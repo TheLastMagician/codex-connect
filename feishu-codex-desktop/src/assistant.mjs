@@ -109,7 +109,7 @@ export class OperationAssistant {
           result={result:{error:error.message}};
         }
         if(result.reply)lastReply=result.reply;
-        if(result.terminal) {remember(result.reply?.meta?.command==='read'?'已在本机显示所选会话的已有回复。':result.reply?.output||'操作已完成');return {text:lastReply?.output||'操作已完成',reply:lastReply,model:c.model};}
+        if(result.terminal) {remember(result.reply?.meta?.command==='read'?'已显示所选会话的最近对话，包含用户消息与 Codex 回复。':result.reply?.output||'操作已完成');return {text:lastReply?.output||'操作已完成',reply:lastReply,model:c.model};}
         messages.push({role:'tool',tool_call_id:message.tool_calls[index].id,content:JSON.stringify(result.result).slice(0,18000)});
       }
     }

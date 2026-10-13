@@ -1,6 +1,6 @@
 export const PAGE_SIZE=10;
 export const HELP_HINT='发送 /help 查看所有操作。';
-export const CHAT_NEXT='/read 查看回复，/status 查看状态；/resume 进入会话直聊，/assistant 返回操作助手。';
+export const CHAT_NEXT='/read 查看对话，/status 查看状态；/resume 进入会话直聊，/assistant 返回操作助手。';
 export function statusLabel(value) {
   const status=typeof value==='object'?value?.type:value;
   return ({active:'执行中',inProgress:'执行中',idle:'就绪',notLoaded:'待机',needsAttention:'待你处理',

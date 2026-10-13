@@ -126071,7 +126071,7 @@ var import_node_crypto3 = require("node:crypto");
 // src/navigation.mjs
 var PAGE_SIZE = 10;
 var HELP_HINT = "\u53D1\u9001 /help \u67E5\u770B\u6240\u6709\u64CD\u4F5C\u3002";
-var CHAT_NEXT = "/read \u67E5\u770B\u56DE\u590D\uFF0C/status \u67E5\u770B\u72B6\u6001\uFF1B/resume \u8FDB\u5165\u4F1A\u8BDD\u76F4\u804A\uFF0C/assistant \u8FD4\u56DE\u64CD\u4F5C\u52A9\u624B\u3002";
+var CHAT_NEXT = "/read \u67E5\u770B\u5BF9\u8BDD\uFF0C/status \u67E5\u770B\u72B6\u6001\uFF1B/resume \u8FDB\u5165\u4F1A\u8BDD\u76F4\u804A\uFF0C/assistant \u8FD4\u56DE\u64CD\u4F5C\u52A9\u624B\u3002";
 function statusLabel(value) {
   const status = typeof value === "object" ? value?.type : value;
   return {
@@ -126164,6 +126164,32 @@ function taskModelArgs(session) {
 async function loadModels(desktop, session) {
   session.models = parseModelCatalog(await desktop.tools());
   return session.models;
+}
+
+// src/conversation.mjs
+function conversationMessages(result) {
+  const messages = [];
+  for (const turn of [...result.turns || []].reverse()) {
+    for (const item of turn.items || []) {
+      if (item.type === "userMessage") {
+        const text = Array.isArray(item.content) ? item.content.map((part) => part.type === "text" ? part.text || "" : "[\u9644\u4EF6]").filter(Boolean).join("\n") : item.text || "";
+        messages.push({ role: "user", text: text || "[\u975E\u6587\u5B57\u6D88\u606F]" });
+      } else if (item.type === "agentMessage" && item.text) {
+        messages.push({ role: "assistant", text: item.text, phase: item.phase });
+      }
+    }
+    if (turn.error?.message) messages.push({ role: "error", text: `\u6267\u884C\u9519\u8BEF\uFF1A${turn.error.message}` });
+  }
+  return messages;
+}
+function messageLabel(message, index) {
+  const role = message.role === "user" ? "\u4F60" : message.role === "error" ? "\u6267\u884C\u9519\u8BEF" : message.phase === "commentary" ? "Codex \xB7 \u8FDB\u5EA6" : "Codex";
+  return `${role} \xB7 \u6D88\u606F ${message.messageNumber ?? index + 1}${message.continuation ? "\uFF08\u7EED\uFF09" : ""}`;
+}
+function renderConversation(messages) {
+  return messages.length ? messages.map((message, index) => `**${messageLabel(message, index)}**
+
+${message.text}`).join("\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n") : "\u6682\u65E0\u53EF\u663E\u793A\u7684\u5BF9\u8BDD\u6D88\u606F\u3002";
 }
 
 // src/cards.mjs
@@ -126261,23 +126287,33 @@ ${modelSummary(session)}`));
 function replyCard(text, meta = {}, issue) {
   if (meta.kind === "list" && meta.session?.view) return listCard(meta.session, issue);
   if (meta.kind === "models" && meta.session) return modelsCard(meta.session, issue);
-  const title = meta.title || { assistant: "Codex \u56DE\u590D", error: "\u64CD\u4F5C\u672A\u5B8C\u6210", help: "\u4F7F\u7528\u5E2E\u52A9" }[meta.kind] || "Codex";
-  const color = meta.kind === "error" ? "orange" : ["assistant", "operator"].includes(meta.kind) ? "turquoise" : "blue";
+  const title = meta.title || { assistant: "Codex \u56DE\u590D", conversation: "\u6700\u8FD1\u5BF9\u8BDD", error: "\u64CD\u4F5C\u672A\u5B8C\u6210", help: "\u4F7F\u7528\u5E2E\u52A9" }[meta.kind] || "Codex";
+  const color = meta.kind === "error" ? "orange" : ["assistant", "operator", "conversation"].includes(meta.kind) ? "turquoise" : "blue";
   let content = String(text);
   if (meta.kind !== "assistant") content = formatCommands(content).replace(/\n发送 `\/help` 查看所有操作。\s*$/, "");
-  const elements = [md(content)];
+  const elements = [];
+  if (meta.kind === "conversation" && meta.conversation) {
+    if (meta.historyTruncated) elements.push(md("\u6D88\u606F\u8F83\u591A\uFF0C\u5DF2\u7701\u7565\u90E8\u5206\u8F83\u65E9\u5185\u5BB9\uFF1B\u5B8C\u6574\u4E0A\u4E0B\u6587\u53EF\u5728\u684C\u9762\u67E5\u770B\u3002"), { tag: "hr" });
+    const messages = meta.conversation.messages;
+    if (!messages.length) elements.push(md("\u6682\u65E0\u53EF\u663E\u793A\u7684\u5BF9\u8BDD\u6D88\u606F\u3002"));
+    for (const [index, message] of messages.entries()) {
+      if (index) elements.push({ tag: "hr" });
+      elements.push(md(`**${messageLabel(message, index)}**`), md(message.text));
+    }
+  } else elements.push(md(content));
   const session = meta.session;
   const selected = meta.thread || session?.selected;
   const options = [];
   if (selected) {
     elements.push({ tag: "hr" });
     if (meta.kind === "assistant") elements.push(md(`**\u56DE\u590D\u6765\u81EA**  ${escapeLabel(selected.title || "\u684C\u9762\u4F1A\u8BDD")}`));
+    if (meta.kind === "conversation") elements.push(md(`**\u4F1A\u8BDD**  ${escapeLabel(selected.title || "\u684C\u9762\u4F1A\u8BDD")}`));
     options.push(
       { label: "\u9009\u62E9\u6B64\u4F1A\u8BDD", type: "primary", action: { kind: "select", thread: selected } },
       { label: "\u8FDB\u5165\u76F4\u804A", action: { kind: "direct", thread: selected } }
     );
     if (session?.selected?.id === selected.id) options.push(
-      { label: "\u67E5\u770B\u56DE\u590D", action: { kind: "command", command: "read", threadKey: `${selected.hostId || "local"}:${selected.id}` } },
+      { label: "\u67E5\u770B\u5BF9\u8BDD", action: { kind: "command", command: "read", threadKey: `${selected.hostId || "local"}:${selected.id}` } },
       { label: "\u72B6\u6001", action: { kind: "command", command: "status", threadKey: `${selected.hostId || "local"}:${selected.id}` } }
     );
   }
@@ -126285,13 +126321,14 @@ function replyCard(text, meta = {}, issue) {
   if (selected) options.push({ label: "\u6A21\u578B", action: { kind: "command", command: "models", threadKey: `${selected.hostId || "local"}:${selected.id}` } });
   if (session?.mode === "chat") options.push({ label: "\u8FD4\u56DE\u64CD\u4F5C\u52A9\u624B", action: { kind: "command", command: "assistant" } });
   if (issue) for (let start = 0; start < options.length; start += 4) elements.push(buttons(options.slice(start, start + 4), issue));
-  return shell(title, meta.subtitle || "Codex \xB7 \u672C\u673A\u684C\u9762", elements, color);
+  const subtitle = meta.kind === "conversation" ? `${selected?.title || "\u5F53\u524D\u4F1A\u8BDD"} \xB7 \u6700\u8FD1 ${meta.conversation?.turnCount || 0} \u8F6E \xB7 \u4ECE\u65E7\u5230\u65B0` : void 0;
+  return shell(title, meta.subtitle || subtitle || "Codex \xB7 \u672C\u673A\u684C\u9762", elements, color);
 }
 var CARD_TITLES = {
   use: "\u5DF2\u9009\u4E2D\u4F1A\u8BDD",
   new: "\u65B0\u4F1A\u8BDD\u5DF2\u521B\u5EFA",
   send: "\u4EFB\u52A1\u5DF2\u53D1\u9001",
-  read: "\u6700\u8FD1\u56DE\u590D",
+  read: "\u6700\u8FD1\u5BF9\u8BDD",
   status: "\u5F53\u524D\u4F1A\u8BDD",
   rename: "\u4F1A\u8BDD\u5DF2\u91CD\u547D\u540D",
   pin: "\u5DF2\u7F6E\u9876",
@@ -126324,7 +126361,7 @@ var HELP = `Codex \u684C\u9762\u4F1A\u8BDD
 /projects \u2014 \u67E5\u770B\u9879\u76EE\uFF1B/project 1 \u67E5\u770B\u8BE5\u9879\u76EE\u4F1A\u8BDD
 /new 1 | \u5E2E\u6211\u68C0\u67E5\u9879\u76EE \u2014 \u5728\u9879\u76EE 1 \u65B0\u5EFA\u4F1A\u8BDD
 /new - | \u5E2E\u6211\u6574\u7406\u5F85\u529E \u2014 \u65B0\u5EFA\u72EC\u7ACB\u4F1A\u8BDD
-/read \u2014 \u67E5\u770B\u6700\u8FD1\u56DE\u590D\uFF1B/status \u2014 \u67E5\u770B\u5F53\u524D\u53D1\u9001\u76EE\u6807\u548C\u72B6\u6001
+/read \u2014 \u67E5\u770B\u6700\u8FD1\u4E09\u8F6E\u5BF9\u8BDD\uFF0C\u5305\u542B\u4F60\u7684\u6D88\u606F\u548C Codex \u56DE\u590D\uFF1B/status \u2014 \u67E5\u770B\u5F53\u524D\u53D1\u9001\u76EE\u6807\u548C\u72B6\u6001
 /rename \u65B0\u6807\u9898 \u2014 \u91CD\u547D\u540D\uFF1B/pin\u3001/unpin \u2014 \u7F6E\u9876\u6216\u53D6\u6D88\u7F6E\u9876
 /archive \u2014 \u5F52\u6863\uFF1B/archived \u2014 \u67E5\u770B\u5F52\u6863\u5217\u8868\uFF1B/unarchive \u2014 \u6062\u590D\u6240\u9009\u4F1A\u8BDD
 /fork \u2014 \u590D\u5236\u5E76\u9009\u4E2D\u65B0\u4F1A\u8BDD\uFF1B/open \u2014 \u5728\u672C\u673A\u684C\u9762\u6253\u5F00\u6240\u9009\u4F1A\u8BDD
@@ -126361,20 +126398,11 @@ function equalSecret(left, right) {
   const b = Buffer.from(String(right || ""));
   return a.length === b.length && a.length > 0 && (0, import_node_crypto3.timingSafeEqual)(a, b);
 }
-function assistantMessages(result) {
-  const lines = [];
-  for (const turn of result.turns || []) {
-    for (const item of turn.items || []) if (item.type === "agentMessage" && item.text) lines.push(item.text);
-    if (turn.error?.message) lines.push(`\u6267\u884C\u9519\u8BEF\uFF1A${turn.error.message}`);
-  }
-  return lines;
-}
 function renderThread(result, onlyStatus = false) {
   const thread = result.thread || {};
   const status = statusLabel(thread.status);
   const lines = [thread.title || thread.id || "\u5F53\u524D\u4F1A\u8BDD", `\u72B6\u6001\uFF1A${status}`];
-  if (!onlyStatus) lines.push(...assistantMessages(result));
-  if (lines.length === 2 && !onlyStatus) lines.push("\u6682\u65E0\u53EF\u663E\u793A\u7684\u52A9\u624B\u56DE\u590D\u3002");
+  if (!onlyStatus) lines.push(renderConversation(conversationMessages(result)));
   return lines.join("\n\n");
 }
 var keyOf = (thread) => `${thread.hostId || "local"}:${thread.id}`;
@@ -126733,7 +126761,7 @@ ${session.selected.archived ? "\u4F1A\u8BDD\u5DF2\u5F52\u6863\uFF0C\u5148 /unarc
     }
     let output;
     let threadStatus;
-    let assistantBody;
+    let conversation;
     switch (command) {
       case "help":
         output = HELP + "\n\n" + currentTarget(session);
@@ -126912,7 +126940,7 @@ ${HELP_HINT}`;
         const selected = this.selected(session);
         const result = await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: command === "read" ? 3 : 1, includeOutputs: false, maxOutputCharsPerItem: 4e3 });
         threadStatus = result.thread?.status;
-        if (command === "read") assistantBody = assistantMessages(result).join("\n\n") || "\u6682\u65E0\u53EF\u663E\u793A\u7684\u52A9\u624B\u56DE\u590D\u3002";
+        if (command === "read") conversation = { messages: conversationMessages(result), turnCount: result.turns?.length || 0 };
         output = renderThread(result, command === "status") + (command === "status" ? `
 
 ${modelSummary(session)}` : "") + `
@@ -126986,7 +127014,7 @@ ${this.channelLabel}\u4ECD\u9009\u4E2D\u8FD9\u4E2A\u4F1A\u8BDD\uFF1B/resume \u8F
         this.selected(session);
         this.unwatch(session);
         output = `\u5DF2\u5173\u95ED\u56DE\u590D\u901A\u77E5\uFF1A${this.selected(session).title || this.selected(session).id}
-\u4F1A\u8BDD\u7EE7\u7EED\u8FD0\u884C\u3002/watch \u91CD\u65B0\u5F00\u542F\uFF0C/read \u968F\u65F6\u67E5\u770B\u56DE\u590D\u3002`;
+\u4F1A\u8BDD\u7EE7\u7EED\u8FD0\u884C\u3002/watch \u91CD\u65B0\u5F00\u542F\uFF0C/read \u968F\u65F6\u67E5\u770B\u5BF9\u8BDD\u3002`;
         break;
       case "stop":
       case "approve":
@@ -127019,19 +127047,19 @@ ${this.channelLabel}\u4ECD\u9009\u4E2D\u8FD9\u4E2A\u4F1A\u8BDD\uFF1B/resume \u8F
         this.watch(session, baseline);
         output = `\u5DF2\u53D1\u9001\u5230\uFF1A${selected.title || selected.id}
 \u56DE\u590D\u4F1A\u81EA\u52A8\u53D1\u56DE${this.channelLabel}\u3002
-/status \u67E5\u770B\u8FDB\u5EA6\uFF0C/read \u67E5\u770B\u56DE\u590D\uFF0C/chats \u5207\u6362\u4F1A\u8BDD\u3002`;
+/status \u67E5\u770B\u8FDB\u5EA6\uFF0C/read \u67E5\u770B\u5BF9\u8BDD\uFF0C/chats \u5207\u6362\u4F1A\u8BDD\u3002`;
       }
     }
     const listCommands = ["chats", "projects", "project", "archived", "next", "prev", "page", "more"];
     const meta = {
-      kind: listCommands.includes(command) ? "list" : command === "models" ? "models" : command === "read" ? "assistant" : command === "help" ? "help" : "info",
+      kind: listCommands.includes(command) ? "list" : command === "models" ? "models" : command === "read" ? "conversation" : command === "help" ? "help" : "info",
       title: CARD_TITLES[command || "send"] || (command === "projectinfo" ? "\u9879\u76EE\u8BE6\u60C5" : "Codex"),
       session,
       openId: message.openId,
       updateMessageId: message.updateMessageId,
       command: command || "send",
       threadStatus,
-      assistantBody
+      conversation
     };
     if (capture) return { output, meta };
     await this.send(message.chatId, output, meta);
@@ -127216,12 +127244,32 @@ function chunkMarkdown(text, limit = 3500) {
   }
   return parts.length ? parts : [""];
 }
+function conversationParts(conversation, limit = 3500) {
+  const pages = [];
+  let messages = [];
+  let size = 0;
+  for (const [index, message] of conversation.messages.entries()) {
+    for (const [partIndex, text] of chunkMarkdown(message.text, limit).entries()) {
+      const length = Array.from(text).length + 100;
+      if (messages.length && (size + length > limit || messages.length >= 10)) {
+        pages.push(messages);
+        messages = [];
+        size = 0;
+      }
+      messages.push({ ...message, text, messageNumber: index + 1, continuation: partIndex > 0 });
+      size += length;
+    }
+  }
+  if (messages.length || !pages.length) pages.push(messages);
+  const truncated = pages.length > 20;
+  return pages.slice(-20).map((messages2, index) => ({ conversation: { ...conversation, messages: messages2 }, historyTruncated: truncated && index === 0 }));
+}
 function createSender({ client, actions, state, saveState, getConfig }) {
   return async (chatId, text, meta = {}) => {
     const session = meta.session || Object.values(state.sessions || {}).find((s) => s.chatId === chatId);
     const openId = meta.openId || session?.openId;
     const fullMeta = { ...meta, session };
-    const parts = meta.kind === "list" ? [String(text)] : chunkMarkdown(text).slice(0, 20);
+    const parts = meta.kind === "conversation" && meta.conversation ? conversationParts(meta.conversation) : (meta.kind === "list" ? [String(text)] : chunkMarkdown(text).slice(0, 20)).map((text2) => ({ text: text2 }));
     for (const [index, part] of parts.entries()) {
       const tokens = [];
       const issue = getConfig().cardActionsEnabled && openId ? (action) => {
@@ -127229,7 +127277,7 @@ function createSender({ client, actions, state, saveState, getConfig }) {
         tokens.push(token);
         return token;
       } : void 0;
-      const card = replyCard(part, { ...fullMeta, ...parts.length > 1 ? { subtitle: `\u7B2C ${index + 1} / ${parts.length} \u90E8\u5206` } : {} }, index === parts.length - 1 ? issue : void 0);
+      const card = replyCard(part.text || "", { ...fullMeta, ...part, ...parts.length > 1 ? { subtitle: `${meta.kind === "conversation" ? "\u6700\u8FD1\u5BF9\u8BDD \xB7 " : ""}\u7B2C ${index + 1} / ${parts.length} \u90E8\u5206` } : {} }, index === parts.length - 1 ? issue : void 0);
       saveState();
       const content = JSON.stringify(card);
       let result;
@@ -127446,7 +127494,7 @@ var OperationAssistant = class {
         }
         if (result.reply) lastReply = result.reply;
         if (result.terminal) {
-          remember(result.reply?.meta?.command === "read" ? "\u5DF2\u5728\u672C\u673A\u663E\u793A\u6240\u9009\u4F1A\u8BDD\u7684\u5DF2\u6709\u56DE\u590D\u3002" : result.reply?.output || "\u64CD\u4F5C\u5DF2\u5B8C\u6210");
+          remember(result.reply?.meta?.command === "read" ? "\u5DF2\u663E\u793A\u6240\u9009\u4F1A\u8BDD\u7684\u6700\u8FD1\u5BF9\u8BDD\uFF0C\u5305\u542B\u7528\u6237\u6D88\u606F\u4E0E Codex \u56DE\u590D\u3002" : result.reply?.output || "\u64CD\u4F5C\u5DF2\u5B8C\u6210");
           return { text: lastReply?.output || "\u64CD\u4F5C\u5DF2\u5B8C\u6210", reply: lastReply, model: c.model };
         }
         messages.push({ role: "tool", tool_call_id: message.tool_calls[index].id, content: JSON.stringify(result.result).slice(0, 18e3) });
@@ -127540,7 +127588,7 @@ var import_promises = require("node:timers/promises");
 var import_node_crypto6 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.2";
+var VERSION = "0.3.3";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -127691,10 +127739,10 @@ function renderWechatReply(text, meta = {}) {
     blocks.push(quick(projects ? "/chats \u4F1A\u8BDD" : "/projects \u9879\u76EE", "/help \u5E2E\u52A9"));
     return sections(blocks);
   }
-  if (meta.kind === "assistant") return sections([
-    "\u{1F4AC} Codex \u56DE\u590D",
+  if (meta.kind === "assistant" || meta.kind === "conversation") return sections([
+    meta.kind === "conversation" ? "\u{1F4AC} \u6700\u8FD1\u5BF9\u8BDD" : "\u{1F4AC} Codex \u56DE\u590D",
     selected ? "\u6765\u81EA\u300C" + name + "\u300D" : null,
-    meta.assistantBody ?? String(text),
+    String(text),
     s?.mode === "chat" ? "\u76F4\u804A\u6A21\u5F0F \xB7 \u76F4\u63A5\u56DE\u590D\u7EE7\u7EED \xB7 /assistant \u8FD4\u56DE\u52A9\u624B" : "\u64CD\u4F5C\u52A9\u624B\u6A21\u5F0F \xB7 /resume \u8FDB\u5165\u4F1A\u8BDD\u76F4\u804A"
   ]);
   if (meta.kind === "operator") return sections(["\u{1F9ED} \u64CD\u4F5C\u52A9\u624B", meta.operatorModel, String(text), "/projects \u9879\u76EE \xB7 /chats \u4F1A\u8BDD \xB7 /resume \u8FDB\u5165\u76F4\u804A"]);

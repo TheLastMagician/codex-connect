@@ -2,6 +2,7 @@ import {createHash,timingSafeEqual,randomUUID} from 'node:crypto';
 import {PAGE_SIZE,HELP_HINT,CHAT_NEXT,statusLabel,currentTarget,renderList} from './navigation.mjs';
 import {CARD_TITLES} from './cards.mjs';
 import {EFFORTS,threadKey,modelSettings,modelSummary,taskModelArgs,loadModels} from './models.mjs';
+import {conversationMessages,renderConversation} from './conversation.mjs';
 
 export const HELP = `Codex 桌面会话
 继续已有会话：
@@ -15,7 +16,7 @@ export const HELP = `Codex 桌面会话
 /projects — 查看项目；/project 1 查看该项目会话
 /new 1 | 帮我检查项目 — 在项目 1 新建会话
 /new - | 帮我整理待办 — 新建独立会话
-/read — 查看最近回复；/status — 查看当前发送目标和状态
+/read — 查看最近三轮对话，包含你的消息和 Codex 回复；/status — 查看当前发送目标和状态
 /rename 新标题 — 重命名；/pin、/unpin — 置顶或取消置顶
 /archive — 归档；/archived — 查看归档列表；/unarchive — 恢复所选会话
 /fork — 复制并选中新会话；/open — 在本机桌面打开所选会话
@@ -45,20 +46,11 @@ export function equalSecret(left,right) {
   const a=Buffer.from(String(left||''));const b=Buffer.from(String(right||''));
   return a.length===b.length && a.length>0 && timingSafeEqual(a,b);
 }
-function assistantMessages(result) {
-  const lines=[];
-  for(const turn of result.turns||[]) {
-    for(const item of turn.items||[]) if(item.type==='agentMessage' && item.text) lines.push(item.text);
-    if(turn.error?.message) lines.push(`执行错误：${turn.error.message}`);
-  }
-  return lines;
-}
 export function renderThread(result,onlyStatus=false) {
   const thread=result.thread||{};
   const status=statusLabel(thread.status);
   const lines=[thread.title||thread.id||'当前会话',`状态：${status}`];
-  if(!onlyStatus) lines.push(...assistantMessages(result));
-  if(lines.length===2 && !onlyStatus) lines.push('暂无可显示的助手回复。');
+  if(!onlyStatus) lines.push(renderConversation(conversationMessages(result)));
   return lines.join('\n\n');
 }
 const keyOf = thread => `${thread.hostId||'local'}:${thread.id}`;
@@ -316,7 +308,7 @@ export class Router {
     let command=match?.[1].toLowerCase();let arg=match?.[2]?.trim()||'';
     if(!command && session.view && ['下一页','上一页'].includes(message.text)) command=message.text==='下一页'?'next':'prev';
     if(!command && session.awaitingChoice && /^\d+$/.test(message.text)) {command=session.awaitingChoice==='project'?'project':'use';arg=message.text;}
-    let output;let threadStatus;let assistantBody;
+    let output;let threadStatus;let conversation;
     switch(command) {
       case 'help': output=HELP+'\n\n'+currentTarget(session);break;
       case 'assistant': {
@@ -406,7 +398,7 @@ export class Router {
         const selected=this.selected(session);
         const result=await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:command==='read'?3:1,includeOutputs:false,maxOutputCharsPerItem:4000});
         threadStatus=result.thread?.status;
-        if(command==='read') assistantBody=assistantMessages(result).join('\n\n')||'暂无可显示的助手回复。';
+        if(command==='read') conversation={messages:conversationMessages(result),turnCount:result.turns?.length||0};
         output=renderThread(result,command==='status')+(command==='status'?`\n\n${modelSummary(session)}`:'')+`\n\n${selected.archived?'会话已归档，先 /unarchive 恢复再聊天。':CHAT_NEXT}\n${HELP_HINT}`;break;
       }
       case 'rename': {
@@ -440,7 +432,7 @@ export class Router {
         await this.desktop.call('navigate_to_codex_page',{threadId:this.selected(session).id});output=`已在本机桌面打开：${this.selected(session).title||this.selected(session).id}\n${this.channelLabel}仍选中这个会话；/resume 进入手机直聊。`;break;
       }
       case 'watch':this.watch(session,threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(this.selected(session)),turnLimit:1,maxOutputCharsPerItem:20000})));output=`已开启回复通知：${this.selected(session).title||this.selected(session).id}\n后续回复会自动发回${this.channelLabel}；/unwatch 关闭，/status 查看状态。`;break;
-      case 'unwatch':this.selected(session);this.unwatch(session);output=`已关闭回复通知：${this.selected(session).title||this.selected(session).id}\n会话继续运行。/watch 重新开启，/read 随时查看回复。`;break;
+      case 'unwatch':this.selected(session);this.unwatch(session);output=`已关闭回复通知：${this.selected(session).title||this.selected(session).id}\n会话继续运行。/watch 重新开启，/read 随时查看对话。`;break;
       case 'stop':case 'approve':case 'reject':
         output=`这个版本不能在${this.channelLabel}停止任务或批准执行。请在 Codex 桌面处理。\n/status 查看当前会话；/open 在本机打开它。`;break;
       case 'send':default: {
@@ -457,13 +449,13 @@ export class Router {
         authorize();
         try {await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session)});}
         catch {throw new Error('桌面未确认发送结果。请先用 /read 或在桌面检查这条消息是否已进入会话，再决定是否重发。');}
-        session.awaitingChoice=null;this.saveState();this.watch(session,baseline);output=`已发送到：${selected.title||selected.id}\n回复会自动发回${this.channelLabel}。\n/status 查看进度，/read 查看回复，/chats 切换会话。`;
+        session.awaitingChoice=null;this.saveState();this.watch(session,baseline);output=`已发送到：${selected.title||selected.id}\n回复会自动发回${this.channelLabel}。\n/status 查看进度，/read 查看对话，/chats 切换会话。`;
       }
     }
     const listCommands=['chats','projects','project','archived','next','prev','page','more'];
-    const meta={kind:listCommands.includes(command)?'list':command==='models'?'models':command==='read'?'assistant':command==='help'?'help':'info',
+    const meta={kind:listCommands.includes(command)?'list':command==='models'?'models':command==='read'?'conversation':command==='help'?'help':'info',
       title:CARD_TITLES[command||'send']||(command==='projectinfo'?'项目详情':'Codex'),session,openId:message.openId,updateMessageId:message.updateMessageId,
-      command:command||'send',threadStatus,assistantBody};
+      command:command||'send',threadStatus,conversation};
     if(capture)return {output,meta};
     await this.send(message.chatId,output,meta);
   }

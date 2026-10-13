@@ -23,17 +23,32 @@ export function chunkMarkdown(text,limit=3500) {
   return parts.length?parts:[''];
 }
 
+function conversationParts(conversation,limit=3500) {
+  const pages=[];let messages=[];let size=0;
+  for(const [index,message] of conversation.messages.entries()) {
+    for(const [partIndex,text] of chunkMarkdown(message.text,limit).entries()) {
+      const length=Array.from(text).length+100;
+      if(messages.length && (size+length>limit || messages.length>=10)) {pages.push(messages);messages=[];size=0;}
+      messages.push({...message,text,messageNumber:index+1,continuation:partIndex>0});size+=length;
+    }
+  }
+  if(messages.length || !pages.length)pages.push(messages);
+  const truncated=pages.length>20;
+  return pages.slice(-20).map((messages,index)=>({conversation:{...conversation,messages},historyTruncated:truncated && index===0}));
+}
+
 export function createSender({client,actions,state,saveState,getConfig}) {
   return async(chatId,text,meta={})=>{
     const session=meta.session||Object.values(state.sessions||{}).find(s=>s.chatId===chatId);
     const openId=meta.openId||session?.openId;
     const fullMeta={...meta,session};
-    const parts=meta.kind==='list'?[String(text)]:chunkMarkdown(text).slice(0,20);
+    const parts=meta.kind==='conversation' && meta.conversation?conversationParts(meta.conversation):
+      (meta.kind==='list'?[String(text)]:chunkMarkdown(text).slice(0,20)).map(text=>({text}));
     for(const [index,part] of parts.entries()) {
       const tokens=[];const issue=getConfig().cardActionsEnabled && openId?action=>{
         const token=actions.issue({chatId,openId},action);tokens.push(token);return token;
       }:undefined;
-      const card=replyCard(part,{...fullMeta,...(parts.length>1?{subtitle:`第 ${index+1} / ${parts.length} 部分`}:{})},index===parts.length-1?issue:undefined);
+      const card=replyCard(part.text||'',{...fullMeta,...part,...(parts.length>1?{subtitle:`${meta.kind==='conversation'?'最近对话 · ':''}第 ${index+1} / ${parts.length} 部分`}:{})},index===parts.length-1?issue:undefined);
       saveState();
       const content=JSON.stringify(card);
       let result;let messageId;

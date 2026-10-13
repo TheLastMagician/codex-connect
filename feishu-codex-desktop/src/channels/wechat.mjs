@@ -58,8 +58,8 @@ export function renderWechatReply(text,meta={}) {
     blocks.push(quick(projects?'/chats 会话':'/projects 项目','/help 帮助'));
     return sections(blocks);
   }
-  if(meta.kind==='assistant')return sections(['💬 Codex 回复',selected?'来自「'+name+'」':null,
-    meta.assistantBody??String(text),s?.mode==='chat'?'直聊模式 · 直接回复继续 · /assistant 返回助手':'操作助手模式 · /resume 进入会话直聊']);
+  if(meta.kind==='assistant' || meta.kind==='conversation')return sections([meta.kind==='conversation'?'💬 最近对话':'💬 Codex 回复',selected?'来自「'+name+'」':null,
+    String(text),s?.mode==='chat'?'直聊模式 · 直接回复继续 · /assistant 返回助手':'操作助手模式 · /resume 进入会话直聊']);
   if(meta.kind==='operator')return sections(['🧭 操作助手',meta.operatorModel,String(text),'/projects 项目 · /chats 会话 · /resume 进入直聊']);
   if(meta.kind==='help')return sections(['🧭 使用指南',
     `开始${lineBreak}直接说话即可让操作助手代操作。${lineBreak}也可 /projects 后回复项目和会话编号。${lineBreak}选中后仍是助手；/resume 才进入会话直聊。`,
