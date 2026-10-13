@@ -268,24 +268,21 @@ export class Router {
         if(name==='select_chat') {
           const matches=[...new Map([...session.threads,...Object.values(session.knownThreads||{})].map(t=>[keyOf(t),t])).values()].filter(t=>t.id===args.threadId && (!args.hostId || (t.hostId||'local')===args.hostId));
           if(matches.length!==1)throw new Error('会话 ID 未查询到或目标不唯一，请重新查找');
-          if(session.threads.length>1 && !message.text.includes(matches[0].title||'\0'))throw new Error('查询结果有多个会话，请列出选项让用户选择，不能自行决定。');
           session.selected=matches[0];session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();
-          return {terminal:!this.taskRequested(message.text),result:{selected:args.threadId},reply:{output:`已选择：${session.selected.title||session.selected.id}\n\n${modelSummary(session)}\n\n${session.selected.archived?'会话已归档，先 /unarchive 恢复。':this.selectionHint(session)}\n/models 查看模型。`,meta:{title:'已选中会话',command:'use',session,openId:message.openId}}};
+          return {result:{selected:args.threadId},reply:{output:`已选择：${session.selected.title||session.selected.id}\n\n${modelSummary(session)}\n\n${session.selected.archived?'会话已归档，先 /unarchive 恢复。':this.selectionHint(session)}\n/models 查看模型。`,meta:{title:'已选中会话',command:'use',session,openId:message.openId}}};
         }
         if(name==='list_models') {
           const reply=await capture('/models');return {reply,result:{models:session.models}};
         }
         if(name==='run_command') {
-          const gates={rename:/重命名|改名|更名|命名|rename/i,pin:/置顶|pin/i,unpin:/置顶|pin/i,archive:/归档|archive/i,unarchive:/恢复|归档|archive/i,
-            model:/模型|model|默认|default|gpt[-\w.]+/i,effort:/强度|推理|effort|none|minimal|low|medium|high|max|ultra/i,
-            resume:/直聊|直接.{0,10}(?:聊天|对话)|进入.{0,20}聊天|回.{0,20}会话.{0,10}聊|resume/i};
-          if(gates[args.command] && (args.argument || !['model','effort'].includes(args.command)) && !gates[args.command].test(message.text))throw new Error('本次用户消息未授权该修改');
+          if(!this.getConfig().allowedOpenIds.includes(message.openId))throw new Error('通道授权已撤销，未执行该操作');
+          if(args.command==='assistant' && args.argument)throw new Error('切换助手模式无需参数，请继续发送你的请求');
           const reply=await capture(`/${args.command}${args.argument?' '+args.argument:''}`);
-          return {terminal:['read','status','resume','help'].includes(args.command) || !args.argument && ['model','effort'].includes(args.command),
+          return {terminal:['read','status','resume','assistant','help','fork'].includes(args.command) || !args.argument && ['model','effort'].includes(args.command),
             reply,result:{ok:true,command:args.command,settings:modelSettings(session)}};
         }
         if(name==='new_task') {
-          if(!/新建|创建|开(?:一个|个).*会话|new|create/i.test(message.text) || !args.task.trim() || !message.text.includes(args.task))throw new Error('新建任务须来自本次用户的明确请求和原文');
+          if(!args.task.trim() || !message.text.includes(args.task))throw new Error('新建任务必须使用本次用户消息中的原文，不能自行添加内容');
           if(args.projectId) {
             await capture('/projects');
             const index=session.projects.findIndex(p=>p.projectId===args.projectId);
@@ -295,7 +292,7 @@ export class Router {
           const reply=await capture(`/new - | ${args.task}`);return {terminal:true,reply,result:{created:true}};
         }
         if(name==='send_task') {
-          if(!this.taskRequested(message.text) || !args.task.trim() || !message.text.includes(args.task))throw new Error('转交任务须由本次用户明确要求，并使用用户原文');
+          if(!args.task.trim() || !message.text.includes(args.task))throw new Error('转交任务必须使用本次用户消息中的原文，不能自行添加内容');
           this.selected(session);
           const reply=await capture(`/send ${args.task}`);
           return {terminal:true,reply,result:{sent:true,threadId:session.selected.id}};
@@ -306,7 +303,6 @@ export class Router {
     if(result.reply)await this.send(message.chatId,result.reply.output,{...result.reply.meta,operatorModel:result.model});
     else await this.send(message.chatId,result.text,{kind:'operator',title:'操作助手',subtitle:result.model,session,openId:message.openId,operatorModel:result.model});
   }
-  taskRequested(text) {return /发(?:送|给)|交给|让.{0,30}(?:执行|处理|检查|修复)|继续.*(?:任务|工作|代码)|(?:检查|修复|运行|测试|构建|分析).{0,30}(?:项目|代码|构建|启动|测试|任务)/i.test(text);}
   async handle(message,{capture=false}={}) {
     const session=this.session(message);
     const authorize=()=>{if(!this.getConfig().allowedOpenIds.includes(message.openId))throw new Error('通道授权已撤销，未执行该操作');};

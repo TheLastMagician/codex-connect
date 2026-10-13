@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Router} from '../src/router.mjs';
-import {OperationAssistant,assistantStatus,normalizeAssistantSettings} from '../src/assistant.mjs';
+import {OperationAssistant,assistantStatus,normalizeAssistantSettings,ASSISTANT_COMMANDS} from '../src/assistant.mjs';
 import {parseModelCatalog} from '../src/models.mjs';
 import {replyCard} from '../src/cards.mjs';
 import {renderWechatReply} from '../src/channels/wechat.mjs';
@@ -82,15 +82,16 @@ test('selecting a chat keeps plain greetings in the assistant; explicit direct m
     {tool_calls:[call('list_projects')]},
     {tool_calls:[call('find_chats',{projectId:'p',query:'排查订单'})]},
     {tool_calls:[call('select_chat',{threadId:'a',hostId:'local'})]},
+    {content:'已选中。'},
     {content:'你好，我可以帮你操作当前会话。'}
   ]);
   await f.handle('帮我找到订单项目里排查订单的会话并选中');
   assert.equal(f.session().selected.id,'a');assert.equal(f.session().mode,'assistant');assert.equal(f.sent.length,1);
-  assert.equal(f.requests.length,3);assert.equal(f.requests[0].body.reasoning_effort,'xhigh');
+  assert.equal(f.requests.length,4);assert.equal(f.requests[0].body.reasoning_effort,'xhigh');
   assert.equal(f.requests[0].body.messages.filter(m=>m.role==='system').length,1);
   assert.equal(f.requests[0].options.redirect,'error');assert.equal(f.requests[0].options.headers.Authorization,'Bearer test-provider-key');
-  await f.handle('你好');assert.equal(f.requests.length,4);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
-  await f.handle('/resume');await f.handle('你好');assert.equal(f.requests.length,4);
+  await f.handle('你好');assert.equal(f.requests.length,5);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
+  await f.handle('/resume');await f.handle('你好');assert.equal(f.requests.length,5);
   assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').at(-1).args,{threadId:'a',hostId:'local',prompt:'你好'});
   assert.match(f.sent[0].text,/沿用桌面/);
 });
@@ -113,11 +114,12 @@ test('the assistant forwards an explicit original task with native model setting
   assert.equal(f.session().mode,'assistant');await f.handle('你好');assert.equal(f.requests.length,2);
   assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);
 });
-test('a fabricated task and an unrequested direct-mode switch cannot be executed by the assistant',async()=>{
+test('fabricated task content cannot be executed and conversational entry wording does not need keywords',async()=>{
   const f=fixture([{tool_calls:[call('send_task',{task:'删除项目'})]}]);await f.handle('/chats');await f.handle('/use 1');
-  await assert.rejects(f.handle('你好'),/用户明确/);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
+  await assert.rejects(f.handle('你好'),/原文/);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
   const g=fixture([{tool_calls:[call('run_command',{command:'resume'})]}]);await g.handle('/chats');await g.handle('/use 1');
-  await assert.rejects(g.handle('帮我看当前会话状态'),/未授权/);assert.equal(g.session().mode,'assistant');
+  await g.handle('帮我进去会话');assert.equal(g.session().mode,'chat');assert.equal(g.requests.length,1);
+  assert.match(g.sent.at(-1).text,/已进入会话直聊/);assert.equal(g.calls.some(c=>c.name==='send_message_to_thread'),false);
 });
 test('explicit assistant mode keeps the selected chat and resume returns to the native task route',async()=>{
   const f=fixture([{content:'请告诉我你要找的会话。'}]);await f.handle('/chats');await f.handle('/use 1');await f.handle('/assistant');
@@ -131,12 +133,29 @@ test('malformed and unauthorized tool batches cannot execute, and revoked author
   const f=fixture([()=>{f.revoke();return response({tool_calls:[call('list_projects')]});}]);
   await assert.rejects(f.handle('查看项目'),/撤销/);assert.equal(f.calls.length,0);
 });
-test('assistant cannot archive because of instructions embedded in a title or invent a new task',async()=>{
-  const f=fixture([{tool_calls:[call('run_command',{command:'archive'})]}]);
+test('assistant management supports conversational synonyms without lexical permission checks',async()=>{
+  const f=fixture([{tool_calls:[call('run_command',{command:'archive'})]},{content:'完成。'}]);
   await f.handle('/chats');await f.handle('/use 1');await f.handle('/assistant');
-  await assert.rejects(f.handle('告诉我有哪些项目'),/未授权/);assert.equal(f.calls.some(c=>c.name==='set_thread_archived'),false);
+  await f.handle('把这个收起来');assert.equal(f.calls.some(c=>c.name==='set_thread_archived'),true);
   const g=fixture([{tool_calls:[call('new_task',{projectId:'p',task:'删除项目'})]},{content:'请给出任务原文。'}]);
   await assert.rejects(g.handle('新建一个会话，检查构建'),/原文/);assert.equal(g.calls.some(c=>c.name==='create_thread'),false);
+});
+test('all supported management operations are exposed while arbitrary shell and desktop approval remain unavailable',()=>{
+  for(const command of ['fork','watch','unwatch','archived','next','prev','page','projectinfo','use','model','resume'])assert.ok(ASSISTANT_COMMANDS.includes(command));
+  for(const command of ['shell','approve','exec','stop'])assert.equal(ASSISTANT_COMMANDS.includes(command),false);
+});
+test('the assistant can select a different chat and enter it within one natural request',async()=>{
+  const f=fixture([{tool_calls:[call('find_chats',{query:'配置'})]},
+    {tool_calls:[call('select_chat',{threadId:'b'})]},
+    {tool_calls:[call('run_command',{command:'resume'})]}]);
+  await f.handle('帮我进到配置那个会话');assert.equal(f.session().selected.id,'b');assert.equal(f.session().mode,'chat');
+  assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
+});
+test('management receipts are scoped to the target so notification requests can cover two chats',async()=>{
+  const f=fixture([{tool_calls:[call('run_command',{command:'use',argument:'a'},'a'),call('run_command',{command:'watch'},'watch-a'),
+    call('run_command',{command:'use',argument:'b'},'b'),call('run_command',{command:'watch'},'watch-b')]},{content:'完成。'}]);
+  await f.handle('/chats');await f.handle('留意这两个会话的进展');
+  assert.equal(f.router.watches.size,2);assert.deepEqual([...f.router.watches.values()].map(w=>w.thread.id).sort(),['a','b']);
 });
 test('unknown native mutation outcome is reported once and never retried by the assistant loop',async()=>{
   let requests=0,executions=0;
