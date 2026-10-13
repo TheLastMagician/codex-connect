@@ -92,14 +92,14 @@ export function replyCard(text,meta={},issue) {
   if(selected) {
     elements.push({tag:'hr'});
     if(meta.kind==='assistant') elements.push(md(`**回复来自**  ${escapeLabel(selected.title||'桌面会话')}`));
-    options.push({label:'继续此会话',type:'primary',action:{kind:'select',thread:selected}});
+    options.push({label:'选择此会话',type:'primary',action:{kind:'select',thread:selected}},
+      {label:'进入直聊',action:{kind:'direct',thread:selected}});
     if(session?.selected?.id===selected.id) options.push({label:'查看回复',action:{kind:'command',command:'read',threadKey:`${selected.hostId||'local'}:${selected.id}`}},
       {label:'状态',action:{kind:'command',command:'status',threadKey:`${selected.hostId||'local'}:${selected.id}`}});
   }
   options.push({label:'会话列表',action:{kind:'command',command:'chats'}},{label:'项目',action:{kind:'command',command:'projects'}});
   if(selected)options.push({label:'模型',action:{kind:'command',command:'models',threadKey:`${selected.hostId||'local'}:${selected.id}`}});
-  if(session?.mode==='assistant' && selected)options.push({label:'返回会话',action:{kind:'command',command:'resume',threadKey:`${selected.hostId||'local'}:${selected.id}`}});
-  else options.push({label:'操作助手',action:{kind:'command',command:'assistant'}});
+  if(session?.mode==='chat')options.push({label:'返回操作助手',action:{kind:'command',command:'assistant'}});
   if(issue)for(let start=0;start<options.length;start+=4)elements.push(buttons(options.slice(start,start+4),issue));
   return shell(title,meta.subtitle||'Codex · 本机桌面',elements,color);
 }

@@ -25,7 +25,7 @@ codex plugin add feishu-codex-desktop@codex-connect
 
 在 Codex 桌面聊天中说：**「用 Codex 连接插件连接微信」**。用手机微信扫描插件显示的二维码并确认。微信 ClawBot 使用扫码授权，无需飞书 App ID / Secret，也不需要安装 OpenClaw。
 
-连接后，在微信 ClawBot 聊天里发送 `/projects`，回复项目编号查看会话，再回复会话编号选择。选中后直接发任务即可。`下一页`、`上一页` 和 `/page 2` 用于翻页，`/help` 查看所有操作。
+连接后，可以直接让操作助手找项目、选会话和转交任务；也可 `/projects` 后回复项目和会话编号。选中后仍与助手对话，`/resume` 进入会话直聊。`下一页`、`上一页` 和 `/page 2` 用于翻页，`/help` 查看所有操作。
 
 ### 连接飞书
 
@@ -54,9 +54,9 @@ codex plugin add feishu-codex-desktop@codex-connect
 
 操作助手使用你单独配置的 OpenAI 兼容 Chat Completions 接口。在 Codex 中调用 `configure_assistant` 配置接口、Key、模型及推理强度，或执行 `node dist/setup.cjs assistant` 在本机隐藏输入 Key。每台机器单独配置，仓库不包含任何用户的助手接口或凭据。
 
-未选会话时可以直接说“帮我找到某项目里的某个会话”。选中后，普通任务直接进入该 Codex 会话；发送 `/assistant` 返回操作助手，`/resume` 返回上次会话。固定命令和按钮不调用助手模型，自然语言助手会使用单独的 API 用量。
+普通消息默认交给操作助手，无需 `/assistant` 前缀；选择、新建或复制会话后仍在助手模式。可以直接说“帮我找到某项目里的某个会话”或“把检查构建发给当前会话”。任务转交后由 Codex 桌面 agent 执行。只有 `/resume`、“进入这个会话聊天”或「进入直聊」按钮才进入会话直聊；`/assistant` 或“返回助手”退出直聊。固定命令和按钮不调用助手模型，自然语言助手会使用单独的 API 用量。
 
-操作助手会把当前管理对话及必要的项目/会话名称和 ID 发送到你配置的接口。[完整说明](feishu-codex-desktop/README.md#模型管理与操作助手030)。
+操作助手会把当前管理对话及必要的项目/会话名称和 ID 发送到你配置的接口。[完整说明](feishu-codex-desktop/README.md#模型管理与操作助手031)。
 
 需要电脑和 Codex 桌面版持续运行。当前仅支持文字；执行审批、停止正在运行的任务仍需在桌面处理。企业微信和 QQ 尚未实现。桌面会话接口属于实验性适配，桌面更新后可能需要调整；实机验证版本为 Windows Codex 桌面 `26.1007.2314.0`。
 

@@ -7,7 +7,8 @@ export const HELP = `Codex 桌面会话
 继续已有会话：
 1. /chats 查看列表
 2. /use 1 选择会话，也可在列表后直接回复编号
-3. 直接说任务，消息会进入选中的真实桌面会话
+3. 默认继续和操作助手对话；可说“把检查构建发给当前会话”
+4. /resume 进入会话直聊；/assistant 返回操作助手
 
 列表每页 10 条：/next 下一页；/prev 上一页；/page 2 跳到第 2 页；/more 也可下一页。
 /chats 关键词 — 按会话标题查找
@@ -24,8 +25,8 @@ export const HELP = `Codex 桌面会话
 /models — 查看桌面可用模型；/model — 查看当前覆盖设置
 /model 模型ID（或编号）— 设置该会话的手机侧模型；/model default 恢复沿用桌面设置
 /effort high — 设置推理强度；/effort default 恢复沿用桌面设置
-/assistant — 返回操作助手；/assistant 帮我切到某会话 — 用自然语言管理
-/resume — 返回上次选中的会话，直接对话继续任务
+/assistant — 返回操作助手（默认模式）；普通消息无需添加 /assistant
+/resume — 明确进入所选会话直聊，后续普通消息直接发送给 Codex
 
 默认沿用会话的模型、项目和上下文；模型覆盖按通道、账号和会话保存。桌面切换窗口不改变通道发送目标。
 当前只支持文字。停止任务和执行审批需要在桌面处理。`;
@@ -103,7 +104,7 @@ export class Router {
         if(!pairing || latest.pairing?.expiresAt<=this.now() || !equalSecret(pairing[1],latest.pairing?.code)) return;
         latest.allowedOpenIds=[...new Set([...latest.allowedOpenIds,message.openId])];
         delete latest.pairing; this.saveConfig(latest);
-        return this.send(message.chatId,'配对成功。\n\n1. 发送 /chats 查看会话列表。\n2. 点击“选择”或发送 /use 1。\n3. 直接说任务即可继续那个桌面会话。',{title:'已配对',openId:message.openId});
+        return this.send(message.chatId,'配对成功。\n\n直接对话即可让操作助手查找项目、选择会话或转交任务。\n/chats 查看列表；/resume 进入所选会话直聊。',{title:'已配对',openId:message.openId});
       }
       if(message.cardAction) await this.handleAction(message,message.cardAction);else await this.handle(message);
     }).catch(async error=>{
@@ -127,8 +128,8 @@ export class Router {
     const session=this.session(message);
     if(action.kind==='select') {
       const thread=action.thread;
-      (session.knownThreads ||= {})[keyOf(thread)]=thread;session.selected=thread;session.mode='chat';session.awaitingChoice=null;this.saveState();
-      await this.send(message.chatId,`已选择：${thread.title||thread.id}\n\n${modelSummary(session)}\n\n${thread.archived?'先发送 /unarchive 恢复这个会话，再聊天。':'现在直接说任务，就会进入这个会话。'}\n/models 查看模型；/assistant 返回操作助手。`,
+      (session.knownThreads ||= {})[keyOf(thread)]=thread;session.selected=thread;session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();
+      await this.send(message.chatId,`已选择：${thread.title||thread.id}\n\n${modelSummary(session)}\n\n${thread.archived?'先发送 /unarchive 恢复这个会话。':this.selectionHint(session)}\n/models 查看模型。`,
         {title:'已选中会话',session,openId:message.openId,updateMessageId:message.updateMessageId});return;
     }
     if(action.kind==='project') {
@@ -143,6 +144,11 @@ export class Router {
       if(session.view?.id!==action.viewId) throw new Error('这份列表已经更新。请点击“会话列表”或发送 /chats 刷新。');
       return this.handle({...message,text:`/page ${action.page}`});
     }
+    if(action.kind==='direct') {
+      const thread=action.thread;
+      (session.knownThreads ||= {})[keyOf(thread)]=thread;session.selected=thread;
+      return this.handle({...message,text:'/resume'});
+    }
     if(action.kind==='model') {
       if(!session.selected || keyOf(session.selected)!==action.threadKey)throw new Error('当前会话已切换，请重新打开 /models。');
       return this.handle({...message,text:`/model ${action.model}`});
@@ -154,8 +160,16 @@ export class Router {
   }
   session(message) {
     const key=`${message.openId}:${message.chatId}`;
-    return this.state.sessions[key] ||= {openId:message.openId,chatId:message.chatId,threads:[],projects:[]};
+    const session=this.state.sessions[key] ||= {openId:message.openId,chatId:message.chatId,threads:[],projects:[]};
+    // Older versions entered direct mode on selection. Migrate once without
+    // dropping the selected target, model overrides, or assistant history.
+    if(this.operator && session.routingVersion!==2) {
+      session.mode='assistant';session.routingVersion=2;this.saveState();
+    }
+    return session;
   }
+  defaultMode() {return this.operator?'assistant':'chat';}
+  selectionHint(session) {return session.mode==='chat'?CHAT_NEXT:'仍在操作助手模式。可以直接说“把检查构建发给当前会话”。\n/resume 进入会话直聊；/send 任务内容 直接转交任务。';}
   async chats(session,query='',project) {
     const [result,projects]=await Promise.all([this.desktop.call('list_threads',{limit:50}),this.desktop.call('list_projects')]);
     session.projects=(projects.projects||[]).filter(p=>p.projectKind!=='chatgpt');
@@ -193,7 +207,7 @@ export class Router {
     if(exact.length>1) throw new Error('标题重复，请使用会话编号');
     throw new Error('这个会话不在当前列表。发送 /chats 刷新，再用 /use 1 选择；也可以发送 /chats 标题关键词 查找。');
   }
-  selected(session) {if(!session.selected) throw new Error('还没选择会话。先发送 /chats，再发送 /use 1，收到“已选择”后直接说任务。');return session.selected;}
+  selected(session) {if(!session.selected) throw new Error('还没选择会话。直接让助手找会话，或 /chats 后用 /use 1 选择；/resume 进入直聊。');return session.selected;}
   async archived(session,reset=false) {
     const cursor=reset?undefined:session.archiveCursor;
     const result=await this.desktop.call('list_archived_threads',{source:'codex',hostId:'local',limit:PAGE_SIZE,...(cursor?{cursor}:{})});
@@ -255,15 +269,16 @@ export class Router {
           const matches=[...new Map([...session.threads,...Object.values(session.knownThreads||{})].map(t=>[keyOf(t),t])).values()].filter(t=>t.id===args.threadId && (!args.hostId || (t.hostId||'local')===args.hostId));
           if(matches.length!==1)throw new Error('会话 ID 未查询到或目标不唯一，请重新查找');
           if(session.threads.length>1 && !message.text.includes(matches[0].title||'\0'))throw new Error('查询结果有多个会话，请列出选项让用户选择，不能自行决定。');
-          session.selected=matches[0];session.mode='chat';session.awaitingChoice=null;this.saveState();
-          return {terminal:true,result:{selected:args.threadId},reply:{output:`已选择：${session.selected.title||session.selected.id}\n\n${modelSummary(session)}\n\n${session.selected.archived?'会话已归档，先 /unarchive 恢复。':'直接发送任务即可继续这个会话。'}\n/assistant 返回操作助手，/models 查看模型。`,meta:{title:'已选中会话',command:'use',session,openId:message.openId}}};
+          session.selected=matches[0];session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();
+          return {terminal:!this.taskRequested(message.text),result:{selected:args.threadId},reply:{output:`已选择：${session.selected.title||session.selected.id}\n\n${modelSummary(session)}\n\n${session.selected.archived?'会话已归档，先 /unarchive 恢复。':this.selectionHint(session)}\n/models 查看模型。`,meta:{title:'已选中会话',command:'use',session,openId:message.openId}}};
         }
         if(name==='list_models') {
           const reply=await capture('/models');return {reply,result:{models:session.models}};
         }
         if(name==='run_command') {
           const gates={rename:/重命名|改名|更名|命名|rename/i,pin:/置顶|pin/i,unpin:/置顶|pin/i,archive:/归档|archive/i,unarchive:/恢复|归档|archive/i,
-            model:/模型|model|默认|default|gpt[-\w.]+/i,effort:/强度|推理|effort|none|minimal|low|medium|high|max|ultra/i};
+            model:/模型|model|默认|default|gpt[-\w.]+/i,effort:/强度|推理|effort|none|minimal|low|medium|high|max|ultra/i,
+            resume:/直聊|直接.{0,10}(?:聊天|对话)|进入.{0,20}聊天|回.{0,20}会话.{0,10}聊|resume/i};
           if(gates[args.command] && (args.argument || !['model','effort'].includes(args.command)) && !gates[args.command].test(message.text))throw new Error('本次用户消息未授权该修改');
           const reply=await capture(`/${args.command}${args.argument?' '+args.argument:''}`);
           return {terminal:['read','status','resume','help'].includes(args.command) || !args.argument && ['model','effort'].includes(args.command),
@@ -279,12 +294,19 @@ export class Router {
           }
           const reply=await capture(`/new - | ${args.task}`);return {terminal:true,reply,result:{created:true}};
         }
+        if(name==='send_task') {
+          if(!this.taskRequested(message.text) || !args.task.trim() || !message.text.includes(args.task))throw new Error('转交任务须由本次用户明确要求，并使用用户原文');
+          this.selected(session);
+          const reply=await capture(`/send ${args.task}`);
+          return {terminal:true,reply,result:{sent:true,threadId:session.selected.id}};
+        }
         throw new Error('操作助手工具不受支持');
       }});
     this.saveState();
     if(result.reply)await this.send(message.chatId,result.reply.output,{...result.reply.meta,operatorModel:result.model});
     else await this.send(message.chatId,result.text,{kind:'operator',title:'操作助手',subtitle:result.model,session,openId:message.openId,operatorModel:result.model});
   }
+  taskRequested(text) {return /发(?:送|给)|交给|让.{0,30}(?:执行|处理|检查|修复)|继续.*(?:任务|工作|代码)|(?:检查|修复|运行|测试|构建|分析).{0,30}(?:项目|代码|构建|启动|测试|任务)/i.test(text);}
   async handle(message,{capture=false}={}) {
     const session=this.session(message);
     const authorize=()=>{if(!this.getConfig().allowedOpenIds.includes(message.openId))throw new Error('通道授权已撤销，未执行该操作');};
@@ -293,7 +315,7 @@ export class Router {
     else if(page)message={...message,text:`/page ${page[1]}`};
     else if(['项目列表','会话列表','帮助'].includes(message.text))message={...message,text:({'项目列表':'/projects','会话列表':'/chats','帮助':'/help'})[message.text]};
     else if(['操作助手','返回助手','切换会话'].includes(message.text))message={...message,text:'/assistant'};
-    else if(message.text==='继续会话')message={...message,text:'/resume'};
+    else if(['继续会话','进入直聊','进入这个会话聊天','进入会话聊天','和这个会话直接聊'].includes(message.text))message={...message,text:'/resume'};
     const match=message.text.match(/^\/(\S+)(?:\s+([\s\S]*))?$/);
     let command=match?.[1].toLowerCase();let arg=match?.[2]?.trim()||'';
     if(!command && session.view && ['下一页','上一页'].includes(message.text)) command=message.text==='下一页'?'next':'prev';
@@ -305,11 +327,11 @@ export class Router {
         session.mode='assistant';session.awaitingChoice=null;this.saveState();
         if(arg)return this.askAssistant({...message,text:arg});
         const status=this.operator?.status();
-        output=`已进入操作助手。\n模型｜${status?.configured?status.model:'尚未配置'}\n\n可以直接说“帮我找到某项目里排查订单的会话”。\n${session.selected?'/resume 返回上次选中的会话；':''}/projects、/chats、/models 仍由程序执行。`;break;
+        output=`已进入操作助手。\n模型｜${status?.configured?status.model:'尚未配置'}\n\n可以直接说“帮我找到某项目里排查订单的会话”。\n${session.selected?'/resume 进入所选会话直聊；':''}/projects、/chats、/models 仍由程序执行。`;break;
       }
       case 'resume': {
         const selected=this.selected(session);session.mode='chat';session.awaitingChoice=null;this.saveState();
-        output=`已返回：${selected.title||selected.id}\n\n${modelSummary(session)}\n\n直接发任务继续；/assistant 返回操作助手。`;break;
+        output=`已进入会话直聊：${selected.title||selected.id}\n\n${modelSummary(session)}\n\n接下来的普通消息直接交给这个 Codex 会话。\n/assistant 或“返回助手”退出直聊。`;break;
       }
       case 'models': {
         const models=await loadModels(this.desktop,session);this.saveState();
@@ -340,7 +362,7 @@ export class Router {
         output=`已更新：${selected.title||selected.id}\n\n${modelSummary(session)}\n\n只对当前通道发给此会话的后续任务生效，不启动任务。/model default 恢复沿用桌面设置。`;
         break;
       }
-      case 'pair':output='已配对，无需重复配对。发送 /chats 查看列表，/use 1 选择会话后直接聊天。\n'+HELP_HINT;break;
+      case 'pair':output='已配对，无需重复配对。默认和操作助手对话，/chats 可查看列表，/resume 进入所选会话直聊。\n'+HELP_HINT;break;
       case 'chats':output=await this.chats(session,arg);break;
       case 'next':case 'more':output=await this.page(session,'next');break;
       case 'prev':output=await this.page(session,'prev');break;
@@ -348,8 +370,8 @@ export class Router {
       case 'use': {
         if(!arg) throw new Error('选择示例：/use 1。先发送 /chats 可查看编号；在会话列表后也可以直接回复 1。');
         if(session.view?.kind==='projects' && /^\d+$/.test(arg)) throw new Error(`你看到的是项目编号。发送 /project ${arg} 查看该项目会话，或 /new ${arg} | 任务内容 新建会话。`);
-        session.selected=this.choose(session,arg);session.mode='chat';session.awaitingChoice=null;this.saveState();
-        output=`已选择：${session.selected.title||session.selected.id}\n项目和上下文保持当前设置。\n\n${modelSummary(session)}\n\n${session.selected.archived?'这个会话已归档。先发送 /unarchive 恢复，再直接聊天。':CHAT_NEXT}\n/models 管理模型；/assistant 返回操作助手。\n${HELP_HINT}`;break;
+        session.selected=this.choose(session,arg);session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();
+        output=`已选择：${session.selected.title||session.selected.id}\n项目和上下文保持当前设置。\n\n${modelSummary(session)}\n\n${session.selected.archived?'这个会话已归档。先发送 /unarchive 恢复。':this.selectionHint(session)}\n/models 管理模型。\n${HELP_HINT}`;break;
       }
       case 'projects': {
         const result=await this.desktop.call('list_projects');
@@ -381,7 +403,7 @@ export class Router {
         authorize();const result=await this.desktop.call('create_thread',{prompt,target});
         if(!result.threadId) throw new Error('桌面没有返回已就绪会话 ID，请用 /chats 查看创建结果，不要重复创建');
         session.selected={id:result.threadId,hostId:result.hostId||'local',title:result.title||result.threadId,kind:'codex'};
-        session.mode='chat';session.awaitingChoice=null;this.saveState();this.watch(session);
+        session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();this.watch(session);
         output=`已创建并选中桌面会话：${session.selected.title}\n任务已开始，回复会自动发回${this.channelLabel}。\n\n${CHAT_NEXT}\n${HELP_HINT}`;break;
       }
       case 'read':case 'status': {
@@ -405,7 +427,7 @@ export class Router {
         const selected=this.selected(session);
         await this.desktop.call('set_thread_archived',{...threadArgs(selected),archived:command==='archive',source:'codex'});
         selected.archived=command==='archive';this.saveState();this.unwatch(session);
-        output=`${selected.title||selected.id}\n${command==='archive'?'已归档。/unarchive 可以恢复；/chats 可以选择其他会话。':'已恢复，现在可以直接说任务。/chats 可以切换会话。'}`;break;
+        output=`${selected.title||selected.id}\n${command==='archive'?'已归档。/unarchive 可以恢复；/chats 可以选择其他会话。':'已恢复。可让助手转交任务，/resume 进入直聊。'}`;break;
       }
       case 'archived': {
         await this.archived(session,true);output=renderList(session);break;
@@ -416,10 +438,10 @@ export class Router {
         const result=await this.desktop.call('fork_thread',{threadId:selected.id});
         if(!result.threadId) throw new Error('未返回已就绪会话 ID，请 /chats 查看结果');
         session.selected={id:result.threadId,hostId:result.hostId||'local',title:result.title||result.threadId,kind:'codex'};
-        session.mode='chat';session.awaitingChoice=null;this.saveState();output=`已复制并选中新会话：${session.selected.title}\n\n${CHAT_NEXT}`;break;
+        session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();output=`已复制并选中新会话：${session.selected.title}\n\n${this.selectionHint(session)}`;break;
       }
       case 'open': {
-        await this.desktop.call('navigate_to_codex_page',{threadId:this.selected(session).id});output=`已在本机桌面打开：${this.selected(session).title||this.selected(session).id}\n${this.channelLabel}仍然选中这个会话，可以直接聊天。`;break;
+        await this.desktop.call('navigate_to_codex_page',{threadId:this.selected(session).id});output=`已在本机桌面打开：${this.selected(session).title||this.selected(session).id}\n${this.channelLabel}仍选中这个会话；/resume 进入手机直聊。`;break;
       }
       case 'watch':this.watch(session,threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(this.selected(session)),turnLimit:1,maxOutputCharsPerItem:20000})));output=`已开启回复通知：${this.selected(session).title||this.selected(session).id}\n后续回复会自动发回${this.channelLabel}；/unwatch 关闭，/status 查看状态。`;break;
       case 'unwatch':this.selected(session);this.unwatch(session);output=`已关闭回复通知：${this.selected(session).title||this.selected(session).id}\n会话继续运行。/watch 重新开启，/read 随时查看回复。`;break;

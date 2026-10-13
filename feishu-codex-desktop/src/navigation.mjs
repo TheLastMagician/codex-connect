@@ -1,6 +1,6 @@
 export const PAGE_SIZE=10;
 export const HELP_HINT='发送 /help 查看所有操作。';
-export const CHAT_NEXT='直接发送任务继续这个会话；/read 查看回复，/status 查看状态，/chats 切换会话。';
+export const CHAT_NEXT='/read 查看回复，/status 查看状态；/resume 进入会话直聊，/assistant 返回操作助手。';
 export function statusLabel(value) {
   const status=typeof value==='object'?value?.type:value;
   return ({active:'执行中',inProgress:'执行中',idle:'就绪',notLoaded:'待机',needsAttention:'待你处理',
@@ -10,7 +10,7 @@ export function projectName(session,thread) {
   return session.projects?.find(project=>project.projectId===thread.projectId)?.label || (thread.projectId?'所属项目见 /projects':'独立会话');
 }
 export function currentTarget(session) {
-  if(session.mode==='assistant')return `当前模式：操作助手。${session.selected?'上次选中：'+(session.selected.title||session.selected.id)+'；/resume 返回。':'可直接描述要查找的项目或会话。'}`;
+  if(session.mode==='assistant')return `当前模式：操作助手。${session.selected?'已选会话：'+(session.selected.title||session.selected.id)+'；/resume 进入直聊。':'可直接描述要查找的项目或会话。'}`;
   return session.selected?`当前发送目标：${session.selected.title||session.selected.id}`:'当前还没选择会话。请用 /use 编号选择后再聊天。';
 }
 export function renderList(session) {

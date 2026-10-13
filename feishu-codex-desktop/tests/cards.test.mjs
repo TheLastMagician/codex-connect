@@ -18,7 +18,7 @@ test('project cards use native layout and omit full private paths from the list'
 test('assistant replies preserve Markdown and identify the actual source chat',()=>{
   const card=replyCard('**完成**\n```js\nconst x = 1;\n```',{kind:'assistant',thread:session.selected,session},()=> 'token');
   assert.equal(card.header.title.content,'Codex 回复');assert.match(card.body.elements[0].content,/```js/);
-  assert.ok(JSON.stringify(card).includes('继续此会话'));
+  assert.ok(JSON.stringify(card).includes('选择此会话'));assert.ok(JSON.stringify(card).includes('进入直聊'));
 });
 function fixture() {
   const state={};const actions=new CardActions({state,saveState:()=>{},getConfig:()=>({allowedOpenIds:['owner']}),now:()=>10000});
