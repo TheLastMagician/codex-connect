@@ -10,6 +10,7 @@ export function projectName(session,thread) {
   return session.projects?.find(project=>project.projectId===thread.projectId)?.label || (thread.projectId?'所属项目见 /projects':'独立会话');
 }
 export function currentTarget(session) {
+  if(session.mode==='assistant')return `当前模式：操作助手。${session.selected?'上次选中：'+(session.selected.title||session.selected.id)+'；/resume 返回。':'可直接描述要查找的项目或会话。'}`;
   return session.selected?`当前发送目标：${session.selected.title||session.selected.id}`:'当前还没选择会话。请用 /use 编号选择后再聊天。';
 }
 export function renderList(session) {

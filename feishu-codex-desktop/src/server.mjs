@@ -10,6 +10,7 @@ import {stopControl} from './control.mjs';
 import {randomBytes} from 'node:crypto';
 import {VERSION} from './version.mjs';
 import {beginWechatLogin,wechatLoginStatus,submitWechatVerifyCode,disconnectWechat} from './wechat-auth.mjs';
+import {assistantStatus,configureAssistant} from './assistant.mjs';
 
 function context(extra) {
   const meta=extra?._meta||{};
@@ -23,6 +24,8 @@ function context(extra) {
 }
 function alive(pid) {try {process.kill(pid,0);return true;}catch{return false;}}
 const tools=[
+  {name:'assistant_status',description:'查看操作助手接口、模型和强度配置，隐藏 API Key。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
+  {name:'configure_assistant',description:'用户要求配置操作助手时使用。凭据只保存在本机，不回显、不打包。使用 OpenAI 兼容 Chat Completions 工具调用接口；省略 apiKey 可保留已有凭据。',inputSchema:{type:'object',properties:{baseUrl:{type:'string'},model:{type:'string'},apiKey:{type:'string'},reasoningEffort:{type:'string'},enabled:{type:'boolean'}},additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'bridge_status',description:'查看飞书、微信及桌面桥接配置和运行状态，隐藏凭据。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
   {name:'wechat_login',description:'用户要求连接微信时生成微信 ClawBot 登录二维码，自动等待扫码。显示返回的 qrPath 图片供用户用微信扫一扫。凭据只保存在本机。',inputSchema:{type:'object',properties:{refresh:{type:'boolean',description:'用户要求刷新过期二维码或换绑微信时设为 true'}},additionalProperties:false},annotations:{readOnlyHint:false,openWorldHint:true}},
   {name:'wechat_login_status',description:'查看微信扫码登录状态，隐藏 token；扫码确认后微信通道自动连接。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
@@ -53,6 +56,8 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
   try {
     let result;
     switch(request.params.name) {
+      case 'assistant_status':result=assistantStatus();break;
+      case 'configure_assistant':result=configureAssistant(request.params.arguments||{});break;
       case 'wechat_login': {
         context(extra);result=await beginWechatLogin({refresh:request.params.arguments?.refresh===true});
         await startBridge(extra);break;
@@ -65,7 +70,7 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
         const wechat=wechatLoginStatus();
         result={configured:!!(settings.appId && settings.appSecret) || wechat.configured,feishuConfigured:!!(settings.appId && settings.appSecret),wechatConfigured:wechat.configured,wechatLogin:wechat.status,pairedUsers:settings.allowedOpenIds?.length||0,
           pairingPending:!!(settings.pairing?.expiresAt>Date.now()),cardActionsEnabled:!!settings.cardActionsEnabled,...status,processAlive:!!status.pid && alive(status.pid),
-          limitations:['无法停止桌面回复或代点审批','仅转发文字','桌面 App 需要保持运行','本机桌面工具接口可能随版本改变']};break;
+          assistant:assistantStatus(),limitations:['无法停止桌面回复或代点审批','仅转发文字','桌面 App 需要保持运行','本机桌面工具接口可能随版本改变']};break;
       }
       case 'desktop_probe': {
         const desktop=new DesktopClient(context(extra));

@@ -3,6 +3,7 @@ import {Writable} from 'node:stream';
 import {randomBytes} from 'node:crypto';
 import {secureDirectory,readJson,writeJson,dataDir} from './storage.mjs';
 import {beginWechatLogin} from './wechat-auth.mjs';
+import {configureAssistant,assistantSettings} from './assistant.mjs';
 
 async function hiddenQuestion(prompt) {
   let muted=false;
@@ -12,6 +13,17 @@ async function hiddenQuestion(prompt) {
   try{return (await answer).trim();}finally{input.close();process.stdout.write('\n');}
 }
 async function main() {
+  if(process.argv[2]==='assistant') {
+    const previous=assistantSettings();const rl=readline.createInterface({input:process.stdin,output:process.stdout});
+    let baseUrl,model,reasoningEffort;
+    try {
+      baseUrl=(await rl.question('助手接口地址（回车保留）: ')).trim()||previous.baseUrl;
+      model=(await rl.question('助手模型 ID（回车保留）: ')).trim()||previous.model;
+      reasoningEffort=(await rl.question('助手推理强度（回车保留，可留空）: ')).trim()||previous.reasoningEffort;
+    }finally{rl.close();}
+    const apiKey=await hiddenQuestion('助手 API Key（隐藏输入，回车保留）: ')||previous.apiKey;
+    console.log(JSON.stringify(configureAssistant({baseUrl,model,reasoningEffort,apiKey,enabled:true}),null,2));return;
+  }
   if(process.argv[2]==='wechat') {
     const login=await beginWechatLogin({refresh:process.argv.includes('--refresh')});
     console.log(JSON.stringify(login,null,2));

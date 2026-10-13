@@ -4,15 +4,16 @@ import {CardActions} from '../card-actions.mjs';
 import {createSender} from '../outbound.mjs';
 import {config,readJson,writeJson} from '../storage.mjs';
 import {readLocalThreads} from '../catalog.mjs';
+import {OperationAssistant} from '../assistant.mjs';
 
-export function createFeishuChannel({desktop,settings,onStatus}) {
+export function createFeishuChannel({desktop,settings,onStatus,operator=new OperationAssistant()}) {
   const state=readJson('state.json',{sessions:{},seen:{}});
   const saveState=()=>writeJson('state.json',state);
   const sdkOptions={appId:settings.appId,appSecret:settings.appSecret,domain:Domain.Feishu,
     loggerLevel:LoggerLevel.error,logger:{error:()=>onStatus({lastTransportErrorAt:Date.now()}),warn:()=>{},info:()=>{},debug:()=>{},trace:()=>{}}};
   const actions=new CardActions({state,saveState,getConfig:config});
   const send=createSender({client:new Client(sdkOptions),actions,state,saveState,getConfig:config});
-  const router=new Router({desktop,getLocalThreads:readLocalThreads,getConfig:config,saveConfig:value=>writeJson('config.json',value),state,saveState,send});
+  const router=new Router({desktop,getLocalThreads:readLocalThreads,getConfig:config,saveConfig:value=>writeJson('config.json',value),state,saveState,send,operator});
   const ws=new WSClient({...sdkOptions,onReady:()=>onStatus({state:'connected'}),onError:()=>onStatus({state:'failed'}),
     onReconnecting:()=>onStatus({state:'reconnecting'}),onReconnected:()=>onStatus({state:'connected'})});
   const dispatcher=new EventDispatcher({}).register({

@@ -22,5 +22,11 @@ description: 连接、启动、断开或诊断微信 ClawBot 对本机 Codex 桌
 只在用户要求退出或断开微信时使用 `disconnect_wechat`；飞书通道保持运行。
 `stop_bridge` 会停止所有通道的桥接，Codex 会话本身继续运行。
 凭据和回复上下文存于用户目录 `.codex-feishu-desktop` 的受限本机文件，不打印 token、不放入插件包、不提交 Git。
+模型管理使用 `/models`、`/model 模型ID`、`/effort high`；`/model default` 恢复沿用桌面会话模型和强度。
+设置按微信账号、通道、主机和会话保存，作为后续任务发送参数，不启动任务，也不保证改变桌面永久配置。
+未选会话时自然对话进入操作助手；选中后直接文字任务绕过助手模型，交给原 Codex 会话。
+`/assistant` 或“操作助手”“返回助手”“切换会话”返回助手；`/assistant 帮我选择某会话` 用自然语言管理；`/resume` 返回已有会话。
+操作助手可使用用户指定的 OpenAI 兼容 Chat Completions 接口。用 `assistant_status` 检查，只有用户要求时用 `configure_assistant` 配置，省略 apiKey 保留已有凭据。
+助手 API Key 只存于本机 assistant.json，不回显、不发布；固定命令不调用助手模型，助手自然对话会使用接口用量。
 所有发送、创建、修改和回复读取通过真实桌面 app-tools 管道；完整本机列表可只读查询桌面元数据，禁止修改数据库。
 当前不能代点执行审批或停止桌面任务。不要用 shell、桌面代码修改或独立 CLI 会话绕过这些限制，也不要声称已经实现 QQ、企业微信或所有桌面功能。
