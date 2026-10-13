@@ -1,0 +1,20 @@
+{
+  "name": "codex-connect",
+  "interface": {
+    "displayName": "Codex 连接"
+  },
+  "plugins": [
+    {
+      "name": "feishu-codex-desktop",
+      "source": {
+        "source": "local",
+        "path": "./feishu-codex-desktop"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

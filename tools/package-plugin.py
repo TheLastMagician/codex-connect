@@ -1,0 +1,39 @@
+import json
+from pathlib import Path
+from urllib.request import urlopen
+import zipfile
+import jsonschema
+
+workspace = Path(__file__).resolve().parents[1]
+root = workspace / 'feishu-codex-desktop'
+for filename in ('plugin.json', 'mcp.json'):
+    document = json.loads((root / filename).read_text(encoding='utf-8'))
+    with urlopen(document['$schema'], timeout=20) as response:
+        schema = json.load(response)
+    jsonschema.Draft202012Validator(schema).validate(document)
+
+manifest = json.loads((root/'plugin.json').read_text(encoding='utf-8'))
+assert len(manifest['extensions']['com.openai']['interface']['shortDescription']) <= 30
+legacy = json.loads((root/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))
+assert (manifest['name'], manifest['version']) == (legacy['name'], legacy['version'])
+files = [root/name for name in ('plugin.json','mcp.json','.mcp.json','README.md','LICENSE','setup.cmd','package.json','package-lock.json')]
+for directory in ('.codex-plugin','assets','skills','src','scripts','dist','tests'):
+    files.extend(path for path in (root/directory).rglob('*') if path.is_file())
+config = Path.home()/'.codex-feishu-desktop/config.json'
+secret = json.loads(config.read_text(encoding='utf-8')).get('appSecret','') if config.exists() else ''
+wechat_config = Path.home()/'.codex-feishu-desktop/wechat.json'
+wechat_secret = json.loads(wechat_config.read_text(encoding='utf-8')).get('token','') if wechat_config.exists() else ''
+archive = workspace/f"{manifest['name']}-{manifest['version']}.zip"
+with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
+    for file in files:
+        assert not file.is_symlink()
+        relative=file.relative_to(root)
+        assert '..' not in relative.parts
+        data=file.read_bytes()
+        assert not secret or secret.encode() not in data, 'Credentials present in package'
+        assert not wechat_secret or wechat_secret.encode() not in data, 'WeChat credentials present in package'
+        zipped.writestr(str(Path(root.name)/relative).replace('\\','/'),data)
+with zipfile.ZipFile(archive) as zipped:
+    assert zipped.testzip() is None
+    assert all(name.startswith('feishu-codex-desktop/') for name in zipped.namelist())
+    print(json.dumps({'archive':str(archive),'files':len(zipped.namelist()),'bytes':archive.stat().st_size,'schemas':'valid','credentials':'excluded'}))

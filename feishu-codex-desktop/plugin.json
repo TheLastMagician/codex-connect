@@ -1,0 +1,31 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "feishu-codex-desktop",
+  "version": "0.2.3",
+  "description": "通过飞书或微信 ClawBot 私聊控制本机 Codex 桌面真实会话，选择项目、继续聊天并接收回复。支持扫码连接微信与飞书同时运行。",
+  "author": {
+    "name": "Local Workspace"
+  },
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "mcpServers": "./.mcp.json",
+      "skills": "./skills/",
+      "interface": {
+        "displayName": "Codex 连接",
+        "shortDescription": "用飞书或微信继续本机 Codex 会话",
+        "longDescription": "通过飞书原生卡片或微信 ClawBot 私聊连接本机 Codex 桌面真实会话，列出项目与会话、继续任务、查看进度并接收回复。微信扫码登录，无需 App ID / Secret；飞书和微信可以同时运行，分别保存发送目标。当前支持文字，需要桌面版保持运行；停止任务和执行审批需在桌面处理。",
+        "developerName": "Local Workspace",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
+        "defaultPrompt": "帮我配置并启动飞书 Codex 桌面桥接，先检查真实桌面会话接口"
+      }
+    }
+  }
+}

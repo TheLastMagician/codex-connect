@@ -1,0 +1,14 @@
+node_modules/
+.work/
+*.zip
+*.log
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.codex-feishu-desktop/
+desktop-context.json
+wechat-login*.json
+wechat-state*.json
+wechat-qr*.png
