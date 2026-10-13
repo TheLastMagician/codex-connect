@@ -42,10 +42,32 @@ test('read is a read-only recent conversation while status omits message content
   await router.handle({openId:'owner',chatId:'chat',text:'/read'});
   assert.equal(replies[0].meta.kind,'conversation');assert.equal(replies[0].meta.title,'最近对话');
   assert.deepEqual(replies[0].meta.conversation,conversation);assert.match(replies[0].text,/第一个问题/);
-  assert.equal(calls[0].name,'read_thread');assert.equal(calls[0].args.turnLimit,3);assert.equal(calls[0].args.includeOutputs,false);
+  assert.equal(calls[0].name,'read_thread');assert.equal(calls[0].args.turnLimit,3);assert.equal(calls[0].args.includeOutputs,true);
   await router.handle({openId:'owner',chatId:'chat',text:'/status'});
   assert.equal(replies[1].meta.kind,'info');assert.doesNotMatch(replies[1].text,/第一个问题|第一个回答/);
+  assert.equal(calls[1].args.includeOutputs,false);
   assert.ok(calls.every(call=>call.name==='read_thread'));
+});
+
+test('forwarded phone prompts appear as user messages while tool results and routing metadata stay hidden',()=>{
+  const input='检查 A < B & C，保留 <input>原文</input>';
+  const delegation={type:'functionCallOutput',namespace:'codex_app',name:'send_message_to_thread',
+    output:{text:`<codex_delegation>\n<source_thread_id>private-id</source_thread_id>\n<input>${input}</input>\n</codex_delegation>`,truncated:false}};
+  const messages=conversationMessages({turns:[{items:[delegation,
+    {type:'commandExecution',output:{text:'内部命令输出'}},{...delegation,output:{text:'工具输出不可显示'}},
+    {type:'agentMessage',text:'收到任务'}]}]});
+  assert.deepEqual(messages.map(m=>m.text),[input,'收到任务']);assert.equal(messages[0].role,'user');
+  assert.doesNotMatch(renderConversation(messages),/private-id|内部命令输出|工具输出不可显示/);
+  assert.equal(conversationMessages({turns:[{items:[{...delegation,namespace:'other'}]}]}).length,0);
+  assert.equal(conversationMessages({turns:[{items:[{...delegation,name:'other'}]}]}).length,0);
+  assert.equal(conversationMessages({turns:[{items:[delegation,{type:'userMessage',content:[{type:'text',text:input}]}]}]}).length,1);
+});
+
+test('a truncated forwarded prompt is labelled instead of silently disappearing',()=>{
+  const messages=conversationMessages({turns:[{items:[{type:'functionCallOutput',namespace:'codex_app',name:'send_message_to_thread',
+    output:{text:'<codex_delegation>\n<source_thread_id>private-id</source_thread_id>\n<input>手机上的长任务',truncated:true}}]}]});
+  assert.equal(messages.length,1);assert.match(messages[0].text,/手机上的长任务/);assert.match(messages[0].text,/已截断/);
+  assert.doesNotMatch(messages[0].text,/private-id/);
 });
 
 test('conversation cards use distinct role blocks and separators and preserve reply Markdown',()=>{

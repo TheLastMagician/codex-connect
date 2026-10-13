@@ -396,7 +396,7 @@ export class Router {
       }
       case 'read':case 'status': {
         const selected=this.selected(session);
-        const result=await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:command==='read'?3:1,includeOutputs:false,maxOutputCharsPerItem:4000});
+        const result=await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:command==='read'?3:1,includeOutputs:command==='read',maxOutputCharsPerItem:4000});
         threadStatus=result.thread?.status;
         if(command==='read') conversation={messages:conversationMessages(result),turnCount:result.turns?.length||0};
         output=renderThread(result,command==='status')+(command==='status'?`\n\n${modelSummary(session)}`:'')+`\n\n${selected.archived?'会话已归档，先 /unarchive 恢复再聊天。':CHAT_NEXT}\n${HELP_HINT}`;break;

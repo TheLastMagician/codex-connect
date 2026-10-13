@@ -126170,10 +126170,20 @@ async function loadModels(desktop, session) {
 function conversationMessages(result) {
   const messages = [];
   for (const turn of [...result.turns || []].reverse()) {
-    for (const item of turn.items || []) {
+    const items = turn.items || [];
+    for (const [index, item] of items.entries()) {
       if (item.type === "userMessage") {
         const text = Array.isArray(item.content) ? item.content.map((part) => part.type === "text" ? part.text || "" : "[\u9644\u4EF6]").filter(Boolean).join("\n") : item.text || "";
         messages.push({ role: "user", text: text || "[\u975E\u6587\u5B57\u6D88\u606F]" });
+      } else if (index === 0 && item.type === "functionCallOutput" && item.namespace === "codex_app" && item.name === "send_message_to_thread" && !items.some((other) => other.type === "userMessage")) {
+        const output = item.output;
+        const text = output?.text;
+        if (typeof text === "string") {
+          const prefix = /^<codex_delegation>\s*<source_thread_id>[^<]*<\/source_thread_id>\s*<input>/;
+          const match = text.match(/^<codex_delegation>\s*<source_thread_id>[^<]*<\/source_thread_id>\s*<input>([\s\S]*)<\/input>\s*<\/codex_delegation>\s*$/);
+          const input = match?.[1] ?? (output.truncated && prefix.test(text) ? text.replace(prefix, "") : null);
+          if (input !== null) messages.push({ role: "user", text: input + (output.truncated ? "\n\n[\u6D88\u606F\u8FC7\u957F\uFF0C\u5DF2\u622A\u65AD\uFF1B\u5B8C\u6574\u5185\u5BB9\u8BF7\u5728\u684C\u9762\u67E5\u770B\u3002]" : "") });
+        }
       } else if (item.type === "agentMessage" && item.text) {
         messages.push({ role: "assistant", text: item.text, phase: item.phase });
       }
@@ -126938,7 +126948,7 @@ ${HELP_HINT}`;
       case "read":
       case "status": {
         const selected = this.selected(session);
-        const result = await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: command === "read" ? 3 : 1, includeOutputs: false, maxOutputCharsPerItem: 4e3 });
+        const result = await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: command === "read" ? 3 : 1, includeOutputs: command === "read", maxOutputCharsPerItem: 4e3 });
         threadStatus = result.thread?.status;
         if (command === "read") conversation = { messages: conversationMessages(result), turnCount: result.turns?.length || 0 };
         output = renderThread(result, command === "status") + (command === "status" ? `
@@ -127588,7 +127598,7 @@ var import_promises = require("node:timers/promises");
 var import_node_crypto6 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.3";
+var VERSION = "0.3.4";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
