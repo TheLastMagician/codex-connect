@@ -99,8 +99,10 @@ export class DesktopInput {
     authorize();
     const request={threadId,clientUserMessageId:randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
       ...(model?{model}:{}),...(thinking?{effort:thinking}:{})};
+    // Let the desktop choose the input route for its actual host. Forcing
+    // user-message admission selects a cloud-only extension on local/SSH hosts.
     const response=await this.request('thread-follower-start-turn',{conversationId:threadId,
-      turnStart:{request,context:{inheritThreadSettings:true,useUserMessageAdmission:true}}},{hostId,targetClientId:owner});
+      turnStart:{request,context:{inheritThreadSettings:true}}},{hostId,targetClientId:owner});
     if(response.resultType!=='success')throw inputError('桌面未确认发送结果，请在桌面检查该会话后再决定是否重发。');
     return {threadId,accepted:true};
   }

@@ -126041,7 +126041,7 @@ var DesktopInput = class {
     };
     const response = await this.request("thread-follower-start-turn", {
       conversationId: threadId,
-      turnStart: { request, context: { inheritThreadSettings: true, useUserMessageAdmission: true } }
+      turnStart: { request, context: { inheritThreadSettings: true } }
     }, { hostId, targetClientId: owner });
     if (response.resultType !== "success") throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
     return { threadId, accepted: true };
@@ -127787,7 +127787,7 @@ var import_promises = require("node:timers/promises");
 var import_node_crypto7 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.6";
+var VERSION = "0.3.7";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

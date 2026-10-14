@@ -28,7 +28,10 @@ async function fixture(options={}) {
               {...response,resultType:'error',error:'no-client-found'};
           }else if(request.method==='thread-follower-start-turn') {
             if(options.dropStartAck)continue;
-            response=options.rejectStart?{...response,resultType:'error',error:'request-failed'}:{...response,result:{result:'accepted'}};
+            // Local/SSH app-server hosts reject the cloud-only admission route.
+            const cloudAdmission=request.params.turnStart.context?.useUserMessageAdmission===true;
+            response=cloudAdmission?{...response,resultType:'error',error:'User-message admission requires a cloud app-server host'}:
+              options.rejectStart?{...response,resultType:'error',error:'request-failed'}:{...response,result:{result:'accepted'}};
           }else if(request.method==='tools/call')response={jsonrpc:'2.0',id:request.id,result:{success:true,contentItems:[]}};
         }
         const data=encodeFrame(response);socket.write(data.subarray(0,3));socket.write(data.subarray(3));
@@ -42,6 +45,14 @@ async function fixture(options={}) {
   }};
 }
 
+test('local desktop starts an ordinary turn without forcing cloud user-message admission',async()=>{
+  const f=await fixture();try{
+    const result=await f.input.send({threadId:'local-target',prompt:'你好'});
+    assert.deepEqual(result,{threadId:'local-target',accepted:true});
+    assert.equal(Object.hasOwn(f.requests.at(-1).params.turnStart.context,'useUserMessageAdmission'),false);
+  }finally{await f.close();}
+});
+
 test('messages enter the existing desktop conversation as ordinary user input and inherit its provider and permissions',async()=>{
   const f=await fixture();try{
     await f.input.send({threadId:'target',prompt:'你好，检查 A < B & C'});
@@ -50,7 +61,7 @@ test('messages enter the existing desktop conversation as ordinary user input an
     const request=sent.params.turnStart.request;
     assert.equal(request.threadId,'target');assert.deepEqual(request.input,[{type:'text',text:'你好，检查 A < B & C',text_elements:[]}]);
     assert.match(request.clientUserMessageId,/^[0-9a-f-]{36}$/);
-    assert.deepEqual(sent.params.turnStart.context,{inheritThreadSettings:true,useUserMessageAdmission:true});
+    assert.deepEqual(sent.params.turnStart.context,{inheritThreadSettings:true});
     for(const key of ['toolOutput','callerSource','model','effort','approvalPolicy','sandboxPolicy','permissions','collaborationMode'])
       assert.equal(Object.hasOwn(request,key),false);
     assert.doesNotMatch(JSON.stringify(sent),/function_call_output|codex_delegation/);
@@ -71,6 +82,7 @@ test('remote host routing keeps the host and uses its matching protocol version'
     await f.input.send({threadId:'remote-chat',hostId:'ssh-host',prompt:'任务'});
     assert.equal(f.requests[1].params.hostId,'ssh-host');
     assert.equal(f.requests.at(-1).hostId,'ssh-host');assert.equal(f.requests.at(-1).version,3);
+    assert.deepEqual(f.requests.at(-1).params.turnStart.context,{inheritThreadSettings:true});
   }finally{await f.close();}
 });
 
