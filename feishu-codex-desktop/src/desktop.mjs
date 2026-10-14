@@ -18,26 +18,29 @@ export function encodeFrame(value) {
 }
 export class DesktopClient {
   constructor(context) { this.context = context; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
+    this.connectionGeneration=0;
     this.input=new DesktopInput({pipePath:context.inputPipePath,
       activateThread:({threadId})=>this.call('navigate_to_codex_page',{threadId})}); }
   async connect() {
     if (this.socket && !this.socket.destroyed) return;
     if (this.connecting) return this.connecting;
     if (!this.context.pipePath) throw new Error('未收到桌面版连接信息，请在 Codex 内启动插件');
-    this.connecting = new Promise((resolve,reject) => {
+    const generation=this.connectionGeneration;
+    const connecting = new Promise((resolve,reject) => {
       const socket = net.createConnection(this.context.pipePath);
       const timer = setTimeout(() => socket.destroy(new Error('连接桌面版超时')),5000);
       socket.once('error',reject);
       socket.once('connect',() => {
+        if(generation!==this.connectionGeneration){socket.destroy();reject(new Error('桌面连接已更新'));return;}
         clearTimeout(timer); socket.off('error',reject); this.socket = socket;
         socket.on('data',chunk => this.onData(chunk));
-        socket.on('error',error => this.disconnect(error));
-        socket.on('close',() => this.disconnect(new Error('Codex 桌面连接已关闭，请重新启动桥接')));
+        socket.on('error',error => {if(this.socket===socket)this.disconnect(error);});
+        socket.on('close',() => {if(this.socket===socket)this.disconnect(new Error('Codex 桌面连接已关闭，正在等待重新连接'));});
         resolve();
       });
       socket.once('close',() => clearTimeout(timer));
-    }).finally(() => {this.connecting = null;});
-    return this.connecting;
+    }).finally(() => {if(this.connecting===connecting)this.connecting=null;});
+    this.connecting=connecting;return connecting;
   }
   async request(method,params,timeoutMs=30000) {
     await this.connect();
@@ -74,7 +77,13 @@ export class DesktopClient {
     for(const item of this.pending.values()) {clearTimeout(item.timer);item.reject(error);}
     this.pending.clear();
   }
-  close() {this.input.close();this.disconnect(new Error('桌面连接已关闭'));}
+  close() {this.connectionGeneration++;this.connecting=null;this.input.close();this.disconnect(new Error('桌面连接已关闭'));}
+  updateContext(context) {
+    if(this.context.pipePath!==context.pipePath) {
+      this.close();
+    }
+    this.context={...this.context,...context};
+  }
   async tools() {
     const result = await this.request('tools/list',{threadStartKind:'all'});
     return result.tools.filter(tool => tool.namespace === 'codex_app' && ALLOWED_TOOLS.has(tool.name));

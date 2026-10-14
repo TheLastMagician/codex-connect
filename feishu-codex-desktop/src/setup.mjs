@@ -4,6 +4,7 @@ import {randomBytes} from 'node:crypto';
 import {secureDirectory,readJson,writeJson,dataDir} from './storage.mjs';
 import {beginWechatLogin} from './wechat-auth.mjs';
 import {configureAssistant,assistantSettings} from './assistant.mjs';
+import {configureAutostart} from './autostart-settings.mjs';
 
 async function hiddenQuestion(prompt) {
   let muted=false;
@@ -13,6 +14,10 @@ async function hiddenQuestion(prompt) {
   try{return (await answer).trim();}finally{input.close();process.stdout.write('\n');}
 }
 async function main() {
+  if(process.argv[2]==='autostart') {
+    if(!['on','off'].includes(process.argv[3]))throw new Error('使用 node dist/setup.cjs autostart on 或 off');
+    console.log(JSON.stringify(configureAutostart(process.argv[3]==='on',{bundleDir:__dirname}),null,2));return;
+  }
   if(process.argv[2]==='assistant') {
     const previous=assistantSettings();const rl=readline.createInterface({input:process.stdin,output:process.stdout});
     let baseUrl,model,reasoningEffort;

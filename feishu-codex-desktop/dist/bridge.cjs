@@ -126131,6 +126131,7 @@ var DesktopClient = class {
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
+    this.connectionGeneration = 0;
     this.input = new DesktopInput({
       pipePath: context.inputPipePath,
       activateThread: ({ threadId }) => this.call("navigate_to_codex_page", { threadId })
@@ -126140,24 +126141,35 @@ var DesktopClient = class {
     if (this.socket && !this.socket.destroyed) return;
     if (this.connecting) return this.connecting;
     if (!this.context.pipePath) throw new Error("\u672A\u6536\u5230\u684C\u9762\u7248\u8FDE\u63A5\u4FE1\u606F\uFF0C\u8BF7\u5728 Codex \u5185\u542F\u52A8\u63D2\u4EF6");
-    this.connecting = new Promise((resolve, reject) => {
+    const generation = this.connectionGeneration;
+    const connecting = new Promise((resolve, reject) => {
       const socket = import_node_net2.default.createConnection(this.context.pipePath);
       const timer = setTimeout(() => socket.destroy(new Error("\u8FDE\u63A5\u684C\u9762\u7248\u8D85\u65F6")), 5e3);
       socket.once("error", reject);
       socket.once("connect", () => {
+        if (generation !== this.connectionGeneration) {
+          socket.destroy();
+          reject(new Error("\u684C\u9762\u8FDE\u63A5\u5DF2\u66F4\u65B0"));
+          return;
+        }
         clearTimeout(timer);
         socket.off("error", reject);
         this.socket = socket;
         socket.on("data", (chunk) => this.onData(chunk));
-        socket.on("error", (error) => this.disconnect(error));
-        socket.on("close", () => this.disconnect(new Error("Codex \u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5")));
+        socket.on("error", (error) => {
+          if (this.socket === socket) this.disconnect(error);
+        });
+        socket.on("close", () => {
+          if (this.socket === socket) this.disconnect(new Error("Codex \u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5"));
+        });
         resolve();
       });
       socket.once("close", () => clearTimeout(timer));
     }).finally(() => {
-      this.connecting = null;
+      if (this.connecting === connecting) this.connecting = null;
     });
-    return this.connecting;
+    this.connecting = connecting;
+    return connecting;
   }
   async request(method, params, timeoutMs = 3e4) {
     await this.connect();
@@ -126215,8 +126227,16 @@ var DesktopClient = class {
     this.pending.clear();
   }
   close() {
+    this.connectionGeneration++;
+    this.connecting = null;
     this.input.close();
     this.disconnect(new Error("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED"));
+  }
+  updateContext(context) {
+    if (this.context.pipePath !== context.pipePath) {
+      this.close();
+    }
+    this.context = { ...this.context, ...context };
   }
   async tools() {
     const result = await this.request("tools/list", { threadStartKind: "all" });
@@ -127828,7 +127848,7 @@ var import_promises2 = require("node:timers/promises");
 var import_node_crypto7 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.8";
+var VERSION = "0.4.0";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -128203,6 +128223,27 @@ async function main() {
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
+  const refreshDesktop = async () => {
+    const current = readJson("desktop-context.json", {});
+    if (!current.pipePath || !current.threadId) return;
+    try {
+      if (current.pipePath !== desktop.context.pipePath || current.threadId !== desktop.context.threadId) {
+        const probe = new DesktopClient(current);
+        try {
+          await probe.call("list_threads", { limit: 1 });
+        } finally {
+          probe.close();
+        }
+        desktop.updateContext(current);
+      }
+      if (!desktop.socket || desktop.socket.destroyed) await desktop.call("list_threads", { limit: 1 });
+      if (!desktop.input.socket || desktop.input.socket.destroyed) await desktop.input.connect();
+      status.desktopConnected = true;
+    } catch {
+      status.desktopConnected = false;
+    }
+    saveStatus();
+  };
   const refreshWechat = async () => {
     const account = readWechatAccount();
     const valid = account.enabled && account.token && account.botId && account.ownerUserId;
@@ -128252,6 +128293,7 @@ async function main() {
       if (polling || stopping) return;
       polling = true;
       try {
+        await refreshDesktop();
         await refreshWechat();
         await Promise.allSettled([...channels.values()].map((c) => c.poll()));
       } catch {

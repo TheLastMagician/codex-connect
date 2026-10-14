@@ -36,6 +36,21 @@ export async function main() {
     try{fs.unlinkSync(lockPath);}catch{}process.exit(0);
   };
   process.once('SIGINT',stop);process.once('SIGTERM',stop);
+  const refreshDesktop=async()=>{
+    const current=readJson('desktop-context.json',{});
+    if(!current.pipePath || !current.threadId)return;
+    try {
+      if(current.pipePath!==desktop.context.pipePath || current.threadId!==desktop.context.threadId) {
+        const probe=new DesktopClient(current);
+        try{await probe.call('list_threads',{limit:1});}finally{probe.close();}
+        desktop.updateContext(current);
+      }
+      if(!desktop.socket || desktop.socket.destroyed)await desktop.call('list_threads',{limit:1});
+      if(!desktop.input.socket || desktop.input.socket.destroyed)await desktop.input.connect();
+      status.desktopConnected=true;
+    }catch{status.desktopConnected=false;}
+    saveStatus();
+  };
   const refreshWechat=async()=>{
     const account=readWechatAccount();
     const valid=account.enabled && account.token && account.botId && account.ownerUserId;
@@ -73,6 +88,7 @@ export async function main() {
     timer=setInterval(async()=>{
       if(polling || stopping)return;polling=true;
       try {
+        await refreshDesktop();
         await refreshWechat();
         await Promise.allSettled([...channels.values()].map(c=>c.poll()));
       }catch{status.lastRefreshErrorAt=Date.now();saveStatus();}

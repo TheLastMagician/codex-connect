@@ -1,29 +1,22 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
 import {Server} from '@modelcontextprotocol/sdk/server/index.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotocol/sdk/types.js';
-import {dataDir,secureDirectory,config,readJson,writeJson} from './storage.mjs';
+import {secureDirectory,config,readJson,writeJson} from './storage.mjs';
 import {DesktopClient} from './desktop.mjs';
 import {stopControl} from './control.mjs';
 import {randomBytes} from 'node:crypto';
 import {VERSION} from './version.mjs';
 import {beginWechatLogin,wechatLoginStatus,submitWechatVerifyCode,disconnectWechat} from './wechat-auth.mjs';
 import {assistantStatus,configureAssistant} from './assistant.mjs';
+import {desktopContext,ensureBridge,alive,pauseAutostart} from './bridge-lifecycle.mjs';
+import {configureAutostart,autostartStatus,syncAutostartRuntime} from './autostart-settings.mjs';
 
 function context(extra) {
-  const meta=extra?._meta||{};
-  const saved=readJson('desktop-context.json',{});
-  let turn=meta['x-codex-turn-metadata'];
-  if(typeof turn==='string') {try {turn=JSON.parse(turn);}catch{turn={};}}
-  const threadId=turn?.thread_id || meta['openai/threadId'] || meta.threadId || process.env.CODEX_THREAD_ID || saved.threadId;
-  const pipePath=process.env.CODEX_APP_TOOLS_PIPE_PATH || saved.pipePath;
-  if(!pipePath || !threadId) throw new Error('需要在 Codex 桌面聊天中调用；缺少桌面工具管道或真实会话上下文');
-  return {pipePath,threadId};
+  return desktopContext(extra);
 }
-function alive(pid) {try {process.kill(pid,0);return true;}catch{return false;}}
 const tools=[
+  {name:'configure_autostart',description:'用户要求随 Codex 自动连接时开启；在本机注册启动/恢复会话钩子，需要用户在设置的钩子页信任一次。关闭仅取消自启动，不停止当前桥接。',inputSchema:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'assistant_status',description:'查看操作助手接口、模型和强度配置，隐藏 API Key。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
   {name:'configure_assistant',description:'用户要求配置操作助手时使用。凭据只保存在本机，不回显、不打包。使用 OpenAI 兼容 Chat Completions 工具调用接口；省略 apiKey 可保留已有凭据。',inputSchema:{type:'object',properties:{baseUrl:{type:'string'},model:{type:'string'},apiKey:{type:'string'},reasoningEffort:{type:'string'},enabled:{type:'boolean'}},additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'bridge_status',description:'查看飞书、微信及桌面桥接配置和运行状态，隐藏凭据。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
@@ -38,17 +31,14 @@ const tools=[
   {name:'stop_bridge',description:'停止所有聊天通道的桥接服务。不会停止任何 Codex 会话。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:false}}
 ];
 async function startBridge(extra) {
-  secureDirectory();const previous=readJson('status.json',{});
-  if(previous.pid && alive(previous.pid) && !['stopped','failed'].includes(previous.state)) return {alreadyRunning:true,...previous};
-  const settings=config();const wechat=wechatLoginStatus();
-  if(!(settings.appId && settings.appSecret && settings.feishuEnabled!==false) && !wechat.configured && !['wait','scaned','need_verifycode'].includes(wechat.status)) throw new Error('请先配置飞书，或调用 wechat_login 扫码连接微信。');
-  writeJson('desktop-context.json',context(extra));
-  const log=fs.openSync(path.join(dataDir,'bridge.log'),'a',0o600);
+  return ensureBridge(context(extra),{entryPath:path.join(__dirname,'bridge.cjs')});
+}
+async function autoConnect(extra) {
+  if(readJson('autostart.json',{}).enabled!==true)return;
   try {
-    const child=spawn(process.execPath,[path.join(__dirname,'bridge.cjs')],{detached:true,windowsHide:true,stdio:['ignore',log,log],env:process.env});
-    await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});child.unref();
-    return {startedProcess:true,pid:child.pid,note:'已启动进程，请用 bridge_status 核对各通道连接状态。'};
-  }finally{fs.closeSync(log);}
+    const result=await ensureBridge(context(extra),{entryPath:path.join(__dirname,'bridge.cjs'),automatic:true});
+    writeJson('autostart-status.json',{state:result.skipped||'started',checkedAt:Date.now()});
+  }catch {writeJson('autostart-status.json',{state:'waiting_desktop',checkedAt:Date.now()});}
 }
 const server=new Server({name:'feishu-codex-desktop',version:VERSION},{capabilities:{tools:{}}});
 server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
@@ -56,6 +46,11 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
   try {
     let result;
     switch(request.params.name) {
+      case 'configure_autostart': {
+        result=configureAutostart(request.params.arguments?.enabled,{bundleDir:__dirname});
+        if(result.enabled)await autoConnect(extra);
+        break;
+      }
       case 'assistant_status':result=assistantStatus();break;
       case 'configure_assistant':result=configureAssistant(request.params.arguments||{});break;
       case 'wechat_login': {
@@ -70,7 +65,8 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
         const wechat=wechatLoginStatus();
         result={configured:!!(settings.appId && settings.appSecret) || wechat.configured,feishuConfigured:!!(settings.appId && settings.appSecret),wechatConfigured:wechat.configured,wechatLogin:wechat.status,pairedUsers:settings.allowedOpenIds?.length||0,
           pairingPending:!!(settings.pairing?.expiresAt>Date.now()),cardActionsEnabled:!!settings.cardActionsEnabled,...status,processAlive:!!status.pid && alive(status.pid),
-          assistant:assistantStatus(),limitations:['无法停止桌面回复或代点审批','仅转发文字','桌面 App 需要保持运行','本机桌面工具接口可能随版本改变']};break;
+          assistant:assistantStatus(),autostart:{...autostartStatus(),lastAttempt:readJson('autostart-status.json',{})},
+          limitations:['无法停止桌面回复或代点审批','仅转发文字','桌面 App 需要保持运行','本机桌面工具接口可能随版本改变']};break;
       }
       case 'desktop_probe': {
         const desktop=new DesktopClient(context(extra));
@@ -94,9 +90,10 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
         result=await startBridge(extra);break;
       }
       case 'stop_bridge': {
+        pauseAutostart();
         const lock=readJson('bridge.lock',{});
         if(lock.pid && alive(lock.pid)) await stopControl();
-        result={stopRequested:true,note:'停止的是聊天通道桥接；Codex 会话继续运行。'};break;
+        result={stopRequested:true,note:'本次桌面运行期间暂停自动启动；重启 Codex 或手动 start_bridge 后恢复。Codex 会话继续运行。'};break;
       }
       default:throw new Error('未知工具');
     }
@@ -105,6 +102,10 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
 });
 async function main() {
   await server.connect(new StdioServerTransport());
+  if(readJson('autostart.json',{}).enabled===true) {
+    try{syncAutostartRuntime(__dirname);}catch{}
+  }
+  void autoConnect();
   process.stdin.once('end',()=>server.close().finally(()=>process.exit(0)));
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});

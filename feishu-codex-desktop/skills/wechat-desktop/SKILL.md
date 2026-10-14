@@ -11,6 +11,7 @@ description: 连接、启动、断开或诊断微信 ClawBot 对本机 Codex 桌
 过期或用户要求刷新、换绑时调用 `wechat_login(refresh=true)`。已有正常连接时不重复扫码。
 登录确认后，`bridge_status` 的微信通道为 `connected` 才说明消息轮询已经连接。桥接运行时会自动载入新凭据。
 如果桥接没有运行，使用 `start_bridge` 启动，再检查状态。仅配置微信即可启动，不要求飞书 App ID / Secret。
+用户要求自动连接时使用 configure_autostart(enabled=true)；先在 Codex 设置的钩子页信任一次本插件注册的 SessionStart 钩子，CLI 可用 /hooks。不要代写信任记录。启用后，启动/恢复桌面会话或加载插件 MCP 时检查并连接已配置通道，多会话不重复启动；未加载会话的空白首页不保证触发钩子。bridge_status.autostart 可查看开关及注册状态，已注册不等于已信任。
 
 引导用户直接用自然语言让助手查找、选择和转交任务；也可 `/help` 或 `/projects` 后回复项目和会话编号。选中后仍是助手，只有 /resume 明确进入会话直聊。
 支持“下一页”“上一页”、`/page 2`、`选择 12` 和 `/use 12`。回复必须给出当前页数、全局编号和具体的下一步示例。
@@ -20,7 +21,7 @@ description: 连接、启动、断开或诊断微信 ClawBot 对本机 Codex 桌
 发送或创建结果未知时不要自动重试；先检查真实桌面会话是否已收到消息。
 
 只在用户要求退出或断开微信时使用 `disconnect_wechat`；飞书通道保持运行。
-`stop_bridge` 会停止所有通道的桥接，Codex 会话本身继续运行。
+`stop_bridge` 会停止所有通道的桥接，Codex 会话本身继续运行；本次桌面运行期间暂停自动拉起，重启 Codex 或手动 start_bridge 恢复。configure_autostart(enabled=false) 永久关闭自启动，仅取消本插件的钩子，不停止当前桥接或删除凭据。
 凭据和回复上下文存于用户目录 `.codex-feishu-desktop` 的受限本机文件，不打印 token、不放入插件包、不提交 Git。
 模型管理使用 `/models`、`/model 模型ID`、`/effort high`；`/model default` 恢复沿用桌面会话模型和强度。
 设置按微信账号、通道、主机和会话保存，作为后续任务发送参数，不启动任务，也不保证改变桌面永久配置。

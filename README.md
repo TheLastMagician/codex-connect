@@ -48,6 +48,14 @@ codex plugin add feishu-codex-desktop@codex-connect
 
 更新后重启桌面版；在新聊天中重新启动桥接。微信、飞书的本机配置独立于插件文件，仍然保留。
 
+### 随 Codex 自动连接（0.4.0）
+
+在 Codex 中说“开启 Codex 连接自动启动”，调用 `configure_autostart(enabled=true)`。也可在插件目录执行 `node dist/setup.cjs autostart on`。首次在 Codex 设置的 **Hooks／钩子** 页审阅并信任“连接 Codex 桌面聊天通道”；CLI 可用 `/hooks`。这是 [Codex 官方钩子信任要求](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)，插件不会替用户修改信任记录。
+
+以后启动 Codex 并恢复或打开会话时，自动连接已配置的飞书和微信，无需再发送“启动桥接”，也不会重复配对。已有桥接会更新桌面连接，不会因多个会话同时恢复而重复启动。自动启动本身不调用模型或发送任务。仅停留在尚未加载会话的空白首页时，不保证已触发会话启动钩子。
+
+`stop_bridge` 会暂停本次桌面运行期间的自动拉起；重启 Codex或手动 `start_bridge` 后恢复。用 `configure_autostart(enabled=false)` 或 `node dist/setup.cjs autostart off` 永久关闭自动启动；它不会停止正在运行的桥接。状态见 `bridge_status.autostart`。此设置只保存在当前机器，不随仓库或插件包分发。
+
 ## 当前范围
 
 支持列出项目和会话、搜索标题、继续聊天、读取回复和状态、新建、重命名、置顶、归档/恢复、复制和打开会话。桥接运行期间自动回传所关注任务的回复。
