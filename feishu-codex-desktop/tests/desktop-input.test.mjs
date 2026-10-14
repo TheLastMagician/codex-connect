@@ -39,8 +39,9 @@ async function fixture(options={}) {
     });
   });
   await new Promise(resolve=>server.listen(pipe,resolve));
-  const input=new DesktopInput({pipePath:pipe,timeoutMs:options.timeoutMs||500});
-  return {input,pipe,requests,close:async()=>{
+  const input=new DesktopInput({pipePath:pipe,timeoutMs:options.timeoutMs||500,activateThread:options.activateThread,
+    loadTimeoutMs:options.loadTimeoutMs??1000,pollIntervalMs:5});
+  return {input,pipe,requests,setOwnerReady:(value=true)=>{ownerReady=value;},close:async()=>{
     input.close();for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));
   }};
 }
@@ -86,11 +87,77 @@ test('remote host routing keeps the host and uses its matching protocol version'
   }finally{await f.close();}
 });
 
-test('an unloaded chat fails without sending, navigating, or retrying discovery',async()=>{
+test('an unloaded chat without an activation callback fails before sending',async()=>{
   const f=await fixture({ownerReady:false});try{
     await assert.rejects(f.input.send({threadId:'target',prompt:'任务'}),error=>
-      error.notSent && /尚未发送/.test(error.message) && /未切换桌面/.test(error.message) && /手动打开/.test(error.message));
+      error.notSent && /尚未发送/.test(error.message) && /重新启动桥接/.test(error.message));
     assert.deepEqual(f.requests.map(r=>r.method),['initialize','thread-owner-discovery']);
+  }finally{await f.close();}
+});
+
+test('a cold chat opens once and waits for its actual host owner before sending the original text',async()=>{
+  const opened=[];let discoveries=0;
+  const prompt='请检查这个会话，保留原来的模型和项目，中文逗号、句号。以及“引号”与换行\n都应原样发送。';
+  const f=await fixture({ownerReady:false,activateThread:async args=>{opened.push(args);},
+    onDiscovery:()=>{if(++discoveries===4)f.setOwnerReady();}});
+  try {
+    const result=await f.input.send({threadId:'cold-chat',hostId:'ssh-host',prompt,model:'custom-model',thinking:'xhigh'});
+    assert.deepEqual(result,{threadId:'cold-chat',accepted:true});
+    assert.deepEqual(opened,[{threadId:'cold-chat',hostId:'ssh-host'}]);
+    assert.equal(discoveries,4);
+    const starts=f.requests.filter(r=>r.method==='thread-follower-start-turn');assert.equal(starts.length,1);
+    assert.equal(starts[0],f.requests.at(-1));assert.equal(starts[0].hostId,'ssh-host');
+    assert.equal(starts[0].params.turnStart.request.input[0].text,prompt);
+    assert.equal(starts[0].params.turnStart.request.model,'custom-model');
+    assert.equal(starts[0].params.turnStart.request.effort,'xhigh');
+    assert.deepEqual(starts[0].params.turnStart.context,{inheritThreadSettings:true});
+  }finally{await f.close();}
+});
+
+test('an already loaded chat never activates the desktop',async()=>{
+  const f=await fixture({activateThread:()=>assert.fail('Loaded chats must stay in the background')});
+  try{await f.input.send({threadId:'loaded-chat',prompt:'你好，世界。'});}
+  finally{await f.close();}
+});
+
+test('navigation failure or a loading timeout never submits a message or retries navigation',async()=>{
+  for(const failNavigation of [true,false]) {
+    let opens=0;
+    const f=await fixture({ownerReady:false,loadTimeoutMs:25,activateThread:async()=>{
+      opens++;if(failNavigation)throw new Error('Navigation unavailable');
+    }});
+    try {
+      await assert.rejects(f.input.send({threadId:'cold-chat',prompt:'任务'}),error=>
+        error.notSent && /消息尚未发送/.test(error.message) && !/未切换桌面/.test(error.message));
+      assert.equal(opens,1);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+    }finally{await f.close();}
+  }
+});
+
+test('revoking authorization before opening or while loading prevents message submission',async()=>{
+  for(const revokeDuringLoad of [false,true]) {
+    let authorized=true,opens=0;
+    const f=await fixture({ownerReady:false,activateThread:async()=>{opens++;authorized=false;},
+      onDiscovery:()=>{if(!revokeDuringLoad)authorized=false;}});
+    try {
+      await assert.rejects(f.input.send({threadId:'cold-chat',prompt:'任务'},()=>{
+        if(!authorized)throw new Error('revoked');
+      }),error=>error.notSent && /授权已撤销/.test(error.message));
+      assert.equal(opens,revokeDuringLoad?1:0);
+      assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+    }finally{await f.close();}
+  }
+});
+
+test('concurrent sends to the same cold chat share its opening and each send once',async()=>{
+  let opens=0,discoveries=0;
+  const f=await fixture({ownerReady:false,activateThread:async()=>{opens++;},
+    onDiscovery:()=>{if(++discoveries===5)f.setOwnerReady();}});
+  try {
+    await Promise.all(['第一条，消息。','第二条，消息。'].map(prompt=>f.input.send({threadId:'cold-chat',prompt})));
+    assert.equal(opens,1);
+    const starts=f.requests.filter(r=>r.method==='thread-follower-start-turn');assert.equal(starts.length,2);
+    assert.deepEqual(starts.map(r=>r.params.turnStart.request.input[0].text).sort(),['第一条，消息。','第二条，消息。'].sort());
   }finally{await f.close();}
 });
 
@@ -113,13 +180,19 @@ test('an unconfirmed start is never retried and an explicit desktop failure is r
   }
 });
 
-test('desktop client never uses app tools to open or resend an unloaded target',async()=>{
+test('desktop client opens a cold target using genuine app context, then sends ordinary input exactly once',async()=>{
   const f=await fixture({ownerReady:false});const client=new DesktopClient({threadId:'genuine-caller',inputPipePath:f.pipe});
-  const appCalls=[];client.request=async(...args)=>{appCalls.push(args);throw new Error('Unexpected app tool request');};
+  const appCalls=[];client.request=async(method,args)=>{
+    appCalls.push({method,args});f.setOwnerReady();return {success:true,contentItems:[]};
+  };
   try{
-    await assert.rejects(client.call('send_message_to_thread',{threadId:'unloaded-target',prompt:'任务'}),error=>error.notSent);
-    assert.deepEqual(appCalls,[]);
-    assert.deepEqual(f.requests.map(r=>r.method),['initialize','thread-owner-discovery']);
+    await client.call('send_message_to_thread',{threadId:'unloaded-target',prompt:'你好，检查一下。'});
+    assert.equal(appCalls.length,1);assert.equal(appCalls[0].method,'tools/call');
+    assert.equal(appCalls[0].args.threadId,'genuine-caller');assert.equal(appCalls[0].args.callerSource,'codex');
+    assert.equal(appCalls[0].args.tool,'navigate_to_codex_page');
+    assert.deepEqual(appCalls[0].args.arguments,{threadId:'unloaded-target'});
+    assert.deepEqual(f.requests.map(r=>r.method),['initialize','thread-owner-discovery','thread-owner-discovery','thread-follower-start-turn']);
+    assert.equal(f.requests.at(-1).params.turnStart.request.input[0].text,'你好，检查一下。');
   }finally{client.close();await f.close();}
 });
 

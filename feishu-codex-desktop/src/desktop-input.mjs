@@ -2,6 +2,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
 
 const MAX_FRAME=8*1024*1024;
 const VERSIONS={initialize:0,'thread-owner-discovery':1,'thread-follower-start-turn':2};
@@ -18,8 +19,9 @@ function inputError(message,notSent=false) {return Object.assign(new Error(messa
 
 // Use the running desktop's coordination bus; never launch another Codex process.
 export class DesktopInput {
-  constructor({pipePath=desktopInputPath(),timeoutMs=10000}={}) {
-    Object.assign(this,{pipePath,timeoutMs});this.pending=new Map();this.buffer=Buffer.alloc(0);
+  constructor({pipePath=desktopInputPath(),timeoutMs=10000,activateThread,loadTimeoutMs=20000,pollIntervalMs=300}={}) {
+    Object.assign(this,{pipePath,timeoutMs,activateThread,loadTimeoutMs,pollIntervalMs});
+    this.pending=new Map();this.buffer=Buffer.alloc(0);this.loading=new Map();
   }
   async connect() {
     if(this.socket && !this.socket.destroyed && this.clientId)return;
@@ -79,23 +81,50 @@ export class DesktopInput {
       }
     }
   }
-  async findOwner(threadId,hostId='local') {
-    const response=await this.request('thread-owner-discovery',{hostId,conversationId:threadId});
+  async findOwner(threadId,hostId='local',timeoutMs=this.timeoutMs) {
+    const response=await this.request('thread-owner-discovery',{hostId,conversationId:threadId},{timeoutMs});
     if(response.resultType==='success' && typeof response.handledByClientId==='string')return response.handledByClientId;
     if(response.resultType==='error' && response.error==='no-client-found')return null;
     throw inputError('无法确认桌面会话连接，消息尚未发送。请重新启动桥接。',true);
+  }
+  async loadOwner(threadId,hostId,authorize) {
+    if(!this.activateThread)throw inputError('目标会话尚未加载，消息尚未发送。请重新启动桥接以启用自动打开会话。',true);
+    const key=JSON.stringify([hostId,threadId]);
+    let loading=this.loading.get(key);
+    if(!loading) {
+      loading=(async()=>{
+        authorize();
+        try {await this.activateThread({threadId,hostId});}
+        catch {throw inputError('未能确认目标会话已打开，消息尚未发送。请检查桌面连接后重试。',true);}
+        const deadline=Date.now()+this.loadTimeoutMs;
+        while(Date.now()<deadline) {
+          authorize();
+          let owner;
+          try {owner=await this.findOwner(threadId,hostId,Math.min(this.timeoutMs,Math.max(1,deadline-Date.now())));}
+          catch {throw inputError('已尝试打开目标会话，但无法确认加载状态，消息尚未发送。请检查桌面连接后重试。',true);}
+          if(owner)return owner;
+          await delay(Math.min(this.pollIntervalMs,Math.max(1,deadline-Date.now())));
+        }
+        throw inputError('已尝试打开目标会话，但加载尚未完成，消息尚未发送。请稍后重试。',true);
+      })();
+      this.loading.set(key,loading);
+    }
+    try {return await loading;}
+    finally {if(this.loading.get(key)===loading)this.loading.delete(key);}
   }
   async send({threadId,hostId='local',prompt,model,thinking},beforeSend) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
     const authorize=()=>{try{beforeSend?.();}catch{throw inputError('通道授权已撤销，消息尚未发送。',true);}};
+    authorize();
     await this.connect();let owner;
     try {
       owner=await this.findOwner(threadId,hostId);
     }catch(error){if(error.notSent)throw error;throw inputError('无法确认目标桌面会话连接，消息尚未发送，也未切换桌面。请稍后重试。',true);}
-    // Discovering an owner must never navigate or focus the desktop. The current
-    // coordination protocol exposes no background resume for an unloaded chat.
-    if(!owner)throw inputError('目标会话尚未加载，消息尚未发送，也未切换桌面。当前接口暂不支持后台加载此会话；可换一个已加载会话，或方便时在桌面手动打开目标后重试。',true);
+    // Loaded chats stay in the background. For cold chats the user permits
+    // opening the target; navigation alone is not proof that it has loaded.
+    authorize();
+    if(!owner)owner=await this.loadOwner(threadId,hostId,authorize);
     authorize();
     const request={threadId,clientUserMessageId:randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
       ...(model?{model}:{}),...(thinking?{effort:thinking}:{})};

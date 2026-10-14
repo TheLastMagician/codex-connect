@@ -21572,6 +21572,7 @@ var import_node_net = __toESM(require("node:net"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
 var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_crypto2 = require("node:crypto");
+var import_promises = require("node:timers/promises");
 var MAX_FRAME = 8 * 1024 * 1024;
 var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
 function desktopInputPath() {
@@ -21588,10 +21589,11 @@ function inputError(message, notSent = false) {
   return Object.assign(new Error(message), { notSent });
 }
 var DesktopInput = class {
-  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4 } = {}) {
-    Object.assign(this, { pipePath, timeoutMs });
+  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4, activateThread, loadTimeoutMs = 2e4, pollIntervalMs = 300 } = {}) {
+    Object.assign(this, { pipePath, timeoutMs, activateThread, loadTimeoutMs, pollIntervalMs });
     this.pending = /* @__PURE__ */ new Map();
     this.buffer = Buffer.alloc(0);
+    this.loading = /* @__PURE__ */ new Map();
   }
   async connect() {
     if (this.socket && !this.socket.destroyed && this.clientId) return;
@@ -21693,11 +21695,45 @@ var DesktopInput = class {
       }
     }
   }
-  async findOwner(threadId, hostId = "local") {
-    const response = await this.request("thread-owner-discovery", { hostId, conversationId: threadId });
+  async findOwner(threadId, hostId = "local", timeoutMs = this.timeoutMs) {
+    const response = await this.request("thread-owner-discovery", { hostId, conversationId: threadId }, { timeoutMs });
     if (response.resultType === "success" && typeof response.handledByClientId === "string") return response.handledByClientId;
     if (response.resultType === "error" && response.error === "no-client-found") return null;
     throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
+  }
+  async loadOwner(threadId, hostId, authorize) {
+    if (!this.activateThread) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u4EE5\u542F\u7528\u81EA\u52A8\u6253\u5F00\u4F1A\u8BDD\u3002", true);
+    const key = JSON.stringify([hostId, threadId]);
+    let loading = this.loading.get(key);
+    if (!loading) {
+      loading = (async () => {
+        authorize();
+        try {
+          await this.activateThread({ threadId, hostId });
+        } catch {
+          throw inputError("\u672A\u80FD\u786E\u8BA4\u76EE\u6807\u4F1A\u8BDD\u5DF2\u6253\u5F00\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
+        }
+        const deadline = Date.now() + this.loadTimeoutMs;
+        while (Date.now() < deadline) {
+          authorize();
+          let owner;
+          try {
+            owner = await this.findOwner(threadId, hostId, Math.min(this.timeoutMs, Math.max(1, deadline - Date.now())));
+          } catch {
+            throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u65E0\u6CD5\u786E\u8BA4\u52A0\u8F7D\u72B6\u6001\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
+          }
+          if (owner) return owner;
+          await (0, import_promises.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
+        }
+        throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u52A0\u8F7D\u5C1A\u672A\u5B8C\u6210\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
+      })();
+      this.loading.set(key, loading);
+    }
+    try {
+      return await loading;
+    } finally {
+      if (this.loading.get(key) === loading) this.loading.delete(key);
+    }
   }
   async send({ threadId, hostId = "local", prompt, model, thinking }, beforeSend) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
@@ -21709,6 +21745,7 @@ var DesktopInput = class {
         throw inputError("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
       }
     };
+    authorize();
     await this.connect();
     let owner;
     try {
@@ -21717,7 +21754,8 @@ var DesktopInput = class {
       if (error2.notSent) throw error2;
       throw inputError("\u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
     }
-    if (!owner) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u5F53\u524D\u63A5\u53E3\u6682\u4E0D\u652F\u6301\u540E\u53F0\u52A0\u8F7D\u6B64\u4F1A\u8BDD\uFF1B\u53EF\u6362\u4E00\u4E2A\u5DF2\u52A0\u8F7D\u4F1A\u8BDD\uFF0C\u6216\u65B9\u4FBF\u65F6\u5728\u684C\u9762\u624B\u52A8\u6253\u5F00\u76EE\u6807\u540E\u91CD\u8BD5\u3002", true);
+    authorize();
+    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize);
     authorize();
     const request = {
       threadId,
@@ -21780,7 +21818,10 @@ var DesktopClient = class {
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
-    this.input = new DesktopInput({ pipePath: context2.inputPipePath });
+    this.input = new DesktopInput({
+      pipePath: context2.inputPipePath,
+      activateThread: ({ threadId }) => this.call("navigate_to_codex_page", { threadId })
+    });
   }
   async connect() {
     if (this.socket && !this.socket.destroyed) return;
@@ -21927,7 +21968,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto6 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.7";
+var VERSION = "0.3.8";
 
 // src/wechat-auth.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);

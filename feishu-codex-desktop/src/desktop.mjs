@@ -18,7 +18,8 @@ export function encodeFrame(value) {
 }
 export class DesktopClient {
   constructor(context) { this.context = context; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
-    this.input=new DesktopInput({pipePath:context.inputPipePath}); }
+    this.input=new DesktopInput({pipePath:context.inputPipePath,
+      activateThread:({threadId})=>this.call('navigate_to_codex_page',{threadId})}); }
   async connect() {
     if (this.socket && !this.socket.destroyed) return;
     if (this.connecting) return this.connecting;
