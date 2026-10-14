@@ -121,6 +121,21 @@ test('unknown send outcome is never retried and explains how to check before res
   await deliver(f,'任务',{id:'fail-send'});await deliver(f,'任务',{id:'fail-send'});
   assert.equal(sends,1);assert.match(f.sent.at(-1).text,/未确认发送结果/);assert.equal(f.router.watches.size,0);
 });
+
+test('an unloaded target reports an unsent message without opening it or starting reply watches',async()=>{
+  const f=fixture();await deliver(f,'/chats',{id:'unloaded-list'});await deliver(f,'/use 1',{id:'unloaded-select'});
+  const original=f.desktop.call;
+  f.desktop.call=async(name,args)=>{
+    if(name==='send_message_to_thread')throw Object.assign(new Error('目标会话尚未加载，消息尚未发送，也未切换桌面。'),{notSent:true});
+    return original(name,args);
+  };
+  await deliver(f,'任务',{id:'unloaded-send'});
+  assert.match(f.sent.at(-1).text,/尚未发送，也未切换桌面/);
+  assert.doesNotMatch(f.sent.at(-1).text,/任务已发送|未确认发送结果/);
+  assert.equal(f.router.watches.size,0);
+  assert.equal(f.calls.some(c=>c.name==='navigate_to_codex_page'),false);
+  assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');
+});
 test('different paired people cannot change each others selected chats',async()=>{
   const f=fixture({allowedOpenIds:['owner','other']});
   await deliver(f,'/chats',{id:'one'});await deliver(f,'/use 1',{id:'two'});

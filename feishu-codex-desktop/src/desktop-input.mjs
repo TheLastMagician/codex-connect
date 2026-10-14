@@ -2,7 +2,6 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {setTimeout as delay} from 'node:timers/promises';
 
 const MAX_FRAME=8*1024*1024;
 const VERSIONS={initialize:0,'thread-owner-discovery':1,'thread-follower-start-turn':2};
@@ -19,8 +18,8 @@ function inputError(message,notSent=false) {return Object.assign(new Error(messa
 
 // Use the running desktop's coordination bus; never launch another Codex process.
 export class DesktopInput {
-  constructor({pipePath=desktopInputPath(),timeoutMs=10000,wait=delay}={}) {
-    Object.assign(this,{pipePath,timeoutMs,wait});this.pending=new Map();this.buffer=Buffer.alloc(0);
+  constructor({pipePath=desktopInputPath(),timeoutMs=10000}={}) {
+    Object.assign(this,{pipePath,timeoutMs});this.pending=new Map();this.buffer=Buffer.alloc(0);
   }
   async connect() {
     if(this.socket && !this.socket.destroyed && this.clientId)return;
@@ -86,22 +85,17 @@ export class DesktopInput {
     if(response.resultType==='error' && response.error==='no-client-found')return null;
     throw inputError('无法确认桌面会话连接，消息尚未发送。请重新启动桥接。',true);
   }
-  async send({threadId,hostId='local',prompt,model,thinking},openThread,beforeSend) {
+  async send({threadId,hostId='local',prompt,model,thinking},beforeSend) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
     const authorize=()=>{try{beforeSend?.();}catch{throw inputError('通道授权已撤销，消息尚未发送。',true);}};
     await this.connect();let owner;
     try {
       owner=await this.findOwner(threadId,hostId);
-      if(!owner) {
-        authorize();
-        await openThread(threadId);
-        for(let attempt=0;attempt<12 && !owner;attempt++) {
-          await this.wait(350);owner=await this.findOwner(threadId,hostId);
-        }
-      }
-    }catch(error){if(error.notSent)throw error;throw inputError('无法加载目标桌面会话，消息尚未发送。请在桌面打开该会话后重试。',true);}
-    if(!owner)throw inputError('目标会话尚未加载，消息尚未发送。请在桌面打开该会话后重试。',true);
+    }catch(error){if(error.notSent)throw error;throw inputError('无法确认目标桌面会话连接，消息尚未发送，也未切换桌面。请稍后重试。',true);}
+    // Discovering an owner must never navigate or focus the desktop. The current
+    // coordination protocol exposes no background resume for an unloaded chat.
+    if(!owner)throw inputError('目标会话尚未加载，消息尚未发送，也未切换桌面。当前接口暂不支持后台加载此会话；可换一个已加载会话，或方便时在桌面手动打开目标后重试。',true);
     authorize();
     const request={threadId,clientUserMessageId:randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
       ...(model?{model}:{}),...(thinking?{effort:thinking}:{})};

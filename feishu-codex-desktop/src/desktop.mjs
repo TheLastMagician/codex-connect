@@ -81,7 +81,7 @@ export class DesktopClient {
   async call(tool,args={},options={}) {
     if(!ALLOWED_TOOLS.has(tool)) throw new Error('不支持的桌面操作');
     if(!this.context.threadId) throw new Error('缺少真实调用会话，请从 Codex 桌面内启动桥接');
-    if(tool==='send_message_to_thread')return this.input.send(args,threadId=>this.call('navigate_to_codex_page',{threadId}),options.beforeSend);
+    if(tool==='send_message_to_thread')return this.input.send(args,options.beforeSend);
     const result=await this.request('tools/call',{
       namespace:'codex_app',tool,arguments:args,callerSource:'codex',
       threadId:this.context.threadId,hostId:'local',

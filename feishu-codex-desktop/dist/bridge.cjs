@@ -122621,13 +122621,13 @@ var require_lib2 = __commonJS({
           this.fireSoon(wait);
         }
       }
-      fireSoon(delay3) {
+      fireSoon(delay2) {
         if (this.timer)
           clearTimeout(this.timer);
         this.timer = setTimeout(() => {
           this.timer = void 0;
           void this.doFire();
-        }, delay3);
+        }, delay2);
       }
       /**
        * Force-flush everything accumulated so far, including any content that
@@ -123631,8 +123631,8 @@ ${block}
             if (attempt >= max || !isRetryable(err)) {
               throw err;
             }
-            const delay3 = base * Math.pow(3, attempt - 1);
-            yield sleep(delay3);
+            const delay2 = base * Math.pow(3, attempt - 1);
+            yield sleep(delay2);
           }
         }
         throw lastErr;
@@ -124072,11 +124072,11 @@ ${block}
           return;
         }
         this.clearTimer();
-        const delay3 = this.bufferChars >= this.config.longThresholdChars ? this.config.longDelayMs : this.config.delayMs;
+        const delay2 = this.bufferChars >= this.config.longThresholdChars ? this.config.longDelayMs : this.config.delayMs;
         this.timer = setTimeout(() => {
           this.timer = void 0;
           this.enqueueFlush();
-        }, delay3);
+        }, delay2);
       }
       run(task) {
         if (this.buffer.length > 0) {
@@ -125885,7 +125885,6 @@ var import_node_net = __toESM(require("node:net"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_crypto = require("node:crypto");
-var import_promises = require("node:timers/promises");
 var MAX_FRAME = 8 * 1024 * 1024;
 var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
 function desktopInputPath() {
@@ -125902,8 +125901,8 @@ function inputError(message, notSent = false) {
   return Object.assign(new Error(message), { notSent });
 }
 var DesktopInput = class {
-  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4, wait = import_promises.setTimeout } = {}) {
-    Object.assign(this, { pipePath, timeoutMs, wait });
+  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4 } = {}) {
+    Object.assign(this, { pipePath, timeoutMs });
     this.pending = /* @__PURE__ */ new Map();
     this.buffer = Buffer.alloc(0);
   }
@@ -126013,7 +126012,7 @@ var DesktopInput = class {
     if (response.resultType === "error" && response.error === "no-client-found") return null;
     throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking }, openThread, beforeSend) {
+  async send({ threadId, hostId = "local", prompt, model, thinking }, beforeSend) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     const authorize = () => {
@@ -126027,19 +126026,11 @@ var DesktopInput = class {
     let owner;
     try {
       owner = await this.findOwner(threadId, hostId);
-      if (!owner) {
-        authorize();
-        await openThread(threadId);
-        for (let attempt = 0; attempt < 12 && !owner; attempt++) {
-          await this.wait(350);
-          owner = await this.findOwner(threadId, hostId);
-        }
-      }
     } catch (error) {
       if (error.notSent) throw error;
-      throw inputError("\u65E0\u6CD5\u52A0\u8F7D\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u5728\u684C\u9762\u6253\u5F00\u8BE5\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002", true);
+      throw inputError("\u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
     }
-    if (!owner) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u5728\u684C\u9762\u6253\u5F00\u8BE5\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002", true);
+    if (!owner) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u5F53\u524D\u63A5\u53E3\u6682\u4E0D\u652F\u6301\u540E\u53F0\u52A0\u8F7D\u6B64\u4F1A\u8BDD\uFF1B\u53EF\u6362\u4E00\u4E2A\u5DF2\u52A0\u8F7D\u4F1A\u8BDD\uFF0C\u6216\u65B9\u4FBF\u65F6\u5728\u684C\u9762\u624B\u52A8\u6253\u5F00\u76EE\u6807\u540E\u91CD\u8BD5\u3002", true);
     authorize();
     const request = {
       threadId,
@@ -126193,7 +126184,7 @@ var DesktopClient = class {
   async call(tool2, args = {}, options = {}) {
     if (!ALLOWED_TOOLS.has(tool2)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
-    if (tool2 === "send_message_to_thread") return this.input.send(args, (threadId) => this.call("navigate_to_codex_page", { threadId }), options.beforeSend);
+    if (tool2 === "send_message_to_thread") return this.input.send(args, options.beforeSend);
     const result = await this.request("tools/call", {
       namespace: "codex_app",
       tool: tool2,
@@ -127790,13 +127781,13 @@ function createFeishuChannel({ desktop, settings, onStatus, operator = new Opera
 
 // src/channels/wechat.mjs
 var import_node_crypto8 = require("node:crypto");
-var import_promises2 = require("node:timers/promises");
+var import_promises = require("node:timers/promises");
 
 // src/wechat-api.mjs
 var import_node_crypto7 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.5";
+var VERSION = "0.3.6";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -128001,7 +127992,7 @@ function createWechatChannel({
   loadState = () => readJson(wechatStateName(account), { sessions: {}, seen: {} }),
   save = (state) => writeJson(wechatStateName(account), state),
   currentAccount = readWechatAccount,
-  wait = import_promises2.setTimeout,
+  wait = import_promises.setTimeout,
   operator = new OperationAssistant()
 }) {
   const state = loadState();

@@ -23,6 +23,7 @@ async function fixture(options={}) {
         else {
           assert.equal(request.sourceClientId,'server-assigned-client');
           if(request.method==='thread-owner-discovery') {
+            options.onDiscovery?.();
             response=ownerReady?{...response,handledByClientId:'desktop-owner',result:{supportsUntrustedAppInput:true}}:
               {...response,resultType:'error',error:'no-client-found'};
           }else if(request.method==='thread-follower-start-turn') {
@@ -35,15 +36,15 @@ async function fixture(options={}) {
     });
   });
   await new Promise(resolve=>server.listen(pipe,resolve));
-  const input=new DesktopInput({pipePath:pipe,timeoutMs:options.timeoutMs||500,wait:async()=>{}});
-  return {input,pipe,requests,setOwnerReady:value=>{ownerReady=value;},close:async()=>{
+  const input=new DesktopInput({pipePath:pipe,timeoutMs:options.timeoutMs||500});
+  return {input,pipe,requests,close:async()=>{
     input.close();for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));
   }};
 }
 
 test('messages enter the existing desktop conversation as ordinary user input and inherit its provider and permissions',async()=>{
   const f=await fixture();try{
-    await f.input.send({threadId:'target',prompt:'你好，检查 A < B & C'},()=>assert.fail('Already loaded chat was opened'));
+    await f.input.send({threadId:'target',prompt:'你好，检查 A < B & C'});
     const sent=f.requests.find(r=>r.method==='thread-follower-start-turn');
     assert.equal(sent.version,2);assert.equal(sent.targetClientId,'desktop-owner');assert.equal(sent.params.conversationId,'target');
     const request=sent.params.turnStart.request;
@@ -56,36 +57,37 @@ test('messages enter the existing desktop conversation as ordinary user input an
   }finally{await f.close();}
 });
 
-test('an unloaded chat is opened once before a single send, with explicit phone model settings mapped correctly',async()=>{
-  const f=await fixture({ownerReady:false});const opened=[];try{
-    await f.input.send({threadId:'target',prompt:'任务',model:'custom-model',thinking:'high'},async id=>{
-      opened.push(id);f.setOwnerReady(true);
-    });
-    assert.deepEqual(opened,['target']);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
+test('a loaded background chat receives a single message with explicit phone model settings',async()=>{
+  const f=await fixture();try{
+    await f.input.send({threadId:'background-chat',prompt:'任务',model:'custom-model',thinking:'high'});
+    assert.deepEqual(f.requests.map(r=>r.method),['initialize','thread-owner-discovery','thread-follower-start-turn']);
+    assert.equal(f.requests.at(-1).params.conversationId,'background-chat');
     const request=f.requests.at(-1).params.turnStart.request;assert.equal(request.model,'custom-model');assert.equal(request.effort,'high');
   }finally{await f.close();}
 });
 
 test('remote host routing keeps the host and uses its matching protocol version',async()=>{
   const f=await fixture();try{
-    await f.input.send({threadId:'remote-chat',hostId:'ssh-host',prompt:'任务'},()=>{});
+    await f.input.send({threadId:'remote-chat',hostId:'ssh-host',prompt:'任务'});
     assert.equal(f.requests[1].params.hostId,'ssh-host');
     assert.equal(f.requests.at(-1).hostId,'ssh-host');assert.equal(f.requests.at(-1).version,3);
   }finally{await f.close();}
 });
 
-test('missing ownership fails before sending and never falls back to delegated tool output',async()=>{
-  const f=await fixture({ownerReady:false});let opened=0;try{
-    await assert.rejects(f.input.send({threadId:'target',prompt:'任务'},async()=>{opened++;}),error=>error.notSent && /尚未发送/.test(error.message));
-    assert.equal(opened,1);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+test('an unloaded chat fails without sending, navigating, or retrying discovery',async()=>{
+  const f=await fixture({ownerReady:false});try{
+    await assert.rejects(f.input.send({threadId:'target',prompt:'任务'}),error=>
+      error.notSent && /尚未发送/.test(error.message) && /未切换桌面/.test(error.message) && /手动打开/.test(error.message));
+    assert.deepEqual(f.requests.map(r=>r.method),['initialize','thread-owner-discovery']);
   }finally{await f.close();}
 });
 
-test('authorization is rechecked after loading and before the message is submitted',async()=>{
-  const f=await fixture({ownerReady:false});let authorized=true;try{
-    await assert.rejects(f.input.send({threadId:'target',prompt:'任务'},async()=>{
-      f.setOwnerReady(true);authorized=false;
-    },()=>{if(!authorized)throw new Error('revoked');}),error=>error.notSent && /授权已撤销/.test(error.message));
+test('authorization revoked during owner discovery prevents message submission',async()=>{
+  let authorized=true;
+  const f=await fixture({onDiscovery:()=>{authorized=false;}});try{
+    await assert.rejects(f.input.send({threadId:'target',prompt:'任务'},()=>{
+      if(!authorized)throw new Error('revoked');
+    }),error=>error.notSent && /授权已撤销/.test(error.message));
     assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
   }finally{await f.close();}
 });
@@ -93,10 +95,30 @@ test('authorization is rechecked after loading and before the message is submitt
 test('an unconfirmed start is never retried and an explicit desktop failure is reported',async()=>{
   for(const options of [{dropStartAck:true,timeoutMs:80},{rejectStart:true}]){
     const f=await fixture(options);try{
-      await assert.rejects(f.input.send({threadId:'target',prompt:'任务'},()=>{}),/未确认发送结果/);
+      await assert.rejects(f.input.send({threadId:'target',prompt:'任务'}),/未确认发送结果/);
       assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
     }finally{await f.close();}
   }
+});
+
+test('desktop client never uses app tools to open or resend an unloaded target',async()=>{
+  const f=await fixture({ownerReady:false});const client=new DesktopClient({threadId:'genuine-caller',inputPipePath:f.pipe});
+  const appCalls=[];client.request=async(...args)=>{appCalls.push(args);throw new Error('Unexpected app tool request');};
+  try{
+    await assert.rejects(client.call('send_message_to_thread',{threadId:'unloaded-target',prompt:'任务'}),error=>error.notSent);
+    assert.deepEqual(appCalls,[]);
+    assert.deepEqual(f.requests.map(r=>r.method),['initialize','thread-owner-discovery']);
+  }finally{client.close();await f.close();}
+});
+
+test('an explicit request to open a chat still uses the navigation tool',async()=>{
+  const client=new DesktopClient({threadId:'genuine-caller'});const appCalls=[];
+  client.request=async(method,args)=>{appCalls.push({method,args});return {success:true,contentItems:[]};};
+  try{
+    await client.call('navigate_to_codex_page',{threadId:'chosen-target'});
+    assert.equal(appCalls.length,1);assert.equal(appCalls[0].args.tool,'navigate_to_codex_page');
+    assert.deepEqual(appCalls[0].args.arguments,{threadId:'chosen-target'});
+  }finally{client.close();}
 });
 
 test('desktop client dispatches send through ordinary input while retaining the genuine app tools context',async()=>{
