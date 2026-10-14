@@ -447,8 +447,8 @@ export class Router {
         catch {throw new Error('发送前无法读取这个会话，消息尚未发送。请用 /read 检查连接，再重新发送。');}
         // This text is an authenticated user's explicit instruction to this selected chat.
         authorize();
-        try {await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session)});}
-        catch {throw new Error('桌面未确认发送结果。请先用 /read 或在桌面检查这条消息是否已进入会话，再决定是否重发。');}
+        try {await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session)},{beforeSend:authorize});}
+        catch(error) {if(error.notSent)throw error;throw new Error('桌面未确认发送结果。请先用 /read 或在桌面检查这条消息是否已进入会话，再决定是否重发。');}
         session.awaitingChoice=null;this.saveState();this.watch(session,baseline);output=`已发送到：${selected.title||selected.id}\n回复会自动发回${this.channelLabel}。\n/status 查看进度，/read 查看对话，/chats 切换会话。`;
       }
     }

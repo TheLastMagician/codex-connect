@@ -3261,8 +3261,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path4) {
-      let input = path4;
+    function removeDotSegments(path5) {
+      let input = path5;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3671,8 +3671,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path4 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path4 && path4 !== "/" ? path4 : void 0;
+        const path5 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8739,10 +8739,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version2);
-      const path4 = dijkstra.find_path(graph.map, "start", "end");
+      const path5 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path4.length - 1; i++) {
-        optimizedSegs.push(graph.table[path4[i]].node);
+      for (let i = 1; i < path5.length - 1; i++) {
+        optimizedSegs.push(graph.table[path5[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -11219,7 +11219,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path4, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -11230,7 +11230,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs4.createWriteStream(path4);
+      const stream = fs4.createWriteStream(path5);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -11292,14 +11292,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path4, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
       const fs4 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs4.writeFile(path4, utf8, cb);
+      fs4.writeFile(path5, utf8, cb);
     };
   }
 });
@@ -11420,7 +11420,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path4 = "";
+      let path5 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -11431,19 +11431,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path4 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path5 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path4 += svgCmd("h", lineLength);
+            path5 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path4;
+      return path5;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -11451,10 +11451,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path4 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path5 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path4 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path5 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -11468,7 +11468,7 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path4, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -11476,7 +11476,7 @@ var require_svg = __commonJS({
       const fs4 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs4.writeFile(path4, xmlStr, cb);
+      fs4.writeFile(path5, xmlStr, cb);
     };
   }
 });
@@ -11634,8 +11634,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path4) {
-      return path4.slice((path4.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path5) {
+      return path5.slice((path5.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -11699,17 +11699,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path4, text, opts, cb) {
-      if (typeof path4 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path5, text, opts, cb) {
+      if (typeof path5 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path4);
+      const type = params.opts.type || getTypeFromFilename(path5);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path4);
+      const renderToFile = renderer.renderToFile.bind(null, path5);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -11733,7 +11733,7 @@ var require_lib = __commonJS({
 
 // src/server.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 var import_node_child_process3 = require("node:child_process");
 
 // node_modules/zod/v4/core/util.js
@@ -11973,10 +11973,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path4) {
-  if (!path4)
+function getElementAtPath(obj, path5) {
+  if (!path5)
     return obj;
-  return path4.reduce((acc, key) => acc?.[key], obj);
+  return path5.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12316,11 +12316,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path4, issues) {
+function prefixIssues(path5, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path4);
+    iss.path.unshift(path5);
     return iss;
   });
 }
@@ -12778,16 +12778,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path4 = []) => {
+  const processError = (error3, path5 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path4, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path5, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path4, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path5, ...issue2.path]);
       } else {
-        const fullpath = [...path4, ...issue2.path];
+        const fullpath = [...path5, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -21564,9 +21564,203 @@ function config2() {
 }
 
 // src/desktop.mjs
+var import_node_net2 = __toESM(require("node:net"), 1);
+var import_node_crypto3 = require("node:crypto");
+
+// src/desktop-input.mjs
 var import_node_net = __toESM(require("node:net"), 1);
+var import_node_os2 = __toESM(require("node:os"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_crypto2 = require("node:crypto");
+var import_promises = require("node:timers/promises");
 var MAX_FRAME = 8 * 1024 * 1024;
+var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
+function desktopInputPath() {
+  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path2.default.join(process.env.CODEX_HOME || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex"), "ipc", "ipc.sock");
+}
+function frame(message) {
+  const data = Buffer.from(JSON.stringify(message), "utf8");
+  if (data.length > MAX_FRAME) throw new Error("\u6D88\u606F\u8FC7\u5927");
+  const header = Buffer.alloc(4);
+  header.writeUInt32LE(data.length);
+  return Buffer.concat([header, data]);
+}
+function inputError(message, notSent = false) {
+  return Object.assign(new Error(message), { notSent });
+}
+var DesktopInput = class {
+  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4, wait = import_promises.setTimeout } = {}) {
+    Object.assign(this, { pipePath, timeoutMs, wait });
+    this.pending = /* @__PURE__ */ new Map();
+    this.buffer = Buffer.alloc(0);
+  }
+  async connect() {
+    if (this.socket && !this.socket.destroyed && this.clientId) return;
+    if (this.connecting) return this.connecting;
+    this.connecting = (async () => {
+      this.clientId = null;
+      this.buffer = Buffer.alloc(0);
+      await new Promise((resolve, reject) => {
+        const socket = import_node_net.default.createConnection(this.pipePath);
+        this.socket = socket;
+        const timer = setTimeout(() => socket.destroy(new Error("connect-timeout")), this.timeoutMs);
+        socket.once("error", reject);
+        socket.once("close", () => clearTimeout(timer));
+        socket.once("connect", () => {
+          clearTimeout(timer);
+          socket.off("error", reject);
+          socket.on("data", (chunk) => this.onData(chunk));
+          socket.on("error", () => {
+            if (this.socket === socket) this.disconnect();
+          });
+          socket.on("close", () => {
+            if (this.socket === socket) this.disconnect();
+          });
+          resolve();
+        });
+      });
+      const response = await this.request("initialize", { clientType: "codex-connect" });
+      if (response.resultType !== "success" || typeof response.result?.clientId !== "string") throw new Error("initialize-failed");
+      this.clientId = response.result.clientId;
+    })().catch(() => {
+      this.disconnect();
+      throw inputError("\u684C\u9762\u666E\u901A\u6D88\u606F\u5165\u53E3\u4E0D\u53EF\u7528\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\u5E76\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
+    }).finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+  request(method, params, { targetClientId, hostId, timeoutMs = this.timeoutMs } = {}) {
+    if (!Object.hasOwn(VERSIONS, method)) throw inputError("\u4E0D\u652F\u6301\u7684\u684C\u9762\u8F93\u5165\u64CD\u4F5C", true);
+    if (!this.socket || this.socket.destroyed) throw inputError("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+    const requestId = (0, import_node_crypto2.randomUUID)();
+    const remote = hostId && hostId !== "local";
+    const message = {
+      type: "request",
+      requestId,
+      sourceClientId: this.clientId || "initializing-client",
+      version: VERSIONS[method] + (remote && method.startsWith("thread-follower-") ? 1 : 0),
+      method,
+      params,
+      ...targetClientId ? { targetClientId } : {},
+      ...remote ? { hostId } : {},
+      timeoutMs
+    };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        reject(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"));
+      }, timeoutMs);
+      this.pending.set(requestId, { resolve, reject, timer });
+      try {
+        this.socket.write(frame(message));
+      } catch {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+      }
+    });
+  }
+  onData(chunk) {
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    while (this.buffer.length >= 4) {
+      const size = this.buffer.readUInt32LE(0);
+      if (!size || size > MAX_FRAME) {
+        this.disconnect();
+        return;
+      }
+      if (this.buffer.length < size + 4) return;
+      let message;
+      try {
+        message = JSON.parse(this.buffer.subarray(4, size + 4).toString("utf8"));
+      } catch {
+        this.disconnect();
+        return;
+      }
+      this.buffer = this.buffer.subarray(size + 4);
+      if (message.type === "client-discovery-request") {
+        try {
+          this.socket?.write(frame({ type: "client-discovery-response", requestId: message.requestId, response: { canHandle: false } }));
+        } catch {
+          this.disconnect();
+          return;
+        }
+      } else if (message.type === "response") {
+        const pending = this.pending.get(message.requestId);
+        if (!pending) continue;
+        clearTimeout(pending.timer);
+        this.pending.delete(message.requestId);
+        pending.resolve(message);
+      }
+    }
+  }
+  async findOwner(threadId, hostId = "local") {
+    const response = await this.request("thread-owner-discovery", { hostId, conversationId: threadId });
+    if (response.resultType === "success" && typeof response.handledByClientId === "string") return response.handledByClientId;
+    if (response.resultType === "error" && response.error === "no-client-found") return null;
+    throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
+  }
+  async send({ threadId, hostId = "local", prompt, model, thinking }, openThread, beforeSend) {
+    if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
+      throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+    const authorize = () => {
+      try {
+        beforeSend?.();
+      } catch {
+        throw inputError("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+      }
+    };
+    await this.connect();
+    let owner;
+    try {
+      owner = await this.findOwner(threadId, hostId);
+      if (!owner) {
+        authorize();
+        await openThread(threadId);
+        for (let attempt = 0; attempt < 12 && !owner; attempt++) {
+          await this.wait(350);
+          owner = await this.findOwner(threadId, hostId);
+        }
+      }
+    } catch (error2) {
+      if (error2.notSent) throw error2;
+      throw inputError("\u65E0\u6CD5\u52A0\u8F7D\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u5728\u684C\u9762\u6253\u5F00\u8BE5\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002", true);
+    }
+    if (!owner) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u5728\u684C\u9762\u6253\u5F00\u8BE5\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002", true);
+    authorize();
+    const request = {
+      threadId,
+      clientUserMessageId: (0, import_node_crypto2.randomUUID)(),
+      input: [{ type: "text", text: prompt, text_elements: [] }],
+      ...model ? { model } : {},
+      ...thinking ? { effort: thinking } : {}
+    };
+    const response = await this.request("thread-follower-start-turn", {
+      conversationId: threadId,
+      turnStart: { request, context: { inheritThreadSettings: true, useUserMessageAdmission: true } }
+    }, { hostId, targetClientId: owner });
+    if (response.resultType !== "success") throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+    return { threadId, accepted: true };
+  }
+  disconnect() {
+    const socket = this.socket;
+    this.socket = null;
+    this.clientId = null;
+    this.buffer = Buffer.alloc(0);
+    socket?.destroy();
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+    }
+    this.pending.clear();
+  }
+  close() {
+    this.disconnect();
+  }
+};
+
+// src/desktop.mjs
+var MAX_FRAME2 = 8 * 1024 * 1024;
 var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
   "list_threads",
   "list_archived_threads",
@@ -21583,11 +21777,11 @@ var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
 ]);
 function encodeFrame(value) {
   const body = Buffer.from(JSON.stringify(value), "utf8");
-  if (body.length > MAX_FRAME) throw new Error("\u8BF7\u6C42\u8FC7\u5927");
-  const frame = Buffer.alloc(body.length + 4);
-  frame.writeUInt32LE(body.length);
-  body.copy(frame, 4);
-  return frame;
+  if (body.length > MAX_FRAME2) throw new Error("\u8BF7\u6C42\u8FC7\u5927");
+  const frame2 = Buffer.alloc(body.length + 4);
+  frame2.writeUInt32LE(body.length);
+  body.copy(frame2, 4);
+  return frame2;
 }
 var DesktopClient = class {
   constructor(context2) {
@@ -21595,13 +21789,14 @@ var DesktopClient = class {
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
+    this.input = new DesktopInput({ pipePath: context2.inputPipePath });
   }
   async connect() {
     if (this.socket && !this.socket.destroyed) return;
     if (this.connecting) return this.connecting;
     if (!this.context.pipePath) throw new Error("\u672A\u6536\u5230\u684C\u9762\u7248\u8FDE\u63A5\u4FE1\u606F\uFF0C\u8BF7\u5728 Codex \u5185\u542F\u52A8\u63D2\u4EF6");
     this.connecting = new Promise((resolve, reject) => {
-      const socket = import_node_net.default.createConnection(this.context.pipePath);
+      const socket = import_node_net2.default.createConnection(this.context.pipePath);
       const timer = setTimeout(() => socket.destroy(new Error("\u8FDE\u63A5\u684C\u9762\u7248\u8D85\u65F6")), 5e3);
       socket.once("error", reject);
       socket.once("connect", () => {
@@ -21642,7 +21837,7 @@ var DesktopClient = class {
     this.buffer = Buffer.concat([this.buffer, chunk]);
     while (this.buffer.length >= 4) {
       const size = this.buffer.readUInt32LE(0);
-      if (size > MAX_FRAME) {
+      if (size > MAX_FRAME2) {
         this.close();
         return;
       }
@@ -21675,15 +21870,17 @@ var DesktopClient = class {
     this.pending.clear();
   }
   close() {
+    this.input.close();
     this.disconnect(new Error("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED"));
   }
   async tools() {
     const result = await this.request("tools/list", { threadStartKind: "all" });
     return result.tools.filter((tool2) => tool2.namespace === "codex_app" && ALLOWED_TOOLS.has(tool2.name));
   }
-  async call(tool2, args = {}) {
+  async call(tool2, args = {}, options = {}) {
     if (!ALLOWED_TOOLS.has(tool2)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
+    if (tool2 === "send_message_to_thread") return this.input.send(args, (threadId) => this.call("navigate_to_codex_page", { threadId }), options.beforeSend);
     const result = await this.request("tools/call", {
       namespace: "codex_app",
       tool: tool2,
@@ -21691,8 +21888,8 @@ var DesktopClient = class {
       callerSource: "codex",
       threadId: this.context.threadId,
       hostId: "local",
-      turnId: `feishu-${(0, import_node_crypto2.randomUUID)()}`,
-      callId: `feishu-${(0, import_node_crypto2.randomUUID)()}`
+      turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
+      callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
     }, tool2 === "wait_threads" ? 45e3 : 3e4);
     const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
     if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
@@ -21705,12 +21902,12 @@ var DesktopClient = class {
 };
 
 // src/control.mjs
-var import_node_net2 = __toESM(require("node:net"), 1);
+var import_node_net3 = __toESM(require("node:net"), 1);
 async function requestControl(action, channel) {
   const descriptor = readJson("control.json", {});
   if (!descriptor.pipe || !descriptor.token) throw new Error("\u6CA1\u6709\u53EF\u7528\u6865\u63A5\u63A7\u5236\u5165\u53E3");
   await new Promise((resolve, reject) => {
-    const socket = import_node_net2.default.createConnection(descriptor.pipe);
+    const socket = import_node_net3.default.createConnection(descriptor.pipe);
     socket.setEncoding("utf8");
     let response = "";
     socket.setTimeout(2e4, () => socket.destroy(new Error("\u6865\u63A5\u63A7\u5236\u8BF7\u6C42\u8D85\u65F6")));
@@ -21736,21 +21933,21 @@ async function requestControl(action, channel) {
 var stopControl = () => requestControl("stop");
 
 // src/server.mjs
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.3.4";
+var VERSION = "0.3.5";
 
 // src/wechat-auth.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
 var import_node_url = require("node:url");
 var import_node_child_process2 = require("node:child_process");
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 var import_qrcode = __toESM(require_lib(), 1);
 
 // src/wechat-api.mjs
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
 function validateWechatBaseUrl(value) {
   const url = new URL(value);
@@ -21778,7 +21975,7 @@ var WechatApi = class {
     if (post) Object.assign(headers, {
       "Content-Type": "application/json",
       AuthorizationType: "ilink_bot_token",
-      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto3.randomBytes)(4).readUInt32BE())).toString("base64"),
+      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto4.randomBytes)(4).readUInt32BE())).toString("base64"),
       ...auth && this.token ? { Authorization: `Bearer ${this.token}` } : {}
     });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -21823,7 +22020,7 @@ var WechatApi = class {
     return this.bot("sendmessage", { msg: {
       from_user_id: "",
       to_user_id: userId,
-      client_id: `codex-${(0, import_node_crypto3.randomUUID)()}`,
+      client_id: `codex-${(0, import_node_crypto4.randomUUID)()}`,
       message_type: 2,
       message_state: 2,
       context_token: contextToken,
@@ -21844,7 +22041,7 @@ function revokeWechatLogin(loginId, accountLoginId) {
 }
 
 // src/wechat-auth.mjs
-var directory = typeof __dirname === "string" ? __dirname : import_node_path2.default.dirname((0, import_node_url.fileURLToPath)(__filename));
+var directory = typeof __dirname === "string" ? __dirname : import_node_path3.default.dirname((0, import_node_url.fileURLToPath)(__filename));
 function wechatLoginStatus() {
   const login = readJson("wechat-login.json", {});
   const account = readWechatAccount();
@@ -21867,8 +22064,8 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
   if (!refresh && existing.configured) return { status: "confirmed", configured: true, note: "\u5FAE\u4FE1\u5DF2\u767B\u5F55\u3002\u8981\u6362\u7ED1\u8D26\u53F7\uFF0C\u8BF7\u663E\u5F0F\u5237\u65B0\u767B\u5F55\u4E8C\u7EF4\u7801\u3002" };
   const result = await api.qrcode(account.token ? [account.token] : []);
   if (typeof result.qrcode !== "string" || !result.qrcode || typeof result.qrcode_img_content !== "string" || !result.qrcode_img_content || result.qrcode_img_content.length > 8192) throw new Error("\u5FAE\u4FE1\u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u7684\u767B\u5F55\u4E8C\u7EF4\u7801\u3002");
-  const id = (0, import_node_crypto4.randomUUID)();
-  const qrPath = import_node_path2.default.join(dataDir, `wechat-login-${id}.png`);
+  const id = (0, import_node_crypto5.randomUUID)();
+  const qrPath = import_node_path3.default.join(dataDir, `wechat-login-${id}.png`);
   await import_qrcode.default.toFile(qrPath, result.qrcode_img_content, { width: 360, margin: 4, errorCorrectionLevel: "M" });
   import_node_fs2.default.chmodSync(qrPath, 384);
   writeJson("wechat-login.json", {
@@ -21881,8 +22078,8 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
     status: "wait"
   });
   if (launch) {
-    const worker = import_node_path2.default.join(directory, typeof __dirname === "string" ? "wechat-auth-worker.cjs" : "wechat-auth-worker.mjs");
-    const log = import_node_fs2.default.openSync(import_node_path2.default.join(dataDir, "wechat-login.log"), "a", 384);
+    const worker = import_node_path3.default.join(directory, typeof __dirname === "string" ? "wechat-auth-worker.cjs" : "wechat-auth-worker.mjs");
+    const log = import_node_fs2.default.openSync(import_node_path3.default.join(dataDir, "wechat-login.log"), "a", 384);
     try {
       const child = (0, import_node_child_process2.spawn)(process.execPath, [worker, id], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
       await new Promise((resolve, reject) => {
@@ -21909,7 +22106,7 @@ function disconnectWechat() {
   revokeWechatLogin(login.id, account.loginId);
   writeJson("wechat-login.json", { id: login.id, status: "cancelled" });
   try {
-    import_node_fs2.default.unlinkSync(import_node_path2.default.join(dataDir, "wechat.json"));
+    import_node_fs2.default.unlinkSync(import_node_path3.default.join(dataDir, "wechat.json"));
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
@@ -22014,9 +22211,9 @@ async function startBridge(extra) {
   const wechat = wechatLoginStatus();
   if (!(settings.appId && settings.appSecret && settings.feishuEnabled !== false) && !wechat.configured && !["wait", "scaned", "need_verifycode"].includes(wechat.status)) throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u8C03\u7528 wechat_login \u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   writeJson("desktop-context.json", context(extra));
-  const log = import_node_fs3.default.openSync(import_node_path3.default.join(dataDir, "bridge.log"), "a", 384);
+  const log = import_node_fs3.default.openSync(import_node_path4.default.join(dataDir, "bridge.log"), "a", 384);
   try {
-    const child = (0, import_node_child_process3.spawn)(process.execPath, [import_node_path3.default.join(__dirname, "bridge.cjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
+    const child = (0, import_node_child_process3.spawn)(process.execPath, [import_node_path4.default.join(__dirname, "bridge.cjs")], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
     await new Promise((resolve, reject) => {
       child.once("spawn", resolve);
       child.once("error", reject);
@@ -22087,7 +22284,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       case "create_pairing_code": {
         secureDirectory();
         const settings = config2();
-        settings.pairing = { code: (0, import_node_crypto5.randomBytes)(12).toString("hex"), expiresAt: Date.now() + 10 * 60 * 1e3 };
+        settings.pairing = { code: (0, import_node_crypto6.randomBytes)(12).toString("hex"), expiresAt: Date.now() + 10 * 60 * 1e3 };
         writeJson("config.json", settings);
         result = { pairCommand: `/pair ${settings.pairing.code}`, expiresAt: settings.pairing.expiresAt };
         break;

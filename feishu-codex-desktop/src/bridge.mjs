@@ -62,6 +62,7 @@ export async function main() {
     const tools=await desktop.tools();
     if(!tools.some(tool=>tool.name==='send_message_to_thread'))throw new Error('当前桌面版没有提供消息转发能力');
     await desktop.call('list_threads',{limit:1});status.desktopConnected=true;saveStatus();
+    await desktop.input.connect();status.messageTransport='desktop-user-input';saveStatus();
     const settings=config();
     if(settings.appId && settings.appSecret && settings.feishuEnabled!==false) {
       const channel=createFeishuChannel({desktop,settings,onStatus:update=>channelStatus('feishu',update)});

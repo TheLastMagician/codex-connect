@@ -1,5 +1,6 @@
 import net from 'node:net';
 import {randomUUID} from 'node:crypto';
+import {DesktopInput} from './desktop-input.mjs';
 
 const MAX_FRAME = 8 * 1024 * 1024;
 // This is the desktop's installed app-tools transport. It is version-specific.
@@ -16,7 +17,8 @@ export function encodeFrame(value) {
   frame.writeUInt32LE(body.length); body.copy(frame,4); return frame;
 }
 export class DesktopClient {
-  constructor(context) { this.context = context; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0); }
+  constructor(context) { this.context = context; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
+    this.input=new DesktopInput({pipePath:context.inputPipePath}); }
   async connect() {
     if (this.socket && !this.socket.destroyed) return;
     if (this.connecting) return this.connecting;
@@ -71,14 +73,15 @@ export class DesktopClient {
     for(const item of this.pending.values()) {clearTimeout(item.timer);item.reject(error);}
     this.pending.clear();
   }
-  close() {this.disconnect(new Error('桌面连接已关闭'));}
+  close() {this.input.close();this.disconnect(new Error('桌面连接已关闭'));}
   async tools() {
     const result = await this.request('tools/list',{threadStartKind:'all'});
     return result.tools.filter(tool => tool.namespace === 'codex_app' && ALLOWED_TOOLS.has(tool.name));
   }
-  async call(tool,args={}) {
+  async call(tool,args={},options={}) {
     if(!ALLOWED_TOOLS.has(tool)) throw new Error('不支持的桌面操作');
     if(!this.context.threadId) throw new Error('缺少真实调用会话，请从 Codex 桌面内启动桥接');
+    if(tool==='send_message_to_thread')return this.input.send(args,threadId=>this.call('navigate_to_codex_page',{threadId}),options.beforeSend);
     const result=await this.request('tools/call',{
       namespace:'codex_app',tool,arguments:args,callerSource:'codex',
       threadId:this.context.threadId,hostId:'local',
