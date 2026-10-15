@@ -24,8 +24,8 @@ start_bridge 的返回仅表示进程已启动，必须随后检查 bridge_statu
 `/projects` 查看项目，`/project 1` 查看项目 1 的已有会话，`/new 1 | 任务内容` 在项目内新建。
 本机普通列表完整加载未归档会话，包含最近 50 条之外的历史。Python 3 标准库只读查询桌面会话目录，使用真实项目分配和路径映射；Python 不可用时卡片会说明列表不完整。禁止修改桌面数据库。远程主机目前只列出最近会话，卡片会说明范围。
 后台回复通知使用 read_thread，不使用依赖真实活动轮次的 wait_threads；关注状态持久化，重启后恢复。不要因为通知读取失败而重复发送用户任务。
-新建会话会先检查本机用户配置的第三方 HTTP Responses 供应商。首次自动启用本机兼容层时，仅备份并修改该供应商 base_url、注册当前用户的登录启动项，随后提示重启；本次不会创建会话或发送任务。真实调用 ID 已存在的工具结果保持不变，只将没有 call_id 的原生 Codex 转交记录还原为普通用户消息。兼容服务独立于聊天桥接，停止通道不会断开模型转发。需要 Windows、Python 3.11+；不自动修改项目配置或远程/WebSocket 供应商。
-诊断新建首条的 call_id 错误时调用 responses_compat_status；用户要求关闭或恢复原供应商地址时，调用 configure_responses_compat(providerId=返回的真实ID, enabled=false)，之后提示重启 Codex。关闭后不会因下次新建而自动重开。重新开启用 enabled=true。不要索取或打印供应商 API Key，不把未启用的兼容层或模拟回归说成真实收发已通过。卸载前先关闭；卸载后本机 runtime/responses-compat-daemon.cjs restore 可恢复地址。
+新建与已有会话都保留桌面原有供应商连接；不自动修改供应商地址或启用全局代理。第三方 HTTP Responses 新建首条缺少 call_id 的问题尚未实现仅针对新会话的兼容，不能声称已修复。严格供应商若拒绝插件新建，可由用户先在桌面手动新建，再选择该会话继续。不要自动重发失败任务，不修改历史，不伪造调用来源。
+responses_compat_status 与 configure_responses_compat 仅用于诊断、恢复 0.4.1 的旧版全局兼容；enabled 只能为 false。恢复原地址后提示重启 Codex。未启用过则不需要重启。不能启用全局代理或把全局转发描述为仅影响新建。不要索取或打印 API Key。卸载前先恢复；卸载后本机 runtime/responses-compat-daemon.cjs restore 可恢复地址。
 归档列表按桌面游标继续加载，到末页不重查第一页。回复会显示具体翻页、选择和下一步示例，不必让用户记住命令。
 配对码过期或用户明确要求新增控制账号时，调用 `create_pairing_code` 重新生成。
 飞书后台开启机器人、收取用户发给机器人的单聊消息和应用发送消息权限。

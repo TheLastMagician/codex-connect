@@ -13,7 +13,7 @@ import {DesktopClient} from '../src/desktop.mjs';
 const folder=fs.mkdtempSync(path.join(os.tmpdir(),'codex-responses-compat-test-'));
 process.env.FEISHU_CODEX_DATA_DIR=path.join(folder,'private');
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const {providerConfig,configureResponsesCompat,prepareNewThreadCompat,syncResponsesCompatRuntime,ensureResponsesCompat}=await import('../src/responses-compat-settings.mjs');
+const {providerConfig,configureResponsesCompat,syncResponsesCompatRuntime,ensureResponsesCompat}=await import('../src/responses-compat-settings.mjs');
 const {readJson,writeJson}=await import('../src/storage.mjs');
 const delegated=output=>({type:'function_call_output',id:'fco_fixture',name:'create_thread',namespace:'codex_app',
   output:`<codex_delegation>\n  <source_thread_id>genuine-source</source_thread_id>\n  <input>${output}</input>\n</codex_delegation>`});
@@ -101,54 +101,64 @@ test('provider edits preserve all credentials, comments and other settings and c
   assert.equal((await config({action:'list'})).providers[0].baseUrl,'https://example.invalid/v1/');
 });
 
-test('enabling and disabling compat is transactional; a failed daemon never changes a provider endpoint',async()=>{
-  const bundle=path.join(root,'dist');
-  let endpoint='https://example.invalid/v1/';const updates=[];const startups=[];
+test('global compatibility cannot be enabled or read/write provider settings',async()=>{
+  writeJson('responses-compat.json',{});
+  const before=fs.readFileSync(path.join(process.env.FEISHU_CODEX_DATA_DIR,'responses-compat.json'));
+  await assert.rejects(configureResponsesCompat({providerId:'custom',enabled:true},{
+    config:()=>assert.fail('Must not read or edit provider settings'),
+    startup:()=>assert.fail('Must not register startup')
+  }),/已停用全局/);
+  assert.deepEqual(fs.readFileSync(path.join(process.env.FEISHU_CODEX_DATA_DIR,'responses-compat.json')),before);
+});
+
+test('legacy proxy is removed only after restoring the original provider endpoint',async()=>{
+  const route={providerId:'custom',baseUrl:'http://127.0.0.1:32109/legacy',originalBaseUrl:'https://example.invalid/v1/'};
+  writeJson('responses-compat.json',{routes:[route]});
+  let endpoint=route.baseUrl;const updates=[];const startups=[];
   const config=async request=>{
     if(request.action==='list')return {activeProvider:'custom',providers:[{id:'custom',baseUrl:endpoint,wireApi:'responses'}]};
+    assert.equal(readJson('responses-compat.json',{}).routes.length,1,'Keep proxy alive until address is restored');
     assert.equal(request.expected,endpoint);updates.push(request);endpoint=request.replacement;return {updated:true};
   };
-  const options={bundleDir:bundle,desktopPipePath:'desktop-before-setup',config,startup:async value=>startups.push(value),ensure:async()=>{throw new Error('Unavailable daemon');}};
-  await assert.rejects(configureResponsesCompat({providerId:'custom',enabled:true},options),/Unavailable/);
-  assert.equal(updates.length,0);assert.equal(endpoint,'https://example.invalid/v1/');assert.equal(readJson('responses-compat.json',{}).routes,undefined);
-  options.ensure=async()=>({port:32109});
-  await configureResponsesCompat({providerId:'custom',enabled:true},options);
-  const route=readJson('responses-compat.json',{}).routes[0];
-  assert.equal(endpoint,route.baseUrl);assert.equal(route.restartRequiredForPipe,'desktop-before-setup');
-  await assert.rejects(prepareNewThreadCompat({desktopPipePath:'desktop-before-setup',config,ensure:options.ensure}),/重启/);
-  await prepareNewThreadCompat({desktopPipePath:'desktop-after-restart',config,ensure:options.ensure});
-  await configureResponsesCompat({providerId:'custom',enabled:false},options);
+  const result=await configureResponsesCompat({providerId:'custom',enabled:false},{config,startup:async value=>startups.push(value)});
+  assert.equal(updates.length,1);assert.equal(result.enabled,false);
   assert.equal(endpoint,'https://example.invalid/v1/');assert.equal(startups.at(-1),false);
-  await prepareNewThreadCompat({config,configure:()=>assert.fail('Explicitly disabled compatibility must remain disabled')});
 });
 
-test('automatic first-time setup stops before creation and never sends or queues the user task',async()=>{
-  writeJson('responses-compat.json',{});let configured=0;
-  const options={desktopPipePath:'genuine-before-restart',config:async()=>({activeProvider:'custom',providers:[{id:'custom',baseUrl:'https://example.invalid/v1/',wireApi:'responses'}]}),
-    configure:async()=>{configured++;},ensure:async()=>assert.fail('No model requests')};
-  await assert.rejects(prepareNewThreadCompat(options),error=>error.notSent===true && /尚未创建会话、尚未发送任务/.test(error.message));
-  assert.equal(configured,1);
-  await prepareNewThreadCompat({config:async()=>({activeProvider:'openai',providers:[]}),configure:()=>assert.fail('OpenAI config must stay unchanged')});
+test('restoring legacy compatibility preserves external edits and keeps recovery state on restoration failure',async()=>{
+  const route={providerId:'custom',baseUrl:'http://127.0.0.1:32109/legacy',originalBaseUrl:'https://example.invalid/v1/'};
+  writeJson('responses-compat.json',{routes:[route]});
+  await assert.rejects(configureResponsesCompat({providerId:'custom',enabled:false},{
+    config:async req=>{if(req.action==='list')return {providers:[{id:'custom',baseUrl:route.baseUrl}]};throw new Error('Concurrent configuration change');},
+    startup:()=>assert.fail('Cannot stop proxy if restoration failed')
+  }),/Concurrent/);
+  assert.deepEqual(readJson('responses-compat.json',{}).routes,[route]);
+  const external='https://changed-by-user.invalid/v1/';
+  await configureResponsesCompat({providerId:'custom',enabled:false},{
+    config:async req=>{assert.equal(req.action,'list');return {providers:[{id:'custom',baseUrl:external}]};},
+    startup:async enabled=>assert.equal(enabled,false)
+  });
+  assert.deepEqual(readJson('responses-compat.json',{}).routes,[]);
 });
 
-test('native create cannot run when preparation fails or channel authorization is revoked during preparation',async()=>{
-  for(const failSetup of [true,false]){
-    let authorized=true;let requests=0;
-    const desktop=new DesktopClient({pipePath:'genuine-host',threadId:'genuine-source'}, {beforeCreateThread:async()=>{
-      if(failSetup)throw Object.assign(new Error('Restart required, nothing created'),{notSent:true});authorized=false;
-    }});
-    desktop.request=async()=>{requests++;return {};};
-    try{await assert.rejects(desktop.call('create_thread',{prompt:'任务，保留原文',target:{type:'projectless'}},{beforeSend:()=>{if(!authorized)throw new Error('Revoked');}}));assert.equal(requests,0);}
-    finally{desktop.close();}
-  }
-});
-
-test('HTTP-local and WebSocket provider configurations are not rewritten by automatic preparation',async()=>{
+test('creating and continuing chats uses the native paths without preparing a global proxy',async()=>{
   writeJson('responses-compat.json',{});
-  for(const provider of [
-    {id:'local',baseUrl:'http://127.0.0.1:11434/v1/',wireApi:'responses'},
-    {id:'ws',baseUrl:'https://example.invalid/v1/',wireApi:'responses',supportsWebsockets:true}
-  ])await prepareNewThreadCompat({config:async()=>({activeProvider:provider.id,providers:[provider]}),configure:()=>assert.fail('Unsupported provider must remain unchanged')});
+  const desktop=new DesktopClient({pipePath:'genuine-host',threadId:'genuine-source'});
+  const create={prompt:'任务，保留原文',target:{type:'projectless'}};
+  const send={threadId:'target',prompt:'继续，使用已有模型'};
+  let nativeCreates=0,userInputs=0;
+  desktop.request=async(method,params)=>{
+    assert.equal(method,'tools/call');assert.equal(params.tool,'create_thread');assert.deepEqual(params.arguments,create);
+    assert.equal(params.callerSource,'codex');assert.equal(params.threadId,'genuine-source');nativeCreates++;
+    return {success:true,contentItems:[{type:'inputText',text:'{"threadId":"created"}'}]};
+  };
+  desktop.input.send=async args=>{assert.deepEqual(args,send);userInputs++;return {sent:true};};
+  try {
+    assert.deepEqual(await desktop.call('create_thread',create),{threadId:'created'});
+    assert.deepEqual(await desktop.call('send_message_to_thread',send),{sent:true});
+    assert.equal(nativeCreates,1);assert.equal(userInputs,1);
+    assert.deepEqual(readJson('responses-compat.json',{}),{});
+  }finally{desktop.close();}
 });
 
 test('packaged independent compat process starts once on loopback and exits after all routes are disabled',async()=>{

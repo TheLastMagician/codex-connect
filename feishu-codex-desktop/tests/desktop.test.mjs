@@ -27,3 +27,18 @@ test('native transport handles split/coalesced UTF-8 frames and keeps genuine ca
     await assert.rejects(client.call('shell_exec',{command:'anything'}),/不支持/);
   }finally {client.close();await new Promise(resolve=>server.close(resolve));}
 });
+
+test('native creation rechecks channel authorization after connecting and before writing',async()=>{
+  const client=new DesktopClient({pipePath:'genuine-host',threadId:'real-thread'});
+  let authorized=true,writes=0;
+  client.connect=async()=>{
+    authorized=false;
+    client.socket={write:()=>{writes++;},destroy:()=>{}};
+  };
+  try {
+    await assert.rejects(client.call('create_thread',{prompt:'任务',target:{type:'projectless'}},{
+      beforeSend:()=>{if(!authorized)throw new Error('Channel authorization revoked');}
+    }),/authorization revoked/);
+    assert.equal(writes,0);assert.equal(client.pending.size,0);
+  }finally{client.close();}
+});

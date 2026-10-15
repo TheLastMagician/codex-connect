@@ -116,30 +116,28 @@
 
 ## 本机进程与诊断
 
-### 第三方 Responses 新建兼容
+### 供应商直连与旧版兼容恢复
 
-在本机项目或独立会话中请求新建时，插件检查当前用户 `config.toml` 中启用的供应商。对于配置了 HTTPS 地址的 HTTP Responses 供应商，首次自动备份配置、将该供应商 `base_url` 指向仅监听 `127.0.0.1` 的本机兼容层，并添加当前用户的 Windows 登录启动项。**首次设置完成会先提示重启 Codex，当次请求不会创建会话或发送任务。重启后重新发送新建请求即可。** 内置 OpenAI、显式关闭兼容、本机 HTTP 或 WebSocket 供应商沿用原路径。远程项目不修改本机供应商配置。
+0.4.2 已取消新建会话时自动启用全局 Responses 转发。新建及已有会话均使用桌面原有连接，插件不修改供应商 `base_url`、模型、API Key 或桌面配置。全局兼容不再支持开启；下面的工具和程序仅用于恢复 0.4.1 已修改的地址。
 
-兼容层仍把请求发送给原供应商，只转换符合 Codex 原生转交格式、且缺少 `call_id` 的 `create_thread` / `send_message_to_thread` 记录。真实关联的工具结果不变；不伪造调用 ID，不另起 Codex agent，不自动重试请求。格式依据 [Responses 工具结果的调用关联要求](https://developers.openai.com/api/docs/guides/function-calling)。用户文字中的中文标点、换行和 XML 字符会原样保留。
+**第三方 Responses 的新建首条 `call_id` 问题尚未实现仅针对新会话的兼容。** 桌面原生新建接口可能把首条任务作为缺少 `call_id` 的转交记录；严格校验的供应商会拒绝它。这条记录还可能留在历史中，使后续请求再次失败。因此，不能只代理创建时的一次请求再恢复直连。当前新建接口没有公开单独指定会话供应商或接口地址的参数。
 
-这会使该供应商的其他桌面对话也经本机转发。API Key 继续由 Codex 提供，不写入代理设置或插件包。原配置备份保存在受限的 `~/.codex-feishu-desktop/provider-backups/`。兼容服务独立运行，停止飞书/微信桥接不会停止模型转发；登录启动项与 MCP 加载负责恢复服务。
+如果该供应商在插件新建时遇到这个问题，可以先在桌面手动新建并对话，再从飞书或微信选择这个会话继续。插件不会因此自动启用全局代理、重发失败任务或修改旧历史。正常已有会话仍沿用桌面用户输入路径。
 
-兼容自动设置需要 **Windows、Node.js 20+ 和 Python 3.11+**。目前只处理用户配置中直接声明的供应商，不自动更改项目配置、远程主机或 WebSocket 连接。
-
-在桌面调用 `responses_compat_status` 查看地址及转换计数，`configure_responses_compat(providerId="实际ID", enabled=false)` 恢复原地址并关闭该供应商的自动兼容。重新开启使用 `enabled=true`，之后重启 Codex。也可在插件目录执行：
+调用 `responses_compat_status` 检查是否有旧版全局兼容。若已启用，调用 `configure_responses_compat(providerId="返回的真实ID", enabled=false)`，或在插件目录执行：
 
 ```powershell
 node dist/setup.cjs compat status
 node dist/setup.cjs compat off custom
 ```
 
-关闭兼容后请重启 Codex，使已加载的供应商配置也恢复。卸载插件前应先关闭兼容；若已卸载，可执行保留在本机的恢复程序：
+恢复会先把供应商地址还原，再停止对应转发；不会覆盖用户在插件外重新设置的地址。完成后请重启 Codex，使已经加载的配置也恢复。没有启用过兼容时，不需要为此重启。
+
+旧版兼容服务在地址恢复前仍会保持运行，避免供应商地址指向已停止的服务。卸载前应先恢复；若已卸载，可执行本机保留的恢复程序（需要 Node.js 和 Python 3.11+）：
 
 ```powershell
 node "$env:USERPROFILE/.codex-feishu-desktop/runtime/responses-compat-daemon.cjs" restore
 ```
-
-旧失败会话的历史不会被修改或自动重发。建议用新建请求验证首条任务；需要继续旧会话时仍先确认当前发送目标。
 
 桥接是后台本机进程，单实例，关闭发起聊天不影响已启动的桥接。关闭桌面 App 会使桌面会话接口失效。
 自动连接开启后，桌面重新启动或更新并恢复会话时重新绑定真实桌面连接；已有桥接会在后台接入新连接，不重发之前的任务。未开启自动连接时，在任意桌面聊天重新绑定并调用 `start_bridge`。

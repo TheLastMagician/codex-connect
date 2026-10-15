@@ -18,7 +18,7 @@ function context(extra) {
 }
 const tools=[
   {name:'responses_compat_status',description:'查看本机第三方 Responses 兼容层与供应商地址，不读取或返回 API Key。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
-  {name:'configure_responses_compat',description:'为真实已配置供应商启用或关闭本机 Responses 兼容；仅转换原生 Codex 转交记录缺少 call_id 的问题。启用会备份并修改该供应商 base_url、添加当前用户登录启动项；关闭恢复原地址。首次启用后需重启桌面。',inputSchema:{type:'object',properties:{providerId:{type:'string'},enabled:{type:'boolean'}},required:['providerId','enabled'],additionalProperties:false},annotations:{readOnlyHint:false}},
+  {name:'configure_responses_compat',description:'仅用于关闭 0.4.1 已启用的全局 Responses 兼容，恢复供应商原地址。enabled 只能为 false；恢复后需重启桌面。不能启用全局代理或声称仅兼容新建。',inputSchema:{type:'object',properties:{providerId:{type:'string'},enabled:{type:'boolean',enum:[false]}},required:['providerId','enabled'],additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'configure_autostart',description:'用户要求随 Codex 自动连接时开启；在本机注册启动/恢复会话钩子，需要用户在设置的钩子页信任一次。关闭仅取消自启动，不停止当前桥接。',inputSchema:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'assistant_status',description:'查看操作助手接口、模型和强度配置，隐藏 API Key。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
   {name:'configure_assistant',description:'用户要求配置操作助手时使用。凭据只保存在本机，不回显、不打包。使用 OpenAI 兼容 Chat Completions 工具调用接口；省略 apiKey 可保留已有凭据。',inputSchema:{type:'object',properties:{baseUrl:{type:'string'},model:{type:'string'},apiKey:{type:'string'},reasoningEffort:{type:'string'},enabled:{type:'boolean'}},additionalProperties:false},annotations:{readOnlyHint:false}},
@@ -50,7 +50,7 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
     let result;
     switch(request.params.name) {
       case 'responses_compat_status':result={...responsesCompatStatus(),catalog:await providerCatalogStatus()};break;
-      case 'configure_responses_compat':result=await configureResponsesCompat(request.params.arguments||{},{bundleDir:__dirname,desktopPipePath:context(extra).pipePath});break;
+      case 'configure_responses_compat':result=await configureResponsesCompat(request.params.arguments||{});break;
       case 'configure_autostart': {
         result=configureAutostart(request.params.arguments?.enabled,{bundleDir:__dirname});
         if(result.enabled)await autoConnect(extra);

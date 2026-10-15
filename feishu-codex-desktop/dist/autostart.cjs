@@ -280,9 +280,8 @@ function encodeFrame(value) {
   return frame2;
 }
 var DesktopClient = class {
-  constructor(context, { beforeCreateThread } = {}) {
+  constructor(context) {
     this.context = context;
-    this.beforeCreateThread = beforeCreateThread;
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
@@ -402,11 +401,6 @@ var DesktopClient = class {
     if (!ALLOWED_TOOLS.has(tool)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
     if (tool === "send_message_to_thread") return this.input.send(args, options.beforeSend);
-    if (tool === "create_thread" && this.beforeCreateThread) {
-      options.beforeSend?.();
-      await this.beforeCreateThread(this.context, args);
-      options.beforeSend?.();
-    }
     const result = await this.request("tools/call", {
       namespace: "codex_app",
       tool,

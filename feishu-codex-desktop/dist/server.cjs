@@ -21812,9 +21812,8 @@ function encodeFrame(value) {
   return frame2;
 }
 var DesktopClient = class {
-  constructor(context2, { beforeCreateThread } = {}) {
+  constructor(context2) {
     this.context = context2;
-    this.beforeCreateThread = beforeCreateThread;
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
@@ -21934,11 +21933,6 @@ var DesktopClient = class {
     if (!ALLOWED_TOOLS.has(tool2)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
     if (tool2 === "send_message_to_thread") return this.input.send(args, options.beforeSend);
-    if (tool2 === "create_thread" && this.beforeCreateThread) {
-      options.beforeSend?.();
-      await this.beforeCreateThread(this.context, args);
-      options.beforeSend?.();
-    }
     const result = await this.request("tools/call", {
       namespace: "codex_app",
       tool: tool2,
@@ -21994,7 +21988,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.4.1";
+var VERSION = "0.4.2";
 
 // src/wechat-auth.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
@@ -22480,17 +22474,6 @@ async function providerConfig(request, { codexHome = home(), python = process.en
     child.stdin.end(JSON.stringify({ ...request, codexHome }));
   });
 }
-function safeBase(value) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("\u4F9B\u5E94\u5546\u63A5\u53E3\u5730\u5740\u65E0\u6548\u3002");
-  }
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
-    throw new Error("\u4EC5\u652F\u6301\u672A\u5728\u5730\u5740\u4E2D\u5D4C\u5165\u51ED\u636E\u7684 HTTPS Responses \u4F9B\u5E94\u5546\u3002");
-  return url.href.replace(/\/?$/, "/");
-}
 async function providerCatalogStatus() {
   const catalog = await providerConfig({ action: "list" });
   return { ...catalog, providers: catalog.providers.map((provider) => {
@@ -22512,7 +22495,7 @@ function responsesCompatStatus() {
     port: saved.port || null,
     converted: status.instanceId === saved.instanceId ? status.converted || 0 : 0,
     providers: (saved.routes || []).map((route) => ({ id: route.providerId, upstream: route.upstream, baseUrl: route.baseUrl })),
-    note: "\u53EA\u8F6C\u6362\u7F3A\u5C11 call_id \u7684 Codex \u539F\u751F\u8F6C\u4EA4\u8BB0\u5F55\u3002\u6B63\u5E38\u5DE5\u5177\u7ED3\u679C\u3001\u6A21\u578B\u3001\u8BA4\u8BC1\u53CA\u6743\u9650\u4FDD\u6301\u539F\u8BBE\u7F6E\u3002\u66F4\u6362\u4F9B\u5E94\u5546\u5730\u5740\u540E\u9700\u91CD\u542F Codex \u624D\u80FD\u4F7F\u5DF2\u52A0\u8F7D\u7684\u914D\u7F6E\u751F\u6548\u3002"
+    note: saved.routes?.length ? "\u65E7\u7248\u5168\u5C40\u517C\u5BB9\u4ECD\u5728\u8FD0\u884C\uFF0C\u4F1A\u5F71\u54CD\u8BE5\u4F9B\u5E94\u5546\u7684\u6240\u6709\u4F1A\u8BDD\u3002\u8BF7\u5173\u95ED\u517C\u5BB9\u4EE5\u6062\u590D\u539F\u5730\u5740\uFF0C\u4E4B\u540E\u91CD\u542F Codex\u3002" : "\u672A\u542F\u7528\u5168\u5C40\u517C\u5BB9\u3002\u63D2\u4EF6\u4E0D\u4FEE\u6539\u4F9B\u5E94\u5546\u5730\u5740\uFF0C\u65B0\u5EFA\u53CA\u5DF2\u6709\u4F1A\u8BDD\u5747\u4EA4\u7531\u684C\u9762\u539F\u6709\u8FDE\u63A5\u6267\u884C\u3002"
   };
 }
 function syncResponsesCompatRuntime(bundleDir) {
@@ -22611,67 +22594,27 @@ async function setCompatStartup(enabled, { entry = import_node_path6.default.joi
   });
 }
 async function configureResponsesCompat({ providerId, enabled }, {
-  bundleDir,
-  desktopPipePath,
   config: configOverride,
   codexHome,
-  startup = setCompatStartup,
-  ensure = ensureResponsesCompat
+  startup = setCompatStartup
 } = {}) {
   if (typeof enabled !== "boolean" || typeof providerId !== "string" || !providerId) throw new Error("\u9700\u8981\u771F\u5B9E\u4F9B\u5E94\u5546 ID \u548C enabled\u3002");
+  if (enabled) throw new Error("\u5DF2\u505C\u7528\u5168\u5C40 Responses \u517C\u5BB9\uFF1B\u5B83\u4F1A\u5F71\u54CD\u8FD9\u4E2A\u4F9B\u5E94\u5546\u7684\u6240\u6709\u4F1A\u8BDD\uFF0C\u65E0\u6CD5\u4EC5\u4F5C\u7528\u4E8E\u65B0\u5EFA\u3002\u73B0\u4EC5\u652F\u6301 enabled=false \u6062\u590D\u539F\u5730\u5740\u3002");
   return lock("responses-compat-config.lock", async () => {
     const previous = readJson("responses-compat.json", {}), existing = previous.routes?.find((r) => r.providerId === providerId);
     const config3 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config3({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
     const backup = () => import_node_path6.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto7.randomUUID)()}.toml`);
-    if (!enabled) {
-      if (existing && provider.baseUrl === existing.baseUrl) await config3({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
-      const next = {
-        ...previous,
-        routes: (previous.routes || []).filter((r) => r.providerId !== providerId),
-        disabledProviders: [.../* @__PURE__ */ new Set([...previous.disabledProviders || [], providerId])]
-      };
-      writeJson("responses-compat.json", next);
-      if (!next.routes.length) await startup(false);
-      return responsesCompatStatus();
-    }
-    if (existing) {
-      if (provider.baseUrl !== existing.baseUrl) throw new Error("\u4F9B\u5E94\u5546\u5730\u5740\u5DF2\u5728\u63D2\u4EF6\u5916\u66F4\u6539\uFF1B\u8BF7\u5148\u5173\u95ED\u6B64\u4F9B\u5E94\u5546\u7684\u517C\u5BB9\u8BBE\u7F6E\u3002");
-      writeJson("responses-compat.json", { ...previous, disabledProviders: (previous.disabledProviders || []).filter((id) => id !== providerId) });
-      await ensure();
-      return responsesCompatStatus();
-    }
-    if (provider.wireApi !== "responses" || provider.supportsWebsockets) throw new Error("\u517C\u5BB9\u5C42\u4EC5\u652F\u6301 HTTP Responses\uFF1B\u5F53\u524D\u4F9B\u5E94\u5546\u542F\u7528\u4E86\u5176\u4ED6\u534F\u8BAE\u6216 WebSocket\u3002");
-    const upstream = safeBase(provider.baseUrl);
-    syncResponsesCompatRuntime(bundleDir);
-    const route = {
-      providerId,
-      codexHome: codexHome || home(),
-      upstream,
-      originalBaseUrl: provider.baseUrl,
-      token: (0, import_node_crypto7.randomBytes)(24).toString("hex"),
-      ...desktopPipePath ? { restartRequiredForPipe: desktopPipePath } : {}
-    };
-    writeJson("responses-compat.json", {
+    if (existing && provider.baseUrl === existing.baseUrl) await config3({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
+    const next = {
       ...previous,
-      instanceId: previous.instanceId || (0, import_node_crypto7.randomBytes)(24).toString("hex"),
-      routes: [...previous.routes || [], route],
-      disabledProviders: (previous.disabledProviders || []).filter((id) => id !== providerId)
-    });
-    try {
-      const status = await ensure();
-      const next = readJson("responses-compat.json", {});
-      route.baseUrl = `http://127.0.0.1:${status.port}/${route.token}`;
-      writeJson("responses-compat.json", { ...next, port: status.port, routes: next.routes.map((r) => r.providerId === providerId ? route : r) });
-      await startup(true);
-      await config3({ action: "update", providerId, expected: provider.baseUrl, replacement: route.baseUrl, backupPath: backup() });
-      return responsesCompatStatus();
-    } catch (error2) {
-      writeJson("responses-compat.json", previous);
-      if (!previous.routes?.length) await startup(false);
-      throw error2;
-    }
+      routes: (previous.routes || []).filter((r) => r.providerId !== providerId),
+      disabledProviders: [.../* @__PURE__ */ new Set([...previous.disabledProviders || [], providerId])]
+    };
+    writeJson("responses-compat.json", next);
+    if (!next.routes.length) await startup(false);
+    return responsesCompatStatus();
   });
 }
 
@@ -22681,7 +22624,7 @@ function context(extra) {
 }
 var tools = [
   { name: "responses_compat_status", description: "\u67E5\u770B\u672C\u673A\u7B2C\u4E09\u65B9 Responses \u517C\u5BB9\u5C42\u4E0E\u4F9B\u5E94\u5546\u5730\u5740\uFF0C\u4E0D\u8BFB\u53D6\u6216\u8FD4\u56DE API Key\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } },
-  { name: "configure_responses_compat", description: "\u4E3A\u771F\u5B9E\u5DF2\u914D\u7F6E\u4F9B\u5E94\u5546\u542F\u7528\u6216\u5173\u95ED\u672C\u673A Responses \u517C\u5BB9\uFF1B\u4EC5\u8F6C\u6362\u539F\u751F Codex \u8F6C\u4EA4\u8BB0\u5F55\u7F3A\u5C11 call_id \u7684\u95EE\u9898\u3002\u542F\u7528\u4F1A\u5907\u4EFD\u5E76\u4FEE\u6539\u8BE5\u4F9B\u5E94\u5546 base_url\u3001\u6DFB\u52A0\u5F53\u524D\u7528\u6237\u767B\u5F55\u542F\u52A8\u9879\uFF1B\u5173\u95ED\u6062\u590D\u539F\u5730\u5740\u3002\u9996\u6B21\u542F\u7528\u540E\u9700\u91CD\u542F\u684C\u9762\u3002", inputSchema: { type: "object", properties: { providerId: { type: "string" }, enabled: { type: "boolean" } }, required: ["providerId", "enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
+  { name: "configure_responses_compat", description: "\u4EC5\u7528\u4E8E\u5173\u95ED 0.4.1 \u5DF2\u542F\u7528\u7684\u5168\u5C40 Responses \u517C\u5BB9\uFF0C\u6062\u590D\u4F9B\u5E94\u5546\u539F\u5730\u5740\u3002enabled \u53EA\u80FD\u4E3A false\uFF1B\u6062\u590D\u540E\u9700\u91CD\u542F\u684C\u9762\u3002\u4E0D\u80FD\u542F\u7528\u5168\u5C40\u4EE3\u7406\u6216\u58F0\u79F0\u4EC5\u517C\u5BB9\u65B0\u5EFA\u3002", inputSchema: { type: "object", properties: { providerId: { type: "string" }, enabled: { type: "boolean", enum: [false] } }, required: ["providerId", "enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
   { name: "configure_autostart", description: "\u7528\u6237\u8981\u6C42\u968F Codex \u81EA\u52A8\u8FDE\u63A5\u65F6\u5F00\u542F\uFF1B\u5728\u672C\u673A\u6CE8\u518C\u542F\u52A8/\u6062\u590D\u4F1A\u8BDD\u94A9\u5B50\uFF0C\u9700\u8981\u7528\u6237\u5728\u8BBE\u7F6E\u7684\u94A9\u5B50\u9875\u4FE1\u4EFB\u4E00\u6B21\u3002\u5173\u95ED\u4EC5\u53D6\u6D88\u81EA\u542F\u52A8\uFF0C\u4E0D\u505C\u6B62\u5F53\u524D\u6865\u63A5\u3002", inputSchema: { type: "object", properties: { enabled: { type: "boolean" } }, required: ["enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
   { name: "assistant_status", description: "\u67E5\u770B\u64CD\u4F5C\u52A9\u624B\u63A5\u53E3\u3001\u6A21\u578B\u548C\u5F3A\u5EA6\u914D\u7F6E\uFF0C\u9690\u85CF API Key\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } },
   { name: "configure_assistant", description: "\u7528\u6237\u8981\u6C42\u914D\u7F6E\u64CD\u4F5C\u52A9\u624B\u65F6\u4F7F\u7528\u3002\u51ED\u636E\u53EA\u4FDD\u5B58\u5728\u672C\u673A\uFF0C\u4E0D\u56DE\u663E\u3001\u4E0D\u6253\u5305\u3002\u4F7F\u7528 OpenAI \u517C\u5BB9 Chat Completions \u5DE5\u5177\u8C03\u7528\u63A5\u53E3\uFF1B\u7701\u7565 apiKey \u53EF\u4FDD\u7559\u5DF2\u6709\u51ED\u636E\u3002", inputSchema: { type: "object", properties: { baseUrl: { type: "string" }, model: { type: "string" }, apiKey: { type: "string" }, reasoningEffort: { type: "string" }, enabled: { type: "boolean" } }, additionalProperties: false }, annotations: { readOnlyHint: false } },
@@ -22718,7 +22661,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         result = { ...responsesCompatStatus(), catalog: await providerCatalogStatus() };
         break;
       case "configure_responses_compat":
-        result = await configureResponsesCompat(request.params.arguments || {}, { bundleDir: __dirname, desktopPipePath: context(extra).pipePath });
+        result = await configureResponsesCompat(request.params.arguments || {});
         break;
       case "configure_autostart": {
         result = configureAutostart(request.params.arguments?.enabled, { bundleDir: __dirname });

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {randomBytes,randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import {dataDir,readJson,writeJson,secureDirectory} from './storage.mjs';
@@ -29,12 +29,6 @@ export async function providerConfig(request,{codexHome=home(),python=process.en
     child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify({...request,codexHome}));
   });
 }
-function safeBase(value) {
-  let url;try{url=new URL(value);}catch{throw new Error('供应商接口地址无效。');}
-  if(url.protocol!=='https:' || url.username || url.password || url.search || url.hash)
-    throw new Error('仅支持未在地址中嵌入凭据的 HTTPS Responses 供应商。');
-  return url.href.replace(/\/?$/,'/');
-}
 export async function providerCatalogStatus() {
   const catalog=await providerConfig({action:'list'});
   return {...catalog,providers:catalog.providers.map(provider=>{
@@ -48,7 +42,9 @@ export function responsesCompatStatus() {
   return {enabled:!!saved.routes?.length,processAlive:alive(status.pid),version:status.version||null,
     port:saved.port||null,converted:status.instanceId===saved.instanceId?status.converted||0:0,
     providers:(saved.routes||[]).map(route=>({id:route.providerId,upstream:route.upstream,baseUrl:route.baseUrl})),
-    note:'只转换缺少 call_id 的 Codex 原生转交记录。正常工具结果、模型、认证及权限保持原设置。更换供应商地址后需重启 Codex 才能使已加载的配置生效。'};
+    note:saved.routes?.length
+      ?'旧版全局兼容仍在运行，会影响该供应商的所有会话。请关闭兼容以恢复原地址，之后重启 Codex。'
+      :'未启用全局兼容。插件不修改供应商地址，新建及已有会话均交由桌面原有连接执行。'};
 }
 export function syncResponsesCompatRuntime(bundleDir) {
   secureDirectory();fs.mkdirSync(runtime,{recursive:true,mode:0o700});
@@ -102,62 +98,22 @@ export async function setCompatStartup(enabled,{entry=path.join(runtime,'respons
   if(enabled)await execute('reg.exe',['add',registry,'/v',registryName,'/t','REG_SZ','/d',`"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`,'/f'],{windowsHide:true});
   else await execute('reg.exe',['delete',registry,'/v',registryName,'/f'],{windowsHide:true}).catch(()=>{});
 }
-export async function configureResponsesCompat({providerId,enabled},{bundleDir,
-  desktopPipePath,config:configOverride,codexHome,startup=setCompatStartup,ensure=ensureResponsesCompat}={}) {
+export async function configureResponsesCompat({providerId,enabled},{
+  config:configOverride,codexHome,startup=setCompatStartup}={}) {
   if(typeof enabled!=='boolean' || typeof providerId!=='string' || !providerId)throw new Error('需要真实供应商 ID 和 enabled。');
+  // A provider-wide proxy cannot be scoped to a new chat or its first request.
+  // Keep only the recovery path for installations that enabled it in 0.4.1.
+  if(enabled)throw new Error('已停用全局 Responses 兼容；它会影响这个供应商的所有会话，无法仅作用于新建。现仅支持 enabled=false 恢复原地址。');
   return lock('responses-compat-config.lock',async()=>{
     const previous=readJson('responses-compat.json',{}),existing=previous.routes?.find(r=>r.providerId===providerId);
     const config=configOverride||(request=>providerConfig(request,{codexHome:existing?.codexHome||codexHome||home()}));
     const catalog=await config({action:'list'}),provider=catalog.providers.find(p=>p.id===providerId);
     if(!provider)throw new Error('未找到这个已配置的供应商。');
     const backup=()=>path.join(dataDir,'provider-backups',`${Date.now()}-${randomUUID()}.toml`);
-    if(!enabled) {
-      if(existing && provider.baseUrl===existing.baseUrl)await config({action:'update',providerId,expected:existing.baseUrl,replacement:existing.originalBaseUrl,backupPath:backup()});
-      const next={...previous,routes:(previous.routes||[]).filter(r=>r.providerId!==providerId),
-        disabledProviders:[...new Set([...(previous.disabledProviders||[]),providerId])]};
-      writeJson('responses-compat.json',next);if(!next.routes.length)await startup(false);
-      return responsesCompatStatus();
-    }
-    if(existing) {
-      if(provider.baseUrl!==existing.baseUrl)throw new Error('供应商地址已在插件外更改；请先关闭此供应商的兼容设置。');
-      writeJson('responses-compat.json',{...previous,disabledProviders:(previous.disabledProviders||[]).filter(id=>id!==providerId)});
-      await ensure();return responsesCompatStatus();
-    }
-    if(provider.wireApi!=='responses' || provider.supportsWebsockets)throw new Error('兼容层仅支持 HTTP Responses；当前供应商启用了其他协议或 WebSocket。');
-    const upstream=safeBase(provider.baseUrl);
-    syncResponsesCompatRuntime(bundleDir);
-    const route={providerId,codexHome:codexHome||home(),upstream,originalBaseUrl:provider.baseUrl,token:randomBytes(24).toString('hex'),
-      ...(desktopPipePath?{restartRequiredForPipe:desktopPipePath}:{})};
-    writeJson('responses-compat.json',{...previous,instanceId:previous.instanceId||randomBytes(24).toString('hex'),routes:[...(previous.routes||[]),route],
-      disabledProviders:(previous.disabledProviders||[]).filter(id=>id!==providerId)});
-    try {
-      const status=await ensure();const next=readJson('responses-compat.json',{});
-      route.baseUrl=`http://127.0.0.1:${status.port}/${route.token}`;
-      writeJson('responses-compat.json',{...next,port:status.port,routes:next.routes.map(r=>r.providerId===providerId?route:r)});
-      await startup(true);
-      await config({action:'update',providerId,expected:provider.baseUrl,replacement:route.baseUrl,backupPath:backup()});
-      return responsesCompatStatus();
-    }catch(error){writeJson('responses-compat.json',previous);if(!previous.routes?.length)await startup(false);throw error;}
+    if(existing && provider.baseUrl===existing.baseUrl)await config({action:'update',providerId,expected:existing.baseUrl,replacement:existing.originalBaseUrl,backupPath:backup()});
+    const next={...previous,routes:(previous.routes||[]).filter(r=>r.providerId!==providerId),
+      disabledProviders:[...new Set([...(previous.disabledProviders||[]),providerId])]};
+    writeJson('responses-compat.json',next);if(!next.routes.length)await startup(false);
+    return responsesCompatStatus();
   });
-}
-export async function prepareNewThreadCompat({bundleDir,desktopPipePath,config=providerConfig,
-  configure=configureResponsesCompat,ensure=ensureResponsesCompat}={}) {
-  const catalog=await config({action:'list'});
-  const provider=catalog.providers.find(p=>p.id===catalog.activeProvider);
-  if(!provider)return;
-  const saved=readJson('responses-compat.json',{});
-  if(saved.disabledProviders?.includes(provider.id))return;
-  let route=saved.routes?.find(r=>r.providerId===provider.id);
-  if(!route) {
-    // Preserve native behavior for built-in/local or WebSocket providers.
-    if(provider.wireApi!=='responses' || provider.supportsWebsockets || !provider.baseUrl.startsWith('https://'))return;
-    await configure({providerId:provider.id,enabled:true},{bundleDir,desktopPipePath,config});
-    // Loaded desktop configurations can retain their old endpoint. Never start
-    // a first turn with that stale configuration or silently replay it later.
-    throw Object.assign(new Error('已为当前第三方供应商启用本机 Responses 兼容。请重启 Codex 桌面后，再重新发送新建请求。本次尚未创建会话、尚未发送任务。'),{notSent:true});
-  }
-  if(provider.baseUrl!==route.baseUrl)throw Object.assign(new Error('当前供应商地址已更改，请先关闭旧的 Responses 兼容设置，再重新启用。本次尚未创建会话。'),{notSent:true});
-  if(route.restartRequiredForPipe && route.restartRequiredForPipe===desktopPipePath)
-    throw Object.assign(new Error('Responses 兼容已就绪，但桌面仍在使用启用前的连接。请重启 Codex 后重新发送新建请求。本次尚未创建会话、尚未发送任务。'),{notSent:true});
-  await ensure();
 }

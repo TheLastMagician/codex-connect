@@ -18,9 +18,9 @@ async function main() {
   if(process.argv[2]==='compat') {
     const mode=process.argv[3]||'status';
     if(mode==='status')console.log(JSON.stringify({...responsesCompatStatus(),catalog:await providerCatalogStatus()},null,2));
-    else if(['on','off'].includes(mode) && process.argv[4])console.log(JSON.stringify(await configureResponsesCompat(
-      {providerId:process.argv[4],enabled:mode==='on'},{bundleDir:__dirname,desktopPipePath:readJson('desktop-context.json',{}).pipePath}),null,2));
-    else throw new Error('使用 node dist/setup.cjs compat status，或 compat on/off 供应商ID');
+    else if(mode==='off' && process.argv[4])console.log(JSON.stringify(await configureResponsesCompat(
+      {providerId:process.argv[4],enabled:false}),null,2));
+    else throw new Error('全局兼容已停用。使用 node dist/setup.cjs compat status，或 compat off 供应商ID 恢复原地址');
     return;
   }
   if(process.argv[2]==='autostart') {

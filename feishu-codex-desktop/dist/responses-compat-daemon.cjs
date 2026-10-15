@@ -25,19 +25,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
-var import_node_child_process = require("node:child_process");
 var import_node_crypto = require("node:crypto");
 var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
 var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
-function secureDirectory(dir = dataDir) {
-  import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
-  if (process.platform === "win32") {
-    const who = (0, import_node_child_process.spawnSync)("whoami.exe", [], { encoding: "utf8", windowsHide: true });
-    if (who.status !== 0 || !who.stdout.trim()) throw new Error("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D Windows \u7528\u6237");
-    const acl = (0, import_node_child_process.spawnSync)("icacls.exe", [dir, "/inheritance:r", "/grant:r", `${who.stdout.trim()}:(OI)(CI)F`], { windowsHide: true, encoding: "utf8" });
-    if (acl.status !== 0) throw new Error("\u65E0\u6CD5\u9650\u5236\u914D\u7F6E\u76EE\u5F55\u7684 Windows \u8BBF\u95EE\u6743\u9650");
-  }
-}
 function readJson(name, fallback) {
   try {
     return JSON.parse(import_node_fs.default.readFileSync(import_node_path.default.join(dataDir, name), "utf8"));
@@ -59,7 +49,7 @@ function writeJson(name, value) {
 }
 
 // src/version.mjs
-var VERSION = "0.4.1";
+var VERSION = "0.4.2";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);
@@ -179,7 +169,7 @@ function createResponsesCompatServer({ getRoutes, instanceId, onConverted = () =
 var import_node_fs2 = __toESM(require("node:fs"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
 var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_child_process2 = require("node:child_process");
+var import_node_child_process = require("node:child_process");
 var import_node_util = require("node:util");
 var import_node_crypto2 = require("node:crypto");
 var import_promises2 = require("node:timers/promises");
@@ -203,7 +193,7 @@ function alive(pid) {
 }
 
 // src/responses-compat-settings.mjs
-var execute = (0, import_node_util.promisify)(import_node_child_process2.execFile);
+var execute = (0, import_node_util.promisify)(import_node_child_process.execFile);
 var directory = typeof __dirname === "string" ? __dirname : import_node_path2.default.dirname((0, import_node_url.fileURLToPath)(__filename));
 var runtime = import_node_path2.default.join(dataDir, "runtime");
 var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
@@ -211,7 +201,7 @@ var registryName = "CodexConnectResponsesCompat";
 var home = () => process.env.CODEX_HOME || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex");
 async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path2.default.join(directory, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
-    const child = (0, import_node_child_process2.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    const child = (0, import_node_child_process.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
     const fail = () => reject(new Error("\u65E0\u6CD5\u5B89\u5168\u8BFB\u53D6\u6216\u66F4\u65B0\u4F9B\u5E94\u5546\u914D\u7F6E\uFF0C\u9700\u8981 Python 3.11+\u3002"));
     const timer = setTimeout(() => {
@@ -247,17 +237,6 @@ async function providerConfig(request, { codexHome = home(), python = process.en
     child.stdin.end(JSON.stringify({ ...request, codexHome }));
   });
 }
-function safeBase(value) {
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("\u4F9B\u5E94\u5546\u63A5\u53E3\u5730\u5740\u65E0\u6548\u3002");
-  }
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
-    throw new Error("\u4EC5\u652F\u6301\u672A\u5728\u5730\u5740\u4E2D\u5D4C\u5165\u51ED\u636E\u7684 HTTPS Responses \u4F9B\u5E94\u5546\u3002");
-  return url.href.replace(/\/?$/, "/");
-}
 function responsesCompatStatus() {
   const saved = readJson("responses-compat.json", {}), status = readJson("responses-compat-status.json", {});
   return {
@@ -267,26 +246,8 @@ function responsesCompatStatus() {
     port: saved.port || null,
     converted: status.instanceId === saved.instanceId ? status.converted || 0 : 0,
     providers: (saved.routes || []).map((route) => ({ id: route.providerId, upstream: route.upstream, baseUrl: route.baseUrl })),
-    note: "\u53EA\u8F6C\u6362\u7F3A\u5C11 call_id \u7684 Codex \u539F\u751F\u8F6C\u4EA4\u8BB0\u5F55\u3002\u6B63\u5E38\u5DE5\u5177\u7ED3\u679C\u3001\u6A21\u578B\u3001\u8BA4\u8BC1\u53CA\u6743\u9650\u4FDD\u6301\u539F\u8BBE\u7F6E\u3002\u66F4\u6362\u4F9B\u5E94\u5546\u5730\u5740\u540E\u9700\u91CD\u542F Codex \u624D\u80FD\u4F7F\u5DF2\u52A0\u8F7D\u7684\u914D\u7F6E\u751F\u6548\u3002"
+    note: saved.routes?.length ? "\u65E7\u7248\u5168\u5C40\u517C\u5BB9\u4ECD\u5728\u8FD0\u884C\uFF0C\u4F1A\u5F71\u54CD\u8BE5\u4F9B\u5E94\u5546\u7684\u6240\u6709\u4F1A\u8BDD\u3002\u8BF7\u5173\u95ED\u517C\u5BB9\u4EE5\u6062\u590D\u539F\u5730\u5740\uFF0C\u4E4B\u540E\u91CD\u542F Codex\u3002" : "\u672A\u542F\u7528\u5168\u5C40\u517C\u5BB9\u3002\u63D2\u4EF6\u4E0D\u4FEE\u6539\u4F9B\u5E94\u5546\u5730\u5740\uFF0C\u65B0\u5EFA\u53CA\u5DF2\u6709\u4F1A\u8BDD\u5747\u4EA4\u7531\u684C\u9762\u539F\u6709\u8FDE\u63A5\u6267\u884C\u3002"
   };
-}
-function syncResponsesCompatRuntime(bundleDir) {
-  secureDirectory();
-  import_node_fs2.default.mkdirSync(runtime, { recursive: true, mode: 448 });
-  for (const name of ["responses-compat-daemon.cjs", "provider-config.py"]) {
-    const source = import_node_path2.default.join(bundleDir, name);
-    if (!import_node_fs2.default.existsSync(source)) throw new Error("\u7F3A\u5C11 Responses \u517C\u5BB9\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
-    const target = import_node_path2.default.join(runtime, name), temp = target + "." + (0, import_node_crypto2.randomUUID)() + ".tmp";
-    try {
-      import_node_fs2.default.copyFileSync(source, temp);
-      import_node_fs2.default.renameSync(temp, target);
-    } finally {
-      try {
-        import_node_fs2.default.unlinkSync(temp);
-      } catch {
-      }
-    }
-  }
 }
 async function lock(name, action) {
   import_node_fs2.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
@@ -325,40 +286,6 @@ async function lock(name, action) {
     }
   }
 }
-async function healthy(settings, status) {
-  if (!alive(status.pid) || settings.instanceId !== status.instanceId || !Number.isInteger(status.port)) return false;
-  try {
-    const response = await fetch(`http://127.0.0.1:${status.port}/health/${settings.instanceId}`, { signal: AbortSignal.timeout(1e3), redirect: "error" });
-    const result = await response.json();
-    return response.ok && result.service === "codex-connect-responses" && result.instanceId === settings.instanceId;
-  } catch {
-    return false;
-  }
-}
-async function ensureResponsesCompat() {
-  if (!readJson("responses-compat.json", {}).routes?.length) return { enabled: false };
-  return lock("responses-compat-start.lock", async () => {
-    const settings = readJson("responses-compat.json", {});
-    if (!settings.routes?.length) return { enabled: false };
-    let status = readJson("responses-compat-status.json", {});
-    if (await healthy(settings, status)) return status;
-    const entry = import_node_path2.default.join(runtime, "responses-compat-daemon.cjs");
-    if (!import_node_fs2.default.existsSync(entry)) throw new Error("\u672C\u673A Responses \u517C\u5BB9\u8FD0\u884C\u6587\u4EF6\u4E22\u5931\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
-    const child = (0, import_node_child_process2.spawn)(process.execPath, [entry, "--codex-connect-data-dir", dataDir], { windowsHide: true, detached: true, stdio: "ignore", env: process.env });
-    await new Promise((resolve, reject) => {
-      child.once("spawn", resolve);
-      child.once("error", reject);
-    });
-    child.unref();
-    for (let index = 0; index < 50; index++) {
-      await (0, import_promises2.setTimeout)(100);
-      status = readJson("responses-compat-status.json", {});
-      if (status.pid === child.pid && await healthy(settings, status)) return status;
-      if (!alive(child.pid)) break;
-    }
-    throw new Error("\u672C\u673A Responses \u517C\u5BB9\u670D\u52A1\u672A\u80FD\u5C31\u7EEA\uFF1B\u672A\u4FEE\u6539\u4F9B\u5E94\u5546\u5730\u5740\u3002");
-  });
-}
 async function setCompatStartup(enabled, { entry = import_node_path2.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
@@ -366,67 +293,27 @@ async function setCompatStartup(enabled, { entry = import_node_path2.default.joi
   });
 }
 async function configureResponsesCompat({ providerId, enabled }, {
-  bundleDir,
-  desktopPipePath,
   config: configOverride,
   codexHome,
-  startup = setCompatStartup,
-  ensure = ensureResponsesCompat
+  startup = setCompatStartup
 } = {}) {
   if (typeof enabled !== "boolean" || typeof providerId !== "string" || !providerId) throw new Error("\u9700\u8981\u771F\u5B9E\u4F9B\u5E94\u5546 ID \u548C enabled\u3002");
+  if (enabled) throw new Error("\u5DF2\u505C\u7528\u5168\u5C40 Responses \u517C\u5BB9\uFF1B\u5B83\u4F1A\u5F71\u54CD\u8FD9\u4E2A\u4F9B\u5E94\u5546\u7684\u6240\u6709\u4F1A\u8BDD\uFF0C\u65E0\u6CD5\u4EC5\u4F5C\u7528\u4E8E\u65B0\u5EFA\u3002\u73B0\u4EC5\u652F\u6301 enabled=false \u6062\u590D\u539F\u5730\u5740\u3002");
   return lock("responses-compat-config.lock", async () => {
     const previous = readJson("responses-compat.json", {}), existing = previous.routes?.find((r) => r.providerId === providerId);
     const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
     const backup = () => import_node_path2.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto2.randomUUID)()}.toml`);
-    if (!enabled) {
-      if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
-      const next = {
-        ...previous,
-        routes: (previous.routes || []).filter((r) => r.providerId !== providerId),
-        disabledProviders: [.../* @__PURE__ */ new Set([...previous.disabledProviders || [], providerId])]
-      };
-      writeJson("responses-compat.json", next);
-      if (!next.routes.length) await startup(false);
-      return responsesCompatStatus();
-    }
-    if (existing) {
-      if (provider.baseUrl !== existing.baseUrl) throw new Error("\u4F9B\u5E94\u5546\u5730\u5740\u5DF2\u5728\u63D2\u4EF6\u5916\u66F4\u6539\uFF1B\u8BF7\u5148\u5173\u95ED\u6B64\u4F9B\u5E94\u5546\u7684\u517C\u5BB9\u8BBE\u7F6E\u3002");
-      writeJson("responses-compat.json", { ...previous, disabledProviders: (previous.disabledProviders || []).filter((id) => id !== providerId) });
-      await ensure();
-      return responsesCompatStatus();
-    }
-    if (provider.wireApi !== "responses" || provider.supportsWebsockets) throw new Error("\u517C\u5BB9\u5C42\u4EC5\u652F\u6301 HTTP Responses\uFF1B\u5F53\u524D\u4F9B\u5E94\u5546\u542F\u7528\u4E86\u5176\u4ED6\u534F\u8BAE\u6216 WebSocket\u3002");
-    const upstream = safeBase(provider.baseUrl);
-    syncResponsesCompatRuntime(bundleDir);
-    const route = {
-      providerId,
-      codexHome: codexHome || home(),
-      upstream,
-      originalBaseUrl: provider.baseUrl,
-      token: (0, import_node_crypto2.randomBytes)(24).toString("hex"),
-      ...desktopPipePath ? { restartRequiredForPipe: desktopPipePath } : {}
-    };
-    writeJson("responses-compat.json", {
+    if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
+    const next = {
       ...previous,
-      instanceId: previous.instanceId || (0, import_node_crypto2.randomBytes)(24).toString("hex"),
-      routes: [...previous.routes || [], route],
-      disabledProviders: (previous.disabledProviders || []).filter((id) => id !== providerId)
-    });
-    try {
-      const status = await ensure();
-      const next = readJson("responses-compat.json", {});
-      route.baseUrl = `http://127.0.0.1:${status.port}/${route.token}`;
-      writeJson("responses-compat.json", { ...next, port: status.port, routes: next.routes.map((r) => r.providerId === providerId ? route : r) });
-      await startup(true);
-      await config2({ action: "update", providerId, expected: provider.baseUrl, replacement: route.baseUrl, backupPath: backup() });
-      return responsesCompatStatus();
-    } catch (error) {
-      writeJson("responses-compat.json", previous);
-      if (!previous.routes?.length) await startup(false);
-      throw error;
-    }
+      routes: (previous.routes || []).filter((r) => r.providerId !== providerId),
+      disabledProviders: [.../* @__PURE__ */ new Set([...previous.disabledProviders || [], providerId])]
+    };
+    writeJson("responses-compat.json", next);
+    if (!next.routes.length) await startup(false);
+    return responsesCompatStatus();
   });
 }
 
