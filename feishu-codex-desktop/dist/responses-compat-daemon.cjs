@@ -4,6 +4,14 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -22,12 +30,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/storage.mjs
-var import_node_fs = __toESM(require("node:fs"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_crypto = require("node:crypto");
-var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
-var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
 function readJson(name, fallback) {
   try {
     return JSON.parse(import_node_fs.default.readFileSync(import_node_path.default.join(dataDir, name), "utf8"));
@@ -47,9 +49,23 @@ function writeJson(name, value) {
     if (import_node_fs.default.existsSync(temp)) import_node_fs.default.unlinkSync(temp);
   }
 }
+var import_node_fs, import_node_path, import_node_os, import_node_crypto, dataArgument, dataDir;
+var init_storage = __esm({
+  "src/storage.mjs"() {
+    import_node_fs = __toESM(require("node:fs"), 1);
+    import_node_path = __toESM(require("node:path"), 1);
+    import_node_os = __toESM(require("node:os"), 1);
+    import_node_crypto = require("node:crypto");
+    dataArgument = process.argv.indexOf("--codex-connect-data-dir");
+    dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
+  }
+});
+
+// src/responses-compat-daemon.mjs
+init_storage();
 
 // src/version.mjs
-var VERSION = "0.4.3";
+var VERSION = "0.4.4";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);
@@ -168,18 +184,30 @@ function createResponsesCompatServer({ getRoutes, instanceId, onConverted = () =
 // src/responses-compat-settings.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
 var import_node_child_process = require("node:child_process");
 var import_node_util = require("node:util");
 var import_node_crypto2 = require("node:crypto");
 var import_promises2 = require("node:timers/promises");
-var import_node_url = require("node:url");
+var import_node_url2 = require("node:url");
+init_storage();
 
 // src/desktop-input.mjs
 var MAX_FRAME = 8 * 1024 * 1024;
 
+// src/desktop-context.mjs
+var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_url = require("node:url");
+var directory = typeof __dirname === "string" ? __dirname : import_node_path2.default.dirname((0, import_node_url.fileURLToPath)(__filename));
+
 // src/desktop.mjs
 var MAX_FRAME2 = 8 * 1024 * 1024;
+
+// src/bridge-lifecycle.mjs
+init_storage();
+
+// src/wechat-storage.mjs
+init_storage();
 
 // src/bridge-lifecycle.mjs
 function alive(pid) {
@@ -194,12 +222,12 @@ function alive(pid) {
 
 // src/responses-compat-settings.mjs
 var execute = (0, import_node_util.promisify)(import_node_child_process.execFile);
-var directory = typeof __dirname === "string" ? __dirname : import_node_path2.default.dirname((0, import_node_url.fileURLToPath)(__filename));
-var runtime = import_node_path2.default.join(dataDir, "runtime");
+var directory2 = typeof __dirname === "string" ? __dirname : import_node_path3.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
+var runtime = import_node_path3.default.join(dataDir, "runtime");
 var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 var registryName = "CodexConnectResponsesCompat";
-var home = () => process.env.CODEX_HOME || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex");
-async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path2.default.join(directory, "provider-config.py") } = {}) {
+var home = () => process.env.CODEX_HOME || import_node_path3.default.join(import_node_os2.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path3.default.join(directory2, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
     const child = (0, import_node_child_process.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
@@ -251,7 +279,7 @@ function responsesCompatStatus() {
 }
 async function lock(name, action) {
   import_node_fs2.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const file = import_node_path2.default.join(dataDir, name);
+  const file = import_node_path3.default.join(dataDir, name);
   let descriptor;
   const deadline = Date.now() + 12e3;
   while (descriptor === void 0) {
@@ -286,7 +314,7 @@ async function lock(name, action) {
     }
   }
 }
-async function setCompatStartup(enabled, { entry = import_node_path2.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+async function setCompatStartup(enabled, { entry = import_node_path3.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
   else await execute("reg.exe", ["delete", registry, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
@@ -304,7 +332,7 @@ async function configureResponsesCompat({ providerId, enabled }, {
     const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
-    const backup = () => import_node_path2.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto2.randomUUID)()}.toml`);
+    const backup = () => import_node_path3.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto2.randomUUID)()}.toml`);
     if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
     const next = {
       ...previous,

@@ -37,15 +37,15 @@ export async function main() {
   };
   process.once('SIGINT',stop);process.once('SIGTERM',stop);
   const refreshDesktop=async()=>{
-    const current=readJson('desktop-context.json',{});
+    let current=readJson('desktop-context.json',{});
     if(!current.pipePath || !current.threadId)return;
     try {
       if(current.pipePath!==desktop.context.pipePath || current.threadId!==desktop.context.threadId) {
         const probe=new DesktopClient(current);
-        try{await probe.call('list_threads',{limit:1});}finally{probe.close();}
+        try{await probe.call('list_threads',{limit:1});current={...probe.context};}finally{probe.close();}
         desktop.updateContext(current);
       }
-      if(!desktop.socket || desktop.socket.destroyed)await desktop.call('list_threads',{limit:1});
+      await desktop.call('list_threads',{limit:1},{timeoutMs:5000});
       if(!desktop.input.socket || desktop.input.socket.destroyed)await desktop.input.connect();
       status.desktopConnected=true;
     }catch{status.desktopConnected=false;}
@@ -74,10 +74,9 @@ export async function main() {
       await channel.preview();
     });
     desktop=new DesktopClient(readJson('desktop-context.json',{}));
-    const tools=await desktop.tools();
-    if(!tools.some(tool=>tool.name==='send_message_to_thread'))throw new Error('当前桌面版没有提供消息转发能力');
-    await desktop.call('list_threads',{limit:1});status.desktopConnected=true;saveStatus();
-    await desktop.input.connect();status.messageTransport='desktop-user-input';saveStatus();
+    // Keep chat channels alive while the desktop is restarting, so background
+    // discovery can reconnect without a new local chat or manual bridge start.
+    await refreshDesktop();status.messageTransport='desktop-user-input';saveStatus();
     const settings=config();
     if(settings.appId && settings.appSecret && settings.feishuEnabled!==false) {
       const channel=createFeishuChannel({desktop,settings,onStatus:update=>channelStatus('feishu',update)});

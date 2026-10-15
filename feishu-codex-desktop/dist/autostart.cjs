@@ -4,6 +4,18 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -21,18 +33,75 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
+// src/storage.mjs
+var storage_exports = {};
+__export(storage_exports, {
+  config: () => config,
+  dataDir: () => dataDir,
+  readJson: () => readJson,
+  secureDirectory: () => secureDirectory,
+  writeJson: () => writeJson
+});
+function secureDirectory(dir = dataDir) {
+  import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
+  if (process.platform === "win32") {
+    const who = (0, import_node_child_process.spawnSync)("whoami.exe", [], { encoding: "utf8", windowsHide: true });
+    if (who.status !== 0 || !who.stdout.trim()) throw new Error("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D Windows \u7528\u6237");
+    const acl = (0, import_node_child_process.spawnSync)("icacls.exe", [dir, "/inheritance:r", "/grant:r", `${who.stdout.trim()}:(OI)(CI)F`], { windowsHide: true, encoding: "utf8" });
+    if (acl.status !== 0) throw new Error("\u65E0\u6CD5\u9650\u5236\u914D\u7F6E\u76EE\u5F55\u7684 Windows \u8BBF\u95EE\u6743\u9650");
+  }
+}
+function readJson(name, fallback) {
+  try {
+    return JSON.parse(import_node_fs.default.readFileSync(import_node_path2.default.join(dataDir, name), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+function writeJson(name, value) {
+  import_node_fs.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
+  const target = import_node_path2.default.join(dataDir, name);
+  const temp = `${target}.${process.pid}.${(0, import_node_crypto2.randomBytes)(4).toString("hex")}.tmp`;
+  try {
+    import_node_fs.default.writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 384, flag: "wx" });
+    import_node_fs.default.renameSync(temp, target);
+  } finally {
+    if (import_node_fs.default.existsSync(temp)) import_node_fs.default.unlinkSync(temp);
+  }
+}
+function config() {
+  const result = readJson("config.json", {});
+  const appId = process.env.FEISHU_APP_ID || result.appId;
+  const appSecret = process.env.FEISHU_APP_SECRET || result.appSecret;
+  if (!Array.isArray(result.allowedOpenIds)) result.allowedOpenIds = [];
+  return { ...result, appId, appSecret };
+}
+var import_node_fs, import_node_path2, import_node_os2, import_node_child_process, import_node_crypto2, dataArgument, dataDir;
+var init_storage = __esm({
+  "src/storage.mjs"() {
+    import_node_fs = __toESM(require("node:fs"), 1);
+    import_node_path2 = __toESM(require("node:path"), 1);
+    import_node_os2 = __toESM(require("node:os"), 1);
+    import_node_child_process = require("node:child_process");
+    import_node_crypto2 = require("node:crypto");
+    dataArgument = process.argv.indexOf("--codex-connect-data-dir");
+    dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex-feishu-desktop");
+  }
+});
+
 // src/autostart.mjs
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
 
 // src/bridge-lifecycle.mjs
-var import_node_fs2 = __toESM(require("node:fs"), 1);
-var import_node_path3 = __toESM(require("node:path"), 1);
-var import_node_child_process2 = require("node:child_process");
+var import_node_fs3 = __toESM(require("node:fs"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_child_process3 = require("node:child_process");
 var import_promises2 = require("node:timers/promises");
 
 // src/desktop.mjs
 var import_node_net2 = __toESM(require("node:net"), 1);
-var import_node_crypto2 = require("node:crypto");
+var import_node_crypto3 = require("node:crypto");
 
 // src/desktop-input.mjs
 var import_node_net = __toESM(require("node:net"), 1);
@@ -255,6 +324,96 @@ var DesktopInput = class {
   }
 };
 
+// src/desktop-context.mjs
+var import_node_fs2 = __toESM(require("node:fs"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_child_process2 = require("node:child_process");
+var import_node_url = require("node:url");
+var directory = typeof __dirname === "string" ? __dirname : import_node_path3.default.dirname((0, import_node_url.fileURLToPath)(__filename));
+var discovery;
+function desktopUnavailable() {
+  return Object.assign(new Error("Codex \u684C\u9762\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5\u3002\u672C\u6B21\u64CD\u4F5C\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\uFF0C\u7A0D\u540E\u91CD\u8BD5\u3002"), { code: "DESKTOP_DISCONNECTED", notSent: true });
+}
+async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path3.default.join(directory, "discover-desktop.ps1") } = {}) {
+  if (platform !== "win32") return [];
+  return new Promise((resolve) => {
+    let source;
+    try {
+      source = import_node_fs2.default.readFileSync(script, "utf8");
+    } catch {
+      return resolve([]);
+    }
+    const child = (0, import_node_child_process2.spawn)("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    let output = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve([]);
+    }, 15e3);
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve([]);
+    });
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+      if (output.length > 16384) {
+        child.kill();
+        resolve([]);
+      }
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      try {
+        const endpoints = JSON.parse(output.trim().replace(/^\uFEFF/, ""));
+        resolve(code === 0 && Array.isArray(endpoints) ? endpoints.filter((e) => typeof e.pipePath === "string" && /^\\\\\.\\pipe\\codex-browser-use-[0-9a-f-]{36}$/i.test(e.pipePath) && Number.isInteger(e.serverPid) && e.serverPid > 0) : []);
+      } catch {
+        resolve([]);
+      }
+    });
+    child.stdin.on("error", () => {
+    });
+    child.stdin.end("& {\n" + source + "\n}\n\n");
+  });
+}
+async function recoverDesktopContext(current, { probe, discover = discoverDesktopEndpoints, read, publish } = {}) {
+  if (!read || !publish) {
+    const storage = await Promise.resolve().then(() => (init_storage(), storage_exports));
+    read ||= () => storage.readJson("desktop-context.json", {});
+    publish ||= (context) => storage.writeJson("desktop-context.json", context);
+  }
+  const saved = read();
+  if (saved.pipePath && saved.threadId && saved.pipePath !== current.pipePath) {
+    try {
+      await probe(saved);
+      return saved;
+    } catch {
+    }
+  }
+  const source = saved.threadId ? saved : current;
+  if (!source.threadId) throw desktopUnavailable();
+  discovery ||= discover().finally(() => {
+    discovery = null;
+  });
+  const endpoints = await discovery;
+  const candidates = endpoints.filter((e) => e.pipePath !== current.pipePath).slice(0, 8).map((e) => ({ pipePath: e.pipePath, threadId: source.threadId }));
+  const checked = await Promise.allSettled(candidates.map(async (candidate2) => {
+    await probe(candidate2);
+    return candidate2;
+  }));
+  const usable = checked.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  if (usable.length !== 1) throw desktopUnavailable();
+  const candidate = usable[0];
+  const latest = read();
+  if (latest.pipePath && latest.threadId && (latest.pipePath !== saved.pipePath || latest.threadId !== saved.threadId)) {
+    try {
+      await probe(latest);
+      return latest;
+    } catch {
+    }
+  }
+  publish(candidate);
+  return candidate;
+}
+
 // src/desktop.mjs
 var MAX_FRAME2 = 8 * 1024 * 1024;
 var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
@@ -279,9 +438,11 @@ function encodeFrame(value) {
   body.copy(frame2, 4);
   return frame2;
 }
-var DesktopClient = class {
-  constructor(context) {
+var DesktopClient = class _DesktopClient {
+  constructor(context, { recover = true, resolveContext = recoverDesktopContext } = {}) {
     this.context = context;
+    this.recover = recover;
+    this.resolveContext = resolveContext;
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
@@ -296,7 +457,39 @@ var DesktopClient = class {
     if (this.connecting) return this.connecting;
     if (!this.context.pipePath) throw new Error("\u672A\u6536\u5230\u684C\u9762\u7248\u8FDE\u63A5\u4FE1\u606F\uFF0C\u8BF7\u5728 Codex \u5185\u542F\u52A8\u63D2\u4EF6");
     const generation = this.connectionGeneration;
-    const connecting = new Promise((resolve, reject) => {
+    const connecting = this.openSocket(generation).catch(async (error) => {
+      if (!this.recover || !["ENOENT", "ECONNREFUSED", "EPIPE", "ECONNRESET"].includes(error.code)) throw error;
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      let next;
+      try {
+        next = await this.resolveContext(this.context, { probe: async (context) => {
+          const probe = new _DesktopClient(context, { recover: false });
+          try {
+            const tools = await probe.tools({ timeoutMs: 1500 });
+            if (!tools.some((tool) => tool.name === "list_threads") || !tools.some((tool) => tool.name === "read_thread")) throw desktopUnavailable();
+            await probe.call("list_threads", { limit: 1 }, { timeoutMs: 3e3 });
+          } finally {
+            probe.close();
+          }
+        } });
+      } catch {
+        throw desktopUnavailable();
+      }
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      this.context = { ...this.context, ...next };
+      try {
+        await this.openSocket(generation);
+      } catch {
+        throw desktopUnavailable();
+      }
+    }).finally(() => {
+      if (this.connecting === connecting) this.connecting = null;
+    });
+    this.connecting = connecting;
+    return connecting;
+  }
+  openSocket(generation) {
+    return new Promise((resolve, reject) => {
       const socket = import_node_net2.default.createConnection(this.context.pipePath);
       const timer = setTimeout(() => socket.destroy(new Error("\u8FDE\u63A5\u684C\u9762\u7248\u8D85\u65F6")), 5e3);
       socket.once("error", reject);
@@ -319,15 +512,12 @@ var DesktopClient = class {
         resolve();
       });
       socket.once("close", () => clearTimeout(timer));
-    }).finally(() => {
-      if (this.connecting === connecting) this.connecting = null;
     });
-    this.connecting = connecting;
-    return connecting;
   }
   async request(method, params, timeoutMs = 3e4, beforeSend) {
     await this.connect();
     beforeSend?.();
+    if (method === "tools/call" && params.namespace === "codex_app") params = { ...params, threadId: this.context.threadId };
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -393,9 +583,9 @@ var DesktopClient = class {
     }
     this.context = { ...this.context, ...context };
   }
-  async tools() {
-    const result = await this.request("tools/list", { threadStartKind: "all" });
-    return result.tools.filter((tool) => tool.namespace === "codex_app" && ALLOWED_TOOLS.has(tool.name));
+  async tools({ timeoutMs = 3e4 } = {}) {
+    const result = await this.request("tools/list", { threadStartKind: "all" }, timeoutMs);
+    return (result.tools || []).filter((tool) => tool.namespace === "codex_app" && ALLOWED_TOOLS.has(tool.name));
   }
   async call(tool, args = {}, options = {}) {
     if (!ALLOWED_TOOLS.has(tool)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
@@ -408,9 +598,9 @@ var DesktopClient = class {
       callerSource: "codex",
       threadId: this.context.threadId,
       hostId: "local",
-      turnId: `feishu-${(0, import_node_crypto2.randomUUID)()}`,
-      callId: `feishu-${(0, import_node_crypto2.randomUUID)()}`
-    }, tool === "wait_threads" ? 45e3 : 3e4, options.beforeSend);
+      turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
+      callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
+    }, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), options.beforeSend);
     const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
     if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
     try {
@@ -421,51 +611,11 @@ var DesktopClient = class {
   }
 };
 
-// src/storage.mjs
-var import_node_fs = __toESM(require("node:fs"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_os2 = __toESM(require("node:os"), 1);
-var import_node_child_process = require("node:child_process");
-var import_node_crypto3 = require("node:crypto");
-var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
-var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex-feishu-desktop");
-function secureDirectory(dir = dataDir) {
-  import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
-  if (process.platform === "win32") {
-    const who = (0, import_node_child_process.spawnSync)("whoami.exe", [], { encoding: "utf8", windowsHide: true });
-    if (who.status !== 0 || !who.stdout.trim()) throw new Error("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D Windows \u7528\u6237");
-    const acl = (0, import_node_child_process.spawnSync)("icacls.exe", [dir, "/inheritance:r", "/grant:r", `${who.stdout.trim()}:(OI)(CI)F`], { windowsHide: true, encoding: "utf8" });
-    if (acl.status !== 0) throw new Error("\u65E0\u6CD5\u9650\u5236\u914D\u7F6E\u76EE\u5F55\u7684 Windows \u8BBF\u95EE\u6743\u9650");
-  }
-}
-function readJson(name, fallback) {
-  try {
-    return JSON.parse(import_node_fs.default.readFileSync(import_node_path2.default.join(dataDir, name), "utf8"));
-  } catch (error) {
-    if (error.code === "ENOENT") return fallback;
-    throw error;
-  }
-}
-function writeJson(name, value) {
-  import_node_fs.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const target = import_node_path2.default.join(dataDir, name);
-  const temp = `${target}.${process.pid}.${(0, import_node_crypto3.randomBytes)(4).toString("hex")}.tmp`;
-  try {
-    import_node_fs.default.writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 384, flag: "wx" });
-    import_node_fs.default.renameSync(temp, target);
-  } finally {
-    if (import_node_fs.default.existsSync(temp)) import_node_fs.default.unlinkSync(temp);
-  }
-}
-function config() {
-  const result = readJson("config.json", {});
-  const appId = process.env.FEISHU_APP_ID || result.appId;
-  const appSecret = process.env.FEISHU_APP_SECRET || result.appSecret;
-  if (!Array.isArray(result.allowedOpenIds)) result.allowedOpenIds = [];
-  return { ...result, appId, appSecret };
-}
+// src/bridge-lifecycle.mjs
+init_storage();
 
 // src/wechat-storage.mjs
+init_storage();
 function readWechatAccount() {
   const account = readJson("wechat.json", {});
   const revoked = readJson("wechat-revoked.json", { loginIds: [] });
@@ -514,6 +664,7 @@ async function validateDesktopContext(context) {
   const desktop = new DesktopClient(context);
   try {
     await desktop.call("list_threads", { limit: 1 });
+    return desktop.context;
   } finally {
     desktop.close();
   }
@@ -531,19 +682,19 @@ async function ensureBridge(context, { entryPath, automatic = false, validate = 
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
   secureDirectory();
-  const lockPath = import_node_path3.default.join(dataDir, "bridge-start.lock");
+  const lockPath = import_node_path4.default.join(dataDir, "bridge-start.lock");
   let lock;
   const deadline = Date.now() + 6e3;
   while (lock === void 0) {
     try {
-      lock = import_node_fs2.default.openSync(lockPath, "wx", 384);
-      import_node_fs2.default.writeFileSync(lock, JSON.stringify({ pid: process.pid }));
+      lock = import_node_fs3.default.openSync(lockPath, "wx", 384);
+      import_node_fs3.default.writeFileSync(lock, JSON.stringify({ pid: process.pid }));
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
       const owner = readLock("bridge-start.lock");
       if (owner.pid && !alive(owner.pid)) {
         try {
-          import_node_fs2.default.unlinkSync(lockPath);
+          import_node_fs3.default.unlinkSync(lockPath);
         } catch {
         }
         continue;
@@ -553,25 +704,25 @@ async function ensureBridge(context, { entryPath, automatic = false, validate = 
     }
   }
   try {
-    await validate(context);
+    context = await validate(context) || context;
     const skipped2 = automatic && automaticSkip(context);
     if (skipped2) return { skipped: skipped2 };
     writeJson("desktop-context.json", context);
     if (!automatic) writeJson("autostart-pause.json", {});
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
-    if (!entryPath || !import_node_fs2.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
-    const log = import_node_fs2.default.openSync(import_node_path3.default.join(dataDir, "bridge.log"), "a", 384);
+    if (!entryPath || !import_node_fs3.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
+    const log = import_node_fs3.default.openSync(import_node_path4.default.join(dataDir, "bridge.log"), "a", 384);
     let child;
     try {
-      child = (0, import_node_child_process2.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
+      child = (0, import_node_child_process3.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
       });
       child.unref();
     } finally {
-      import_node_fs2.default.closeSync(log);
+      import_node_fs3.default.closeSync(log);
     }
     const readyBy = Date.now() + 3e3;
     while (Date.now() < readyBy && alive(child.pid)) {
@@ -580,15 +731,16 @@ async function ensureBridge(context, { entryPath, automatic = false, validate = 
     }
     throw new Error("\u6865\u63A5\u672A\u80FD\u786E\u8BA4\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u6865\u63A5\u72B6\u6001\u3002");
   } finally {
-    import_node_fs2.default.closeSync(lock);
+    import_node_fs3.default.closeSync(lock);
     try {
-      import_node_fs2.default.unlinkSync(lockPath);
+      import_node_fs3.default.unlinkSync(lockPath);
     } catch {
     }
   }
 }
 
 // src/autostart.mjs
+init_storage();
 async function main() {
   if (readJson("autostart.json", {}).enabled !== true) return;
   let raw = "";
@@ -606,7 +758,7 @@ async function main() {
   try {
     if (!process.env.CODEX_APP_TOOLS_PIPE_PATH) throw new Error("No desktop host context");
     const context = desktopContext(void 0, { event });
-    const result = await ensureBridge(context, { automatic: true, entryPath: import_node_path4.default.join(__dirname, "bridge.cjs") });
+    const result = await ensureBridge(context, { automatic: true, entryPath: import_node_path5.default.join(__dirname, "bridge.cjs") });
     writeJson("autostart-status.json", { state: result.skipped || "started", checkedAt: Date.now() });
   } catch {
     writeJson("autostart-status.json", { state: "waiting_desktop", checkedAt: Date.now() });

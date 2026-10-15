@@ -28,7 +28,7 @@ export function hasConfiguredChannel() {
 }
 export async function validateDesktopContext(context) {
   const desktop=new DesktopClient(context);
-  try {await desktop.call('list_threads',{limit:1});}finally{desktop.close();}
+  try {await desktop.call('list_threads',{limit:1});return desktop.context;}finally{desktop.close();}
 }
 export function pauseAutostart() {
   const saved=readJson('desktop-context.json',{});
@@ -62,7 +62,7 @@ export async function ensureBridge(context,{entryPath,automatic=false,validate=v
   }
   try {
     // Verify the host-supplied context before publishing it to a running bridge.
-    await validate(context);
+    context=await validate(context)||context;
     const skipped=automatic && automaticSkip(context);if(skipped)return {skipped};
     writeJson('desktop-context.json',context);
     if(!automatic)writeJson('autostart-pause.json',{});

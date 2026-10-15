@@ -1,6 +1,7 @@
 import net from 'node:net';
 import {randomUUID} from 'node:crypto';
 import {DesktopInput} from './desktop-input.mjs';
+import {recoverDesktopContext,desktopUnavailable} from './desktop-context.mjs';
 
 const MAX_FRAME = 8 * 1024 * 1024;
 // This is the desktop's installed app-tools transport. It is version-specific.
@@ -17,7 +18,7 @@ export function encodeFrame(value) {
   frame.writeUInt32LE(body.length); body.copy(frame,4); return frame;
 }
 export class DesktopClient {
-  constructor(context) { this.context = context; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
+  constructor(context,{recover=true,resolveContext=recoverDesktopContext}={}) { this.context = context; this.recover=recover;this.resolveContext=resolveContext;this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
     this.connectionGeneration=0;
     this.input=new DesktopInput({pipePath:context.inputPipePath,
       activateThread:({threadId})=>this.call('navigate_to_codex_page',{threadId})}); }
@@ -26,7 +27,28 @@ export class DesktopClient {
     if (this.connecting) return this.connecting;
     if (!this.context.pipePath) throw new Error('未收到桌面版连接信息，请在 Codex 内启动插件');
     const generation=this.connectionGeneration;
-    const connecting = new Promise((resolve,reject) => {
+    const connecting=this.openSocket(generation).catch(async error=>{
+      if(!this.recover || !['ENOENT','ECONNREFUSED','EPIPE','ECONNRESET'].includes(error.code))throw error;
+      if(generation!==this.connectionGeneration)throw desktopUnavailable();
+      let next;
+      try {
+        next=await this.resolveContext(this.context,{probe:async context=>{
+          const probe=new DesktopClient(context,{recover:false});
+          try {
+            const tools=await probe.tools({timeoutMs:1500});
+            if(!tools.some(tool=>tool.name==='list_threads') || !tools.some(tool=>tool.name==='read_thread'))throw desktopUnavailable();
+            await probe.call('list_threads',{limit:1},{timeoutMs:3000});
+          }finally{probe.close();}
+        }});
+      }catch{throw desktopUnavailable();}
+      if(generation!==this.connectionGeneration)throw desktopUnavailable();
+      this.context={...this.context,...next};
+      try{await this.openSocket(generation);}catch{throw desktopUnavailable();}
+    }).finally(()=>{if(this.connecting===connecting)this.connecting=null;});
+    this.connecting=connecting;return connecting;
+  }
+  openSocket(generation) {
+    return new Promise((resolve,reject) => {
       const socket = net.createConnection(this.context.pipePath);
       const timer = setTimeout(() => socket.destroy(new Error('连接桌面版超时')),5000);
       socket.once('error',reject);
@@ -39,12 +61,12 @@ export class DesktopClient {
         resolve();
       });
       socket.once('close',() => clearTimeout(timer));
-    }).finally(() => {if(this.connecting===connecting)this.connecting=null;});
-    this.connecting=connecting;return connecting;
+    });
   }
   async request(method,params,timeoutMs=30000,beforeSend) {
     await this.connect();
     beforeSend?.();
+    if(method==='tools/call' && params.namespace==='codex_app')params={...params,threadId:this.context.threadId};
     const id = this.nextId++;
     return new Promise((resolve,reject) => {
       const timer = setTimeout(() => {
@@ -85,9 +107,9 @@ export class DesktopClient {
     }
     this.context={...this.context,...context};
   }
-  async tools() {
-    const result = await this.request('tools/list',{threadStartKind:'all'});
-    return result.tools.filter(tool => tool.namespace === 'codex_app' && ALLOWED_TOOLS.has(tool.name));
+  async tools({timeoutMs=30000}={}) {
+    const result = await this.request('tools/list',{threadStartKind:'all'},timeoutMs);
+    return (result.tools||[]).filter(tool => tool.namespace === 'codex_app' && ALLOWED_TOOLS.has(tool.name));
   }
   async call(tool,args={},options={}) {
     if(!ALLOWED_TOOLS.has(tool)) throw new Error('不支持的桌面操作');
@@ -97,7 +119,7 @@ export class DesktopClient {
       namespace:'codex_app',tool,arguments:args,callerSource:'codex',
       threadId:this.context.threadId,hostId:'local',
       turnId:`feishu-${randomUUID()}`,callId:`feishu-${randomUUID()}`
-    },tool==='wait_threads'?45000:30000,options.beforeSend);
+    },options.timeoutMs??(tool==='wait_threads'?45000:30000),options.beforeSend);
     const output=(result.contentItems||[]).filter(item=>item.type==='inputText').map(item=>item.text).join('\n');
     if(!result.success) throw new Error(output || '桌面操作失败');
     try {return JSON.parse(output);} catch {return {text:output};}

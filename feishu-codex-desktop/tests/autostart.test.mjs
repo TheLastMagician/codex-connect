@@ -29,7 +29,7 @@ fs.writeFileSync(path.join(bundles,'bridge.cjs'),fakeBridge);
 fs.writeFileSync(path.join(bundles,'catalog.py'),'# test fixture');
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 fs.copyFileSync(path.join(root,'dist/autostart.cjs'),path.join(bundles,'autostart.cjs'));
-for(const name of ['responses-compat-daemon.cjs','provider-config.py'])fs.copyFileSync(path.join(root,'dist',name),path.join(bundles,name));
+for(const name of ['responses-compat-daemon.cjs','provider-config.py','discover-desktop.ps1'])fs.copyFileSync(path.join(root,'dist',name),path.join(bundles,name));
 const validate=async()=>{};
 const options={entryPath:path.join(bundles,'bridge.cjs'),validate};
 async function stopChildren() {
@@ -114,6 +114,13 @@ test('concurrent startup attempts launch a single bridge and retain its real con
   const rebound=await ensureBridge(next,options);
   assert.equal(rebound.alreadyRunning,true);assert.equal(rebound.pid,results[0].pid);
   assert.deepEqual(readJson('desktop-context.json',{}),next);
+});
+
+test('startup publishes the recovered host context instead of restoring a stale inherited pipe',async()=>{
+  const stale={pipePath:'old-inherited-pipe',threadId:'old-real-source'};
+  const verified={pipePath:'new-verified-pipe',threadId:'new-real-source'};
+  const result=await ensureBridge(stale,{...options,validate:async()=>verified});children.add(result.pid);
+  assert.deepEqual(readJson('desktop-context.json',{}),verified);
 });
 
 test('a manual stop pauses the current desktop only and updating the runtime does not clear the pause',async()=>{

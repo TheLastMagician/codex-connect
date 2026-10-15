@@ -4,6 +4,14 @@ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res, err) => function __init() {
+  if (err) throw err[0];
+  try {
+    return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+  } catch (e) {
+    throw err = [e], e;
+  }
+};
 var __commonJS = (cb, mod) => function __require() {
   try {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
@@ -27,6 +35,48 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+
+// src/storage.mjs
+function secureDirectory(dir = dataDir) {
+  import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
+  if (process.platform === "win32") {
+    const who = (0, import_node_child_process.spawnSync)("whoami.exe", [], { encoding: "utf8", windowsHide: true });
+    if (who.status !== 0 || !who.stdout.trim()) throw new Error("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D Windows \u7528\u6237");
+    const acl = (0, import_node_child_process.spawnSync)("icacls.exe", [dir, "/inheritance:r", "/grant:r", `${who.stdout.trim()}:(OI)(CI)F`], { windowsHide: true, encoding: "utf8" });
+    if (acl.status !== 0) throw new Error("\u65E0\u6CD5\u9650\u5236\u914D\u7F6E\u76EE\u5F55\u7684 Windows \u8BBF\u95EE\u6743\u9650");
+  }
+}
+function readJson(name, fallback) {
+  try {
+    return JSON.parse(import_node_fs.default.readFileSync(import_node_path.default.join(dataDir, name), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+function writeJson(name, value) {
+  import_node_fs.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
+  const target = import_node_path.default.join(dataDir, name);
+  const temp = `${target}.${process.pid}.${(0, import_node_crypto.randomBytes)(4).toString("hex")}.tmp`;
+  try {
+    import_node_fs.default.writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 384, flag: "wx" });
+    import_node_fs.default.renameSync(temp, target);
+  } finally {
+    if (import_node_fs.default.existsSync(temp)) import_node_fs.default.unlinkSync(temp);
+  }
+}
+var import_node_fs, import_node_path, import_node_os, import_node_child_process, import_node_crypto, dataArgument, dataDir;
+var init_storage = __esm({
+  "src/storage.mjs"() {
+    import_node_fs = __toESM(require("node:fs"), 1);
+    import_node_path = __toESM(require("node:path"), 1);
+    import_node_os = __toESM(require("node:os"), 1);
+    import_node_child_process = require("node:child_process");
+    import_node_crypto = require("node:crypto");
+    dataArgument = process.argv.indexOf("--codex-connect-data-dir");
+    dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
+  }
+});
 
 // node_modules/qrcode/lib/can-promise.js
 var require_can_promise = __commonJS({
@@ -1569,10 +1619,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version);
-      const path5 = dijkstra.find_path(graph.map, "start", "end");
+      const path6 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path5.length - 1; i++) {
-        optimizedSegs.push(graph.table[path5[i]].node);
+      for (let i = 1; i < path6.length - 1; i++) {
+        optimizedSegs.push(graph.table[path6[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -4049,7 +4099,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path6, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4060,7 +4110,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs5.createWriteStream(path5);
+      const stream = fs5.createWriteStream(path6);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -4122,14 +4172,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path6, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
       const fs5 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs5.writeFile(path5, utf8, cb);
+      fs5.writeFile(path6, utf8, cb);
     };
   }
 });
@@ -4250,7 +4300,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path5 = "";
+      let path6 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -4261,19 +4311,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path5 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path6 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path5 += svgCmd("h", lineLength);
+            path6 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path5;
+      return path6;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -4281,10 +4331,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path5 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path6 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path5 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path6 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -4298,7 +4348,7 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path6, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4306,7 +4356,7 @@ var require_svg = __commonJS({
       const fs5 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs5.writeFile(path5, xmlStr, cb);
+      fs5.writeFile(path6, xmlStr, cb);
     };
   }
 });
@@ -4464,8 +4514,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path5) {
-      return path5.slice((path5.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path6) {
+      return path6.slice((path6.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -4529,17 +4579,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path5, text, opts, cb) {
-      if (typeof path5 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path6, text, opts, cb) {
+      if (typeof path6 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path5);
+      const type = params.opts.type || getTypeFromFilename(path6);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path5);
+      const renderToFile = renderer.renderToFile.bind(null, path6);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -4565,43 +4615,7 @@ var require_lib = __commonJS({
 var import_promises2 = __toESM(require("node:readline/promises"), 1);
 var import_node_stream = require("node:stream");
 var import_node_crypto6 = require("node:crypto");
-
-// src/storage.mjs
-var import_node_fs = __toESM(require("node:fs"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_child_process = require("node:child_process");
-var import_node_crypto = require("node:crypto");
-var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
-var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
-function secureDirectory(dir = dataDir) {
-  import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
-  if (process.platform === "win32") {
-    const who = (0, import_node_child_process.spawnSync)("whoami.exe", [], { encoding: "utf8", windowsHide: true });
-    if (who.status !== 0 || !who.stdout.trim()) throw new Error("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D Windows \u7528\u6237");
-    const acl = (0, import_node_child_process.spawnSync)("icacls.exe", [dir, "/inheritance:r", "/grant:r", `${who.stdout.trim()}:(OI)(CI)F`], { windowsHide: true, encoding: "utf8" });
-    if (acl.status !== 0) throw new Error("\u65E0\u6CD5\u9650\u5236\u914D\u7F6E\u76EE\u5F55\u7684 Windows \u8BBF\u95EE\u6743\u9650");
-  }
-}
-function readJson(name, fallback) {
-  try {
-    return JSON.parse(import_node_fs.default.readFileSync(import_node_path.default.join(dataDir, name), "utf8"));
-  } catch (error) {
-    if (error.code === "ENOENT") return fallback;
-    throw error;
-  }
-}
-function writeJson(name, value) {
-  import_node_fs.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const target = import_node_path.default.join(dataDir, name);
-  const temp = `${target}.${process.pid}.${(0, import_node_crypto.randomBytes)(4).toString("hex")}.tmp`;
-  try {
-    import_node_fs.default.writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 384, flag: "wx" });
-    import_node_fs.default.renameSync(temp, target);
-  } finally {
-    if (import_node_fs.default.existsSync(temp)) import_node_fs.default.unlinkSync(temp);
-  }
-}
+init_storage();
 
 // src/wechat-auth.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
@@ -4610,12 +4624,13 @@ var import_node_url = require("node:url");
 var import_node_child_process2 = require("node:child_process");
 var import_node_crypto3 = require("node:crypto");
 var import_qrcode = __toESM(require_lib(), 1);
+init_storage();
 
 // src/wechat-api.mjs
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.4.3";
+var VERSION = "0.4.4";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -4700,6 +4715,7 @@ var WechatApi = class {
 };
 
 // src/wechat-storage.mjs
+init_storage();
 function readWechatAccount() {
   const account = readJson("wechat.json", {});
   const revoked = readJson("wechat-revoked.json", { loginIds: [] });
@@ -4761,6 +4777,7 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
 }
 
 // src/assistant.mjs
+init_storage();
 var fields = (properties) => ({ type: "object", properties, additionalProperties: false });
 var string = (description) => ({ type: "string", description });
 var tool = (name, description, properties = {}, required = []) => ({ type: "function", function: { name, description, parameters: { ...fields(properties), required } } });
@@ -4816,6 +4833,7 @@ var import_node_fs3 = __toESM(require("node:fs"), 1);
 var import_node_path3 = __toESM(require("node:path"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
 var import_node_crypto4 = require("node:crypto");
+init_storage();
 var runtimeDir = import_node_path3.default.join(dataDir, "runtime");
 var autostartEntry = () => import_node_path3.default.join(runtimeDir, "autostart.cjs");
 function hooksPath(codexHome = process.env.CODEX_HOME || import_node_path3.default.join(import_node_os2.default.homedir(), ".codex")) {
@@ -4862,7 +4880,7 @@ function autostartStatus({ codexHome } = {}) {
   };
 }
 function syncAutostartRuntime(bundleDir) {
-  const required = ["autostart.cjs", "bridge.cjs", "catalog.py", "responses-compat-daemon.cjs", "provider-config.py"];
+  const required = ["autostart.cjs", "bridge.cjs", "catalog.py", "responses-compat-daemon.cjs", "provider-config.py", "discover-desktop.ps1"];
   if (!bundleDir || required.some((name) => !import_node_fs3.default.existsSync(import_node_path3.default.join(bundleDir, name)))) throw new Error("\u7F3A\u5C11\u81EA\u52A8\u542F\u52A8\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
   secureDirectory();
   for (const name of [...required, "autostart.cjs.LEGAL.txt", "bridge.cjs.LEGAL.txt"]) {
@@ -4895,20 +4913,27 @@ function configureAutostart(enabled, { bundleDir, codexHome } = {}) {
 // src/responses-compat-settings.mjs
 var import_node_fs4 = __toESM(require("node:fs"), 1);
 var import_node_os3 = __toESM(require("node:os"), 1);
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
 var import_node_child_process3 = require("node:child_process");
 var import_node_util = require("node:util");
 var import_node_crypto5 = require("node:crypto");
 var import_promises = require("node:timers/promises");
-var import_node_url2 = require("node:url");
+var import_node_url3 = require("node:url");
+init_storage();
 
 // src/desktop-input.mjs
 var MAX_FRAME = 8 * 1024 * 1024;
+
+// src/desktop-context.mjs
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_url2 = require("node:url");
+var directory2 = typeof __dirname === "string" ? __dirname : import_node_path4.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
 
 // src/desktop.mjs
 var MAX_FRAME2 = 8 * 1024 * 1024;
 
 // src/bridge-lifecycle.mjs
+init_storage();
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -4921,12 +4946,12 @@ function alive(pid) {
 
 // src/responses-compat-settings.mjs
 var execute = (0, import_node_util.promisify)(import_node_child_process3.execFile);
-var directory2 = typeof __dirname === "string" ? __dirname : import_node_path4.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
-var runtime = import_node_path4.default.join(dataDir, "runtime");
+var directory3 = typeof __dirname === "string" ? __dirname : import_node_path5.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
+var runtime = import_node_path5.default.join(dataDir, "runtime");
 var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 var registryName = "CodexConnectResponsesCompat";
-var home = () => process.env.CODEX_HOME || import_node_path4.default.join(import_node_os3.default.homedir(), ".codex");
-async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path4.default.join(directory2, "provider-config.py") } = {}) {
+var home = () => process.env.CODEX_HOME || import_node_path5.default.join(import_node_os3.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path5.default.join(directory3, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
     const child = (0, import_node_child_process3.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
@@ -4990,7 +5015,7 @@ function responsesCompatStatus() {
 }
 async function lock(name, action) {
   import_node_fs4.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const file = import_node_path4.default.join(dataDir, name);
+  const file = import_node_path5.default.join(dataDir, name);
   let descriptor;
   const deadline = Date.now() + 12e3;
   while (descriptor === void 0) {
@@ -5025,7 +5050,7 @@ async function lock(name, action) {
     }
   }
 }
-async function setCompatStartup(enabled, { entry = import_node_path4.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+async function setCompatStartup(enabled, { entry = import_node_path5.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
   else await execute("reg.exe", ["delete", registry, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
@@ -5043,7 +5068,7 @@ async function configureResponsesCompat({ providerId, enabled }, {
     const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
-    const backup = () => import_node_path4.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto5.randomUUID)()}.toml`);
+    const backup = () => import_node_path5.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto5.randomUUID)()}.toml`);
     if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
     const next = {
       ...previous,
