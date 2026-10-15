@@ -22,9 +22,10 @@ function render(){
     top.append(element('div','飞','channel-icon'));title.append(element('h3',bot.name),element('div',bot.mode==='fixed'?'固定会话聊天':'完整管理','bot-mode'));top.append(title,badge(channelState));card.append(top);
     const target=element('div',undefined,'target');target.append(element('small',bot.mode==='fixed'?'绑定会话':'工作方式'),element('strong',bot.mode==='fixed'?bot.thread?.title||'尚未选择会话':bot.configured?'管理项目与所有会话':'连接你的第一个飞书机器人'));
     target.append(element('p',bot.mode==='fixed'?'所有输入都作为任务发送，沿用会话模型。':bot.configured?'项目、会话、操作助手与卡片交互。':'填写 App ID 和 App Secret 后启用。'));card.append(target);
-    const pending=state.requests[bot.id]||[],users=bot.allowedOpenIds||[];
+    const platform=bot.mode==='fixed' && bot.accessMode==='feishu',pending=platform?[]:state.requests[bot.id]||[],users=bot.allowedOpenIds||[];
+    if(platform)card.append(element('p','跟随飞书范围 · 无需逐个授权','access'));
     if(pending.length){const block=element('div',undefined,'access pending');block.append(element('strong',pending.length+' 个使用申请'));for(const request of pending){const row=element('div',undefined,'access-row');row.append(element('code',request.openId),button('允许',async()=>{await api('bots/'+bot.id+'/users','POST',{openId:request.openId,allowed:true});toast('已允许，请重新给机器人发消息');await refresh();}));block.append(row);}card.append(block);}
-    const access=element('details',undefined,'access');access.append(element('summary','已授权 '+users.length+' 个账号'));for(const id of users){const row=element('div',undefined,'access-row');row.append(element('code',id),button('撤销',async()=>{if(await confirmAction('撤销这个账号？','撤销后，这个账号不能再向机器人发送任务。')){await api('bots/'+bot.id+'/users','POST',{openId:id,allowed:false});await refresh();}}));access.append(row);}card.append(access);
+    const access=element('details',undefined,'access');access.append(element('summary','已授权 '+users.length+' 个账号'));for(const id of users){const row=element('div',undefined,'access-row');row.append(element('code',id),button('撤销',async()=>{if(await confirmAction('撤销这个账号？','撤销后，这个账号不能再向机器人发送任务。')){await api('bots/'+bot.id+'/users','POST',{openId:id,allowed:false});await refresh();}}));access.append(row);}if(!platform)card.append(access);
     const actions=element('div',undefined,'actions'),toggle=element('label',undefined,'switch'),input=element('input');input.type='checkbox';input.checked=bot.enabled&&bot.configured;input.disabled=!bot.configured;input.setAttribute('aria-label','启用 '+bot.name);toggle.append(input,element('span',bot.enabled&&bot.configured?'已启用':'未启用'));
     input.onchange=()=>run(async()=>{input.disabled=true;try{await api('bots','PUT',{id:bot.id,enabled:input.checked});await refresh();}catch(error){input.checked=!input.checked;throw error;}finally{input.disabled=false;}});
     actions.append(toggle,button(bot.configured?'编辑':'配置',()=>openBot(bot)));
@@ -44,13 +45,14 @@ function render(){
 async function openBot(bot=null){editing=bot;bound=bot?.thread||null;$('bot-form').reset();$('form-error').textContent='';$('form-title').textContent=bot?'编辑机器人':'添加机器人';
   $('bot-name').value=bot?.name||'';$('app-id').value=bot?.appId||'';$('app-id').disabled=!!bot?.environmentCredentials;$('app-secret').disabled=!!bot?.environmentCredentials;
   $('app-secret').placeholder=bot?.secretConfigured?'已保存，留空保留':'输入应用凭据';$('app-secret').required=!bot?.secretConfigured;
-  $('credential-note').textContent=bot?.environmentCredentials?'主机器人凭据由环境变量提供。其他配置仍可在此修改。':'飞书开放平台：启用机器人 → 事件与回调 → 长连接接收 im.message.receive_v1；修改后发布应用。';
-  document.querySelector('input[name=mode][value="'+(bot?.mode||'fixed')+'"]').checked=true;$('bot-enabled').checked=bot?.enabled??true;$('card-actions').checked=!!bot?.cardActionsEnabled;
+  $('credential-note').textContent=bot?.environmentCredentials?'主机器人凭据由环境变量提供。其他配置仍可在此修改。':'飞书开放平台：启用机器人，长连接接收 im.message.receive_v1；群聊需额外开通接收群内 @ 消息的权限，并发布应用。';
+  document.querySelector('input[name=mode][value="'+(bot?.mode||'fixed')+'"]').checked=true;$('bot-enabled').checked=bot?.enabled??true;document.querySelector('input[name=accessMode][value="'+(bot?.accessMode||(!bot?'feishu':'approved'))+'"]').checked=true;$('card-actions').checked=!!bot?.cardActionsEnabled;
   $('current-binding').textContent=bound?'当前绑定：'+bound.title:'选择后，机器人只能与这个会话聊天。';$('thread-search').value='';$('project-select').value='';
   $('thread-select').replaceChildren();$('bot-dialog').showModal();modeChanged();
   if(document.querySelector('input[name=mode]:checked').value==='fixed')await loadCatalog();
 }
-function modeChanged(){const fixed=document.querySelector('input[name=mode]:checked').value==='fixed';$('binding').classList.toggle('hidden',!fixed);$('thread-select').required=false;$('card-field').classList.toggle('hidden',fixed);}
+function modeChanged(){const fixed=document.querySelector('input[name=mode]:checked').value==='fixed';$('binding').classList.toggle('hidden',!fixed);$('thread-select').required=false;$('card-field').classList.toggle('hidden',fixed);$('access-field').classList.toggle('hidden',!fixed);accessChanged();}
+function accessChanged(){const platform=document.querySelector('input[name=mode]:checked').value==='fixed' && document.querySelector('input[name=accessMode]:checked').value==='feishu';$('access-note').textContent=platform?'使用范围由飞书应用的可用范围和群管理设置控制。所有使用者共用绑定会话的上下文。':'首次私聊机器人或在群内 @ 它后，页面会显示使用申请。允许后重新发送消息，首次申请不会自动执行。';}
 async function loadCatalog(){
   $('refresh-catalog').disabled=true;$('catalog-note').textContent='正在读取桌面项目与会话…';
   try{catalogData=await api('catalog');const filter=$('project-select').value;$('project-select').replaceChildren(new Option('全部项目',''),new Option('独立会话','__none'),...catalogData.projects.map(p=>new Option(p.label,p.projectId)));$('project-select').value=filter;filterThreads();$('catalog-note').textContent=catalogData.notice||`共 ${catalogData.threads.length} 个会话，可按项目或标题查找。`;}
@@ -64,7 +66,7 @@ function filterThreads(){if(!catalogData)return;const project=$('project-select'
 }
 async function saveBot(event){event.preventDefault();if(busy)return;busy=true;$('save-bot').disabled=true;$('form-error').textContent='';
   try{const mode=document.querySelector('input[name=mode]:checked').value;
-    const input={...(editing?{id:editing.id}:{}),name:$('bot-name').value,appId:$('app-id').value,appSecret:$('app-secret').value,mode,enabled:$('bot-enabled').checked,cardActionsEnabled:$('card-actions').checked};
+    const input={...(editing?{id:editing.id}:{}),name:$('bot-name').value,appId:$('app-id').value,appSecret:$('app-secret').value,mode,enabled:$('bot-enabled').checked,cardActionsEnabled:$('card-actions').checked,accessMode:mode==='fixed'?document.querySelector('input[name=accessMode]:checked').value:'approved'};
     if(mode==='fixed'){if(!bound)throw new Error('请选择要绑定的会话');input.thread={id:bound.id,hostId:bound.hostId};}
     await api('bots','POST',input);$('bot-dialog').close();toast('配置已保存，正在应用连接');await refresh();
   }catch(error){$('form-error').textContent=error.message;}finally{busy=false;$('save-bot').disabled=false;}
@@ -79,6 +81,7 @@ function renderQr(){const wx=state.wechat,labels={wait:'等待扫码',scaned:'�
 }
 $('add-bot').onclick=()=>run(()=>openBot());$('bot-form').onsubmit=saveBot;$('refresh-catalog').onclick=()=>run(loadCatalog);
 document.querySelectorAll('input[name=mode]').forEach(input=>input.onchange=()=>{modeChanged();if(input.value==='fixed' && !catalogData)run(loadCatalog);});
+document.querySelectorAll('input[name=accessMode]').forEach(input=>input.onchange=accessChanged);
 $('project-select').onchange=filterThreads;$('thread-search').oninput=filterThreads;$('thread-select').onchange=()=>{if($('thread-select').value){bound=JSON.parse($('thread-select').value);$('current-binding').textContent='已选择：'+catalogData.threads.find(t=>t.id===bound.id && t.hostId===bound.hostId)?.title;}};
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.close).close());
 $('refresh-qr').onclick=()=>run(()=>newQr(true));$('verify-form').onsubmit=event=>{event.preventDefault();run(async()=>{await api('wechat/verify','POST',{code:$('verify-code').value});$('verify-code').value='';toast('验证码已提交');await refresh();});};

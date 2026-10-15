@@ -85,7 +85,7 @@ export async function createDashboard({desktop,getStatus=()=>readJson('status.js
       if(!mutation)return json(response,{error:'接口不存在'},404);
       const input=await body(request);
       if((request.method==='POST' || request.method==='PUT') && route==='/api/bots') {
-        fields(input,['id','name','appId','appSecret','enabled','mode','thread','cardActionsEnabled']);
+        fields(input,['id','name','appId','appSecret','enabled','mode','thread','cardActionsEnabled','accessMode']);
         if(input.id!==undefined && typeof input.id!=='string')throw new InputError('机器人标识无效');
         const previous=input.id?feishuBot(input.id):null,mode=input.mode||previous?.mode||'fixed';
         if(mode==='fixed') {

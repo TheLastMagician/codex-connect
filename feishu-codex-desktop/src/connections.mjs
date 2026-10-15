@@ -6,12 +6,12 @@ export function requireBotId(id) {if(!validId(id))throw new Error('机器人标�
 export function feishuBots() {
   const legacy=config();
   return [{...legacy,id:'default',name:legacy.feishuName||'主机器人',enabled:legacy.feishuEnabled!==false,
-    mode:legacy.feishuMode||'full',thread:legacy.feishuThread||null},...(readJson('feishu-bots.json',{bots:[]}).bots||[])];
+    mode:legacy.feishuMode||'full',accessMode:legacy.feishuAccessMode||'approved',thread:legacy.feishuThread||null},...(readJson('feishu-bots.json',{bots:[]}).bots||[])];
 }
 export function feishuBot(id) {return feishuBots().find(bot=>bot.id===requireBotId(id));}
 export function publicBot(bot) {
   return {id:bot.id,name:bot.name,appId:bot.appId||'',secretConfigured:!!bot.appSecret,enabled:bot.enabled,
-    mode:bot.mode,thread:bot.thread||null,cardActionsEnabled:!!bot.cardActionsEnabled,allowedOpenIds:bot.allowedOpenIds||[],
+    mode:bot.mode,accessMode:bot.mode==='fixed'?(bot.accessMode||'approved'):'approved',thread:bot.thread||null,cardActionsEnabled:!!bot.cardActionsEnabled,allowedOpenIds:bot.allowedOpenIds||[],
     configured:!!(bot.appId && bot.appSecret),environmentCredentials:bot.id==='default' && !!(process.env.FEISHU_APP_ID || process.env.FEISHU_APP_SECRET)};
 }
 export function saveFeishuBot(input) {
@@ -22,10 +22,16 @@ export function saveFeishuBot(input) {
   const bot={...previous,id,name:input.name??previous?.name??'飞书机器人',appId:input.appId??previous?.appId??'',
     appSecret:input.appSecret||previous?.appSecret||'',enabled:input.enabled??previous?.enabled??true,
     mode:input.mode??previous?.mode??'fixed',thread:input.thread??previous?.thread??null,
+    accessMode:input.accessMode??previous?.accessMode??'approved',
     cardActionsEnabled:input.cardActionsEnabled??previous?.cardActionsEnabled??false,allowedOpenIds:previous?.allowedOpenIds||[]};
   if(typeof bot.name!=='string' || !bot.name.trim() || bot.name.length>80)throw new Error('请输入 1–80 字的机器人名称');
   bot.name=bot.name.trim();
   if(!['full','fixed'].includes(bot.mode) || typeof bot.enabled!=='boolean' || typeof bot.cardActionsEnabled!=='boolean')throw new Error('机器人模式或开关无效');
+  if(!['approved','feishu'].includes(bot.accessMode))throw new Error('机器人访问方式无效');
+  if(bot.mode==='full') {
+    if(input.accessMode==='feishu')throw new Error('完整管理机器人必须逐个授权，请使用固定会话模式');
+    bot.accessMode='approved';
+  }
   if(typeof bot.appId!=='string' || !/^cli_[0-9a-f]{16}$/i.test(bot.appId))throw new Error('请输入有效的飞书 App ID（cli_ 加 16 位十六进制字符）');
   if(typeof bot.appSecret!=='string' || !bot.appSecret.trim() || bot.appSecret.length>512 || /[\r\n]/.test(bot.appSecret))throw new Error('请填写 App Secret，已有凭据可留空保留');
   bot.appSecret=bot.appSecret.trim();
@@ -37,7 +43,7 @@ function persist(bot) {
   if(bot.id==='default') {
     const saved=readJson('config.json',{});
     writeJson('config.json',{...saved,appId:bot.appId,appSecret:bot.appSecret,feishuName:bot.name,feishuEnabled:bot.enabled,
-      feishuMode:bot.mode,feishuThread:bot.thread,cardActionsEnabled:bot.cardActionsEnabled,allowedOpenIds:bot.allowedOpenIds,
+      feishuMode:bot.mode,feishuAccessMode:bot.accessMode,feishuThread:bot.thread,cardActionsEnabled:bot.cardActionsEnabled,allowedOpenIds:bot.allowedOpenIds,
       ...(bot.pairing?{pairing:bot.pairing}:{})});
   }else {
     const saved=readJson('feishu-bots.json',{bots:[]});
@@ -75,7 +81,11 @@ export function authorizeFeishuUser(id,openId,allowed) {
   persist(bot);pending[id]=(pending[id]||[]).filter(entry=>entry.openId!==openId);writeJson('feishu-requests.json',pending);
   return publicBot(bot);
 }
-export function feishuIdentity(bot) {return createHash('sha256').update(JSON.stringify([bot.appId,bot.appSecret,bot.enabled,bot.mode,bot.thread?.id,bot.thread?.hostId])).digest('hex');}
+export function allowsFeishuUser(bot,openId) {
+  return typeof openId==='string' && !!openId && !!bot &&
+    (bot.mode==='fixed' && bot.accessMode==='feishu' || (bot.allowedOpenIds||[]).includes(openId));
+}
+export function feishuIdentity(bot) {return createHash('sha256').update(JSON.stringify([bot.appId,bot.appSecret,bot.enabled,bot.mode,bot.accessMode,bot.thread?.id,bot.thread?.hostId])).digest('hex');}
 export function botStateName(bot) {
   if(bot.mode==='fixed')return `feishu-fixed-${bot.id}-${createHash('sha256').update(JSON.stringify([bot.thread?.id,bot.thread?.hostId])).digest('hex').slice(0,16)}.json`;
   return bot.id==='default'?'state.json':`feishu-state-${requireBotId(bot.id)}.json`;

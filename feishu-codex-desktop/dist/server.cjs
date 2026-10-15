@@ -22134,7 +22134,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.0";
+var VERSION = "0.5.1";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -22382,6 +22382,7 @@ function feishuBots() {
     name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
     enabled: legacy.feishuEnabled !== false,
     mode: legacy.feishuMode || "full",
+    accessMode: legacy.feishuAccessMode || "approved",
     thread: legacy.feishuThread || null
   }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
 }
@@ -22393,6 +22394,7 @@ function publicBot(bot) {
     secretConfigured: !!bot.appSecret,
     enabled: bot.enabled,
     mode: bot.mode,
+    accessMode: bot.mode === "fixed" ? bot.accessMode || "approved" : "approved",
     thread: bot.thread || null,
     cardActionsEnabled: !!bot.cardActionsEnabled,
     allowedOpenIds: bot.allowedOpenIds || [],

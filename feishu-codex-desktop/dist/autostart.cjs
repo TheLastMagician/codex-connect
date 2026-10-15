@@ -632,6 +632,7 @@ function feishuBots() {
     name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
     enabled: legacy.feishuEnabled !== false,
     mode: legacy.feishuMode || "full",
+    accessMode: legacy.feishuAccessMode || "approved",
     thread: legacy.feishuThread || null
   }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
 }

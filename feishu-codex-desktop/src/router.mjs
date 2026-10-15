@@ -31,14 +31,27 @@ export const HELP = `Codex 桌面会话
 默认沿用会话的模型、项目和上下文；模型覆盖按通道、账号和会话保存。桌面切换窗口不改变通道发送目标。
 当前只支持文字。停止任务和执行审批需要在桌面处理。`;
 
-export function parseMessage(event) {
+export function parseMessage(event,{botOpenId,appId}={}) {
   const message = event?.message;
   const openId = event?.sender?.sender_id?.open_id;
-  if(!openId || event.sender.sender_type !== 'user' || message?.chat_type !== 'p2p' || message.message_type !== 'text') return null;
+  if(!openId || event.sender.sender_type !== 'user' || !['p2p','group'].includes(message?.chat_type) || message.message_type !== 'text') return null;
+  if(appId && event.app_id && event.app_id!==appId)return null;
   if(!message.message_id || !message.chat_id || !message.create_time) return null;
   let text;try {text=JSON.parse(message.content).text;} catch{return null;}
   if(typeof text!=='string' || !text.trim() || text.length>12000) return null;
-  return {openId,chatId:message.chat_id,id:message.message_id,text:text.trim(),timestamp:Number(message.create_time)};
+  const group=message.chat_type==='group';
+  if(group) {
+    if(!botOpenId || !Array.isArray(message.mentions))return null;
+    const mentions=message.mentions.filter(m=>typeof m?.key==='string' && /^@_[A-Za-z0-9_]{1,80}$/.test(m.key));
+    const own=mentions.filter(m=>m.id?.open_id===botOpenId);let addressed=false;
+    for(const mention of own)text=text.replace(new RegExp(mention.key+'(?![A-Za-z0-9_])','g'),()=>{addressed=true;return '';});
+    if(!addressed)return null;
+    // Preserve other people mentioned in the task as readable user text.
+    for(const mention of mentions.filter(m=>m.id?.open_id!==botOpenId && typeof m.name==='string'))
+      text=text.replace(new RegExp(mention.key+'(?![A-Za-z0-9_])','g'),()=>'@'+mention.name);
+  }
+  return {openId,chatId:message.chat_id,id:message.message_id,text:text.trim(),timestamp:Number(message.create_time),
+    ...(group?{chatType:'group',...(!text.trim()?{mentionOnly:true}:{})}:{})};
 }
 export function fingerprint(message) {return createHash('sha256').update(message.id).digest('hex');}
 export function equalSecret(left,right) {
@@ -61,12 +74,13 @@ export function threadSnapshot(result) {
   return {thread:result.thread,latestTurn:turn,latestAssistantMessage:assistant};
 }
 export class Router {
-  constructor({desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now=Date.now,channelLabel='飞书',operator}) {
-    Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,operator});
+  constructor({desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now=Date.now,channelLabel='飞书',operator,isAuthorized}) {
+    Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,operator,isAuthorized});
     this.state.sessions ||= {}; this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches||{}));this.queues=new Map();this.pendingCounts=new Map();
     this.cardRequests=new Map();
   }
+  authorized(openId) {return this.isAuthorized?this.isAuthorized(openId):this.getConfig().allowedOpenIds.includes(openId);}
   // Return immediately to the Feishu SDK: its event ACK deadline is three seconds.
   accept(event) {
     const message=parseMessage(event);
@@ -77,8 +91,8 @@ export class Router {
     if(!message || !Number.isFinite(message.timestamp) || Math.abs(this.now()-message.timestamp)>10*60*1000) return false;
     const settings=this.getConfig();
     const pairing=message.text.match(/^\/pair\s+(\S+)$/);
-    const canPair=pairing && settings.pairing?.expiresAt>this.now() && equalSecret(pairing[1],settings.pairing.code);
-    if(!settings.allowedOpenIds.includes(message.openId) && !canPair) return false;
+    const canPair=message.chatType!=='group' && pairing && settings.pairing?.expiresAt>this.now() && equalSecret(pairing[1],settings.pairing.code);
+    if(!this.authorized(message.openId) && !canPair) return false;
     const cardRequest=this.cardRequests.get(message.id);
     if(cardRequest) {message.cardAction=cardRequest.action;message.updateMessageId=cardRequest.updateMessageId;}
     const key=fingerprint(message);
@@ -91,8 +105,8 @@ export class Router {
     const work=previous.then(async()=>{
       // Recheck allowlist and pairing expiry after waiting in the queue.
       const latest=this.getConfig();
-      if(!latest.allowedOpenIds.includes(message.openId)) {
-        if(!pairing || latest.pairing?.expiresAt<=this.now() || !equalSecret(pairing[1],latest.pairing?.code)) return;
+      if(!this.authorized(message.openId)) {
+        if(!canPair || latest.pairing?.expiresAt<=this.now() || !equalSecret(pairing[1],latest.pairing?.code)) return;
         latest.allowedOpenIds=[...new Set([...latest.allowedOpenIds,message.openId])];
         delete latest.pairing; this.saveConfig(latest);
         return this.send(message.chatId,'配对成功。\n\n可让操作助手查找会话，或 /chats 查看列表。选中后直接发消息，就是与该 Codex 会话聊天。\n/assistant 打开操作助手。',{title:'已配对',openId:message.openId});
@@ -109,7 +123,7 @@ export class Router {
     this.queues.set(message.chatId,work);return true;
   }
   acceptCard(context) {
-    if(!this.getConfig().allowedOpenIds.includes(context.openId)) return false;
+    if(!this.authorized(context.openId)) return false;
     this.cardRequests.set(context.id,context);
     const accepted=this.accept({sender:{sender_type:'user',sender_id:{open_id:context.openId}},message:{
       message_id:context.id,chat_id:context.chatId,chat_type:'p2p',message_type:'text',create_time:String(this.now()),content:'{"text":"/_card"}'}});
@@ -147,6 +161,7 @@ export class Router {
   session(message) {
     const key=`${message.openId}:${message.chatId}`;
     const session=this.state.sessions[key] ||= {openId:message.openId,chatId:message.chatId,threads:[],projects:[]};
+    if(message.chatType==='group')session.chatType='group';
     // Existing selections now receive ordinary messages immediately. Explicit
     // assistant choices made after this migration still survive restarts.
     if(session.routingVersion!==3) {
@@ -238,7 +253,7 @@ export class Router {
       chats:session.threads.slice(0,40).map(t=>({id:t.id,title:t.title,hostId:t.hostId})),model: modelSettings(session)};
     const capture=text=>this.handle({...message,text},{capture:true});
     const result=await this.operator.respond({text:message.text,session,context,
-      authorize:()=>this.getConfig().allowedOpenIds.includes(message.openId),
+      authorize:()=>this.authorized(message.openId),
       execute:async(name,args)=>{
         if(name==='list_projects') {
           const reply=await capture('/projects');
@@ -264,7 +279,7 @@ export class Router {
           const reply=await capture('/models');return {reply,result:{models:session.models}};
         }
         if(name==='run_command') {
-          if(!this.getConfig().allowedOpenIds.includes(message.openId))throw new Error('通道授权已撤销，未执行该操作');
+          if(!this.authorized(message.openId))throw new Error('通道授权已撤销，未执行该操作');
           if(args.command==='assistant' && args.argument)throw new Error('切换助手模式无需参数，请继续发送你的请求');
           const reply=await capture(`/${args.command}${args.argument?' '+args.argument:''}`);
           return {terminal:['read','status','resume','assistant','help','fork'].includes(args.command) || !args.argument && ['model','effort'].includes(args.command),
@@ -294,7 +309,7 @@ export class Router {
   }
   async handle(message,{capture=false}={}) {
     const session=this.session(message);
-    const authorize=()=>{if(!this.getConfig().allowedOpenIds.includes(message.openId))throw new Error('通道授权已撤销，未执行该操作');};
+    const authorize=()=>{if(!this.authorized(message.openId))throw new Error('通道授权已撤销，未执行该操作');};
     const choice=message.text.match(/^选择\s*(\d+)$/);const page=message.text.match(/^第?\s*(\d+)\s*页$/);
     if(choice)message={...message,text:`/use ${choice[1]}`};
     else if(page)message={...message,text:`/page ${page[1]}`};
@@ -471,7 +486,7 @@ export class Router {
   }
   async poll() {
     for(const [key,watch] of [...this.watches]) {
-      if(!this.getConfig().allowedOpenIds.includes(watch.openId)) {this.watches.delete(key);continue;}
+      if(!this.authorized(watch.openId)) {this.watches.delete(key);continue;}
       try {
         const snapshot=threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:1,maxOutputCharsPerItem:20000}));
         const assistant=snapshot.latestAssistantMessage;

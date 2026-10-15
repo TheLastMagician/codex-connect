@@ -4649,7 +4649,7 @@ init_storage();
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.0";
+var VERSION = "0.5.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -5483,6 +5483,7 @@ function feishuBots() {
     name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
     enabled: legacy.feishuEnabled !== false,
     mode: legacy.feishuMode || "full",
+    accessMode: legacy.feishuAccessMode || "approved",
     thread: legacy.feishuThread || null
   }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
 }

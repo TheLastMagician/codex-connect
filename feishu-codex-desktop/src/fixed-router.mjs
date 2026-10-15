@@ -14,9 +14,16 @@ export class FixedChatRouter extends Router {
   }
   acceptCard() {return false;}
   async handleAction() {throw new Error('此机器人只支持聊天');}
+  watch(session,baseline) {
+    // One fixed conversation in a group needs one notification, even when
+    // several authorized members talk to it before the answer arrives.
+    if(session.chatType==='group')for(const [key,watch] of this.watches)
+      if(watch.chatId===session.chatId)this.watches.delete(key);
+    super.watch(session,baseline);
+  }
   async poll() {
     for(const [key,watch] of [...this.watches]) {
-      if(!this.getConfig().allowedOpenIds.includes(watch.openId) || watch.thread.id!==this.thread.id || (watch.thread.hostId||'local')!==(this.thread.hostId||'local')){this.watches.delete(key);continue;}
+      if(!this.authorized(watch.openId) || watch.thread.id!==this.thread.id || (watch.thread.hostId||'local')!==(this.thread.hostId||'local')){this.watches.delete(key);continue;}
       try {
         const snapshot=threadSnapshot(await this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:1,maxOutputCharsPerItem:20000}));
         const assistant=snapshot.latestAssistantMessage;

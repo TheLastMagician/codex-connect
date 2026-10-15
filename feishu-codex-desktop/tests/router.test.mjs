@@ -40,6 +40,26 @@ test('unauthorized, group, stale, invalid messages do not execute or reply',asyn
   assert.equal(parseMessage({...event('x'),message:{content:'invalid'}}),null);
   assert.equal(f.calls.length,0);assert.equal(f.sent.length,0);
 });
+test('group parsing requires this exact bot mention, removes only its tokens and preserves punctuation and other mentions',()=>{
+  const raw=event('@_user_1 检查，@_user_10 的订单。',{chatType:'group'});raw.message.mentions=[
+    {key:'@_user_1',id:{open_id:'ou_bot'},name:'Codex'},{key:'@_user_10',id:{open_id:'ou_person'},name:'小张'}];
+  assert.equal(parseMessage(raw),null);assert.equal(parseMessage(raw,{botOpenId:'ou_other'}),null);
+  const parsed=parseMessage(raw,{botOpenId:'ou_bot'});assert.equal(parsed.text,'检查，@小张 的订单。');assert.equal(parsed.chatType,'group');
+  assert.equal(parseMessage({...raw,message:{...raw.message,content:JSON.stringify({text:'@_user_10 only'})}},{botOpenId:'ou_bot'}),null);
+  assert.equal(parseMessage({...raw,sender:{...raw.sender,sender_type:'app'}},{botOpenId:'ou_bot'}),null);
+  assert.equal(parseMessage({...raw,app_id:'cli_other'},{botOpenId:'ou_bot',appId:'cli_this'}),null);
+});
+test('group selection stays separate from private selection and pairing codes cannot grant access from a group',async()=>{
+  const f=fixture();await deliver(f,'/chats',{id:'private-list'});await deliver(f,'/use 1',{id:'private-choice'});
+  for(const [id,text] of [['group-list','/chats'],['group-choice','/use 2'],['group-task','群里任务']]) {
+    f.router.acceptMessage({openId:'owner',chatId:'group-chat',chatType:'group',id,text,timestamp:now});await Promise.all(f.router.queues.values());
+  }
+  assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');assert.equal(f.state.sessions['owner:group-chat'].selected.id,'b');
+  assert.equal(f.calls.find(c=>c.name==='send_message_to_thread').args.threadId,'b');
+  const unpaired=fixture({allowedOpenIds:[],pairing:{code:'secret',expiresAt:now+10000}});
+  assert.equal(unpaired.router.acceptMessage({openId:'stranger',chatId:'group-chat',chatType:'group',id:'pair-group',text:'/pair secret',timestamp:now}),false);
+  assert.deepEqual(unpaired.settings.allowedOpenIds,[]);assert.equal(unpaired.settings.pairing.code,'secret');assert.equal(unpaired.calls.length,0);
+});
 test('pairing requires unexpired local secret and is consumed once',async()=>{
   const f=fixture({allowedOpenIds:[],pairing:{code:'secret-code',expiresAt:now+60000}});
   assert.equal(await deliver(f,'/pair wrong'),false);

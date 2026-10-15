@@ -37,7 +37,8 @@ test('fixed bindings are resolved from real metadata; fabricated targets and rem
   const input={name:'聊天机器人',appId:'cli_0000000000000005',appSecret:'another-secret',mode:'fixed',thread:{id:'invented',hostId:'local'}};
   assert.equal((await request('/api/bots','POST',input)).status,400);
   input.thread.id='chat-74';const response=await request('/api/bots','POST',input);assert.equal(response.status,200);const {bot}=await response.json();assert.equal(bot.thread.title,'历史会话 74');assert.ok(!JSON.stringify(bot).includes('another-secret'));
-  assert.equal((await request('/api/bots','PUT',{id:bot.id,enabled:false})).status,200);
+  const updated=await request('/api/bots','PUT',{id:bot.id,enabled:false,accessMode:'feishu'});assert.equal(updated.status,200);assert.equal((await updated.json()).bot.accessMode,'feishu');
+  assert.equal((await request('/api/bots','PUT',{id:bot.id,mode:'full',accessMode:'feishu'})).status,400);
   assert.equal(readJson('feishu-bots.json',{}).bots[0].appSecret,'another-secret');
   assert.equal((await request('/api/send_message_to_thread','POST',{})).status,404);assert.equal((await request('/api/shell','POST',{})).status,404);assert.ok(changes>=2);
 });

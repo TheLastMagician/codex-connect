@@ -131313,10 +131313,11 @@ var HELP = `Codex \u684C\u9762\u4F1A\u8BDD
 
 \u9ED8\u8BA4\u6CBF\u7528\u4F1A\u8BDD\u7684\u6A21\u578B\u3001\u9879\u76EE\u548C\u4E0A\u4E0B\u6587\uFF1B\u6A21\u578B\u8986\u76D6\u6309\u901A\u9053\u3001\u8D26\u53F7\u548C\u4F1A\u8BDD\u4FDD\u5B58\u3002\u684C\u9762\u5207\u6362\u7A97\u53E3\u4E0D\u6539\u53D8\u901A\u9053\u53D1\u9001\u76EE\u6807\u3002
 \u5F53\u524D\u53EA\u652F\u6301\u6587\u5B57\u3002\u505C\u6B62\u4EFB\u52A1\u548C\u6267\u884C\u5BA1\u6279\u9700\u8981\u5728\u684C\u9762\u5904\u7406\u3002`;
-function parseMessage(event) {
+function parseMessage(event, { botOpenId, appId } = {}) {
   const message = event?.message;
   const openId = event?.sender?.sender_id?.open_id;
-  if (!openId || event.sender.sender_type !== "user" || message?.chat_type !== "p2p" || message.message_type !== "text") return null;
+  if (!openId || event.sender.sender_type !== "user" || !["p2p", "group"].includes(message?.chat_type) || message.message_type !== "text") return null;
+  if (appId && event.app_id && event.app_id !== appId) return null;
   if (!message.message_id || !message.chat_id || !message.create_time) return null;
   let text;
   try {
@@ -131325,7 +131326,28 @@ function parseMessage(event) {
     return null;
   }
   if (typeof text !== "string" || !text.trim() || text.length > 12e3) return null;
-  return { openId, chatId: message.chat_id, id: message.message_id, text: text.trim(), timestamp: Number(message.create_time) };
+  const group = message.chat_type === "group";
+  if (group) {
+    if (!botOpenId || !Array.isArray(message.mentions)) return null;
+    const mentions = message.mentions.filter((m) => typeof m?.key === "string" && /^@_[A-Za-z0-9_]{1,80}$/.test(m.key));
+    const own = mentions.filter((m) => m.id?.open_id === botOpenId);
+    let addressed = false;
+    for (const mention of own) text = text.replace(new RegExp(mention.key + "(?![A-Za-z0-9_])", "g"), () => {
+      addressed = true;
+      return "";
+    });
+    if (!addressed) return null;
+    for (const mention of mentions.filter((m) => m.id?.open_id !== botOpenId && typeof m.name === "string"))
+      text = text.replace(new RegExp(mention.key + "(?![A-Za-z0-9_])", "g"), () => "@" + mention.name);
+  }
+  return {
+    openId,
+    chatId: message.chat_id,
+    id: message.message_id,
+    text: text.trim(),
+    timestamp: Number(message.create_time),
+    ...group ? { chatType: "group", ...!text.trim() ? { mentionOnly: true } : {} } : {}
+  };
 }
 function fingerprint(message) {
   return (0, import_node_crypto4.createHash)("sha256").update(message.id).digest("hex");
@@ -131351,14 +131373,17 @@ function threadSnapshot(result) {
   return { thread: result.thread, latestTurn: turn, latestAssistantMessage: assistant };
 }
 var Router = class {
-  constructor({ desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now = Date.now, channelLabel = "\u98DE\u4E66", operator }) {
-    Object.assign(this, { desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now, channelLabel, operator });
+  constructor({ desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now = Date.now, channelLabel = "\u98DE\u4E66", operator, isAuthorized }) {
+    Object.assign(this, { desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now, channelLabel, operator, isAuthorized });
     this.state.sessions ||= {};
     this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches || {}));
     this.queues = /* @__PURE__ */ new Map();
     this.pendingCounts = /* @__PURE__ */ new Map();
     this.cardRequests = /* @__PURE__ */ new Map();
+  }
+  authorized(openId) {
+    return this.isAuthorized ? this.isAuthorized(openId) : this.getConfig().allowedOpenIds.includes(openId);
   }
   // Return immediately to the Feishu SDK: its event ACK deadline is three seconds.
   accept(event) {
@@ -131370,8 +131395,8 @@ var Router = class {
     if (!message || !Number.isFinite(message.timestamp) || Math.abs(this.now() - message.timestamp) > 10 * 60 * 1e3) return false;
     const settings = this.getConfig();
     const pairing = message.text.match(/^\/pair\s+(\S+)$/);
-    const canPair = pairing && settings.pairing?.expiresAt > this.now() && equalSecret(pairing[1], settings.pairing.code);
-    if (!settings.allowedOpenIds.includes(message.openId) && !canPair) return false;
+    const canPair = message.chatType !== "group" && pairing && settings.pairing?.expiresAt > this.now() && equalSecret(pairing[1], settings.pairing.code);
+    if (!this.authorized(message.openId) && !canPair) return false;
     const cardRequest = this.cardRequests.get(message.id);
     if (cardRequest) {
       message.cardAction = cardRequest.action;
@@ -131386,8 +131411,8 @@ var Router = class {
     const previous = this.queues.get(message.chatId) || Promise.resolve();
     const work = previous.then(async () => {
       const latest = this.getConfig();
-      if (!latest.allowedOpenIds.includes(message.openId)) {
-        if (!pairing || latest.pairing?.expiresAt <= this.now() || !equalSecret(pairing[1], latest.pairing?.code)) return;
+      if (!this.authorized(message.openId)) {
+        if (!canPair || latest.pairing?.expiresAt <= this.now() || !equalSecret(pairing[1], latest.pairing?.code)) return;
         latest.allowedOpenIds = [.../* @__PURE__ */ new Set([...latest.allowedOpenIds, message.openId])];
         delete latest.pairing;
         this.saveConfig(latest);
@@ -131416,7 +131441,7 @@ ${HELP_HINT}`,
     return true;
   }
   acceptCard(context) {
-    if (!this.getConfig().allowedOpenIds.includes(context.openId)) return false;
+    if (!this.authorized(context.openId)) return false;
     this.cardRequests.set(context.id, context);
     const accepted = this.accept({ sender: { sender_type: "user", sender_id: { open_id: context.openId } }, message: {
       message_id: context.id,
@@ -131478,6 +131503,7 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
   session(message) {
     const key = `${message.openId}:${message.chatId}`;
     const session = this.state.sessions[key] ||= { openId: message.openId, chatId: message.chatId, threads: [], projects: [] };
+    if (message.chatType === "group") session.chatType = "group";
     if (session.routingVersion !== 3) {
       session.mode = session.selected ? "chat" : this.operator ? "assistant" : "chat";
       session.routingVersion = 3;
@@ -131600,7 +131626,7 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
       text: message.text,
       session,
       context,
-      authorize: () => this.getConfig().allowedOpenIds.includes(message.openId),
+      authorize: () => this.authorized(message.openId),
       execute: async (name, args) => {
         if (name === "list_projects") {
           const reply = await capture("/projects");
@@ -131634,7 +131660,7 @@ ${session.selected.archived ? "\u4F1A\u8BDD\u5DF2\u5F52\u6863\uFF0C\u5148 /unarc
           return { reply, result: { models: session.models } };
         }
         if (name === "run_command") {
-          if (!this.getConfig().allowedOpenIds.includes(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u672A\u6267\u884C\u8BE5\u64CD\u4F5C");
+          if (!this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u672A\u6267\u884C\u8BE5\u64CD\u4F5C");
           if (args.command === "assistant" && args.argument) throw new Error("\u5207\u6362\u52A9\u624B\u6A21\u5F0F\u65E0\u9700\u53C2\u6570\uFF0C\u8BF7\u7EE7\u7EED\u53D1\u9001\u4F60\u7684\u8BF7\u6C42");
           const reply = await capture(`/${args.command}${args.argument ? " " + args.argument : ""}`);
           return {
@@ -131671,7 +131697,7 @@ ${session.selected.archived ? "\u4F1A\u8BDD\u5DF2\u5F52\u6863\uFF0C\u5148 /unarc
   async handle(message, { capture = false } = {}) {
     const session = this.session(message);
     const authorize = () => {
-      if (!this.getConfig().allowedOpenIds.includes(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u672A\u6267\u884C\u8BE5\u64CD\u4F5C");
+      if (!this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u672A\u6267\u884C\u8BE5\u64CD\u4F5C");
     };
     const choice = message.text.match(/^选择\s*(\d+)$/);
     const page = message.text.match(/^第?\s*(\d+)\s*页$/);
@@ -132009,7 +132035,7 @@ ${currentTarget(session)}`;
   }
   async poll() {
     for (const [key, watch] of [...this.watches]) {
-      if (!this.getConfig().allowedOpenIds.includes(watch.openId)) {
+      if (!this.authorized(watch.openId)) {
         this.watches.delete(key);
         continue;
       }
@@ -132113,6 +132139,7 @@ function feishuBots() {
     name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
     enabled: legacy.feishuEnabled !== false,
     mode: legacy.feishuMode || "full",
+    accessMode: legacy.feishuAccessMode || "approved",
     thread: legacy.feishuThread || null
   }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
 }
@@ -132127,6 +132154,7 @@ function publicBot(bot) {
     secretConfigured: !!bot.appSecret,
     enabled: bot.enabled,
     mode: bot.mode,
+    accessMode: bot.mode === "fixed" ? bot.accessMode || "approved" : "approved",
     thread: bot.thread || null,
     cardActionsEnabled: !!bot.cardActionsEnabled,
     allowedOpenIds: bot.allowedOpenIds || [],
@@ -132147,12 +132175,18 @@ function saveFeishuBot(input) {
     enabled: input.enabled ?? previous?.enabled ?? true,
     mode: input.mode ?? previous?.mode ?? "fixed",
     thread: input.thread ?? previous?.thread ?? null,
+    accessMode: input.accessMode ?? previous?.accessMode ?? "approved",
     cardActionsEnabled: input.cardActionsEnabled ?? previous?.cardActionsEnabled ?? false,
     allowedOpenIds: previous?.allowedOpenIds || []
   };
   if (typeof bot.name !== "string" || !bot.name.trim() || bot.name.length > 80) throw new Error("\u8BF7\u8F93\u5165 1\u201380 \u5B57\u7684\u673A\u5668\u4EBA\u540D\u79F0");
   bot.name = bot.name.trim();
   if (!["full", "fixed"].includes(bot.mode) || typeof bot.enabled !== "boolean" || typeof bot.cardActionsEnabled !== "boolean") throw new Error("\u673A\u5668\u4EBA\u6A21\u5F0F\u6216\u5F00\u5173\u65E0\u6548");
+  if (!["approved", "feishu"].includes(bot.accessMode)) throw new Error("\u673A\u5668\u4EBA\u8BBF\u95EE\u65B9\u5F0F\u65E0\u6548");
+  if (bot.mode === "full") {
+    if (input.accessMode === "feishu") throw new Error("\u5B8C\u6574\u7BA1\u7406\u673A\u5668\u4EBA\u5FC5\u987B\u9010\u4E2A\u6388\u6743\uFF0C\u8BF7\u4F7F\u7528\u56FA\u5B9A\u4F1A\u8BDD\u6A21\u5F0F");
+    bot.accessMode = "approved";
+  }
   if (typeof bot.appId !== "string" || !/^cli_[0-9a-f]{16}$/i.test(bot.appId)) throw new Error("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u98DE\u4E66 App ID\uFF08cli_ \u52A0 16 \u4F4D\u5341\u516D\u8FDB\u5236\u5B57\u7B26\uFF09");
   if (typeof bot.appSecret !== "string" || !bot.appSecret.trim() || bot.appSecret.length > 512 || /[\r\n]/.test(bot.appSecret)) throw new Error("\u8BF7\u586B\u5199 App Secret\uFF0C\u5DF2\u6709\u51ED\u636E\u53EF\u7559\u7A7A\u4FDD\u7559");
   bot.appSecret = bot.appSecret.trim();
@@ -132171,6 +132205,7 @@ function persist(bot) {
       feishuName: bot.name,
       feishuEnabled: bot.enabled,
       feishuMode: bot.mode,
+      feishuAccessMode: bot.accessMode,
       feishuThread: bot.thread,
       cardActionsEnabled: bot.cardActionsEnabled,
       allowedOpenIds: bot.allowedOpenIds,
@@ -132221,8 +132256,11 @@ function authorizeFeishuUser(id, openId, allowed) {
   writeJson("feishu-requests.json", pending);
   return publicBot(bot);
 }
+function allowsFeishuUser(bot, openId) {
+  return typeof openId === "string" && !!openId && !!bot && (bot.mode === "fixed" && bot.accessMode === "feishu" || (bot.allowedOpenIds || []).includes(openId));
+}
 function feishuIdentity(bot) {
-  return (0, import_node_crypto6.createHash)("sha256").update(JSON.stringify([bot.appId, bot.appSecret, bot.enabled, bot.mode, bot.thread?.id, bot.thread?.hostId])).digest("hex");
+  return (0, import_node_crypto6.createHash)("sha256").update(JSON.stringify([bot.appId, bot.appSecret, bot.enabled, bot.mode, bot.accessMode, bot.thread?.id, bot.thread?.hostId])).digest("hex");
 }
 function botStateName(bot) {
   if (bot.mode === "fixed") return `feishu-fixed-${bot.id}-${(0, import_node_crypto6.createHash)("sha256").update(JSON.stringify([bot.thread?.id, bot.thread?.hostId])).digest("hex").slice(0, 16)}.json`;
@@ -132269,9 +132307,16 @@ var FixedChatRouter = class extends Router {
   async handleAction() {
     throw new Error("\u6B64\u673A\u5668\u4EBA\u53EA\u652F\u6301\u804A\u5929");
   }
+  watch(session, baseline) {
+    if (session.chatType === "group") {
+      for (const [key, watch] of this.watches)
+        if (watch.chatId === session.chatId) this.watches.delete(key);
+    }
+    super.watch(session, baseline);
+  }
   async poll() {
     for (const [key, watch] of [...this.watches]) {
-      if (!this.getConfig().allowedOpenIds.includes(watch.openId) || watch.thread.id !== this.thread.id || (watch.thread.hostId || "local") !== (this.thread.hostId || "local")) {
+      if (!this.authorized(watch.openId) || watch.thread.id !== this.thread.id || (watch.thread.hostId || "local") !== (this.thread.hostId || "local")) {
         this.watches.delete(key);
         continue;
       }
@@ -132686,21 +132731,63 @@ function createFeishuChannel({
     } }
   };
   const client = new sdk.Client(sdkOptions), actions = new CardActions({ state, saveState, getConfig });
-  const fullSend = createSender({ client, actions, state, saveState, getConfig, canSend: (openId) => active() && getConfig().allowedOpenIds.includes(openId) });
+  let botOpenId, identityRequest, retryIdentityAt = 0, pendingMentions = 0;
+  const refreshBotIdentity = () => {
+    if (botOpenId || !active() || Date.now() < retryIdentityAt) return Promise.resolve();
+    if (identityRequest) return identityRequest;
+    identityRequest = (async () => {
+      try {
+        const result = await client.request({ method: "GET", url: "/open-apis/bot/v3/info", timeout: 5e3 });
+        if (result?.code !== 0 || typeof result.bot?.open_id !== "string" || !/^ou_[A-Za-z0-9_-]+$/.test(result.bot.open_id)) throw new Error("identity unavailable");
+        botOpenId = result.bot.open_id;
+        if (active()) onStatus({ groupMentionReady: true });
+      } catch {
+        retryIdentityAt = Date.now() + 3e4;
+        if (active()) onStatus({ groupMentionReady: false, lastBotIdentityErrorAt: Date.now() });
+      } finally {
+        identityRequest = null;
+      }
+    })();
+    return identityRequest;
+  };
+  const authorized = (openId) => active() && allowsFeishuUser(getSettings(), openId);
+  const fullSend = createSender({ client, actions, state, saveState, getConfig, canSend: authorized });
   const send = async (chatId, text, meta = {}) => {
     const openId = meta.openId || meta.session?.openId || Object.values(state.sessions || {}).find((s) => s.chatId === chatId)?.openId;
-    if (!active() || !getConfig().allowedOpenIds.includes(openId)) return;
+    if (!authorized(openId)) return;
     if (settings.mode !== "fixed") return fullSend(chatId, text, meta);
     const reply = fixedReply(text, meta);
     if (reply === null) return;
     for (const part of chunkMarkdown(reply).slice(0, 20)) {
-      if (!active() || !getConfig().allowedOpenIds.includes(openId)) return;
+      if (!authorized(openId)) return;
       const result = await client.im.v1.message.create({ params: { receive_id_type: "chat_id" }, data: { receive_id: chatId, msg_type: "text", content: JSON.stringify({ text: part }) } });
       if (result.code !== 0) throw new Error("\u98DE\u4E66\u6D88\u606F\u53D1\u9001\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u673A\u5668\u4EBA\u6743\u9650");
     }
   };
-  const options = { desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: saveSettings, state, saveState, send, operator };
+  const options = { desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: saveSettings, state, saveState, send, operator, isAuthorized: authorized };
   const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread }) : new Router(options);
+  const receive = (event) => {
+    const message = parseMessage(event, { botOpenId, appId: settings.appId });
+    if (!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now() - message.timestamp) > 6e5) return;
+    const current = getConfig(), pair = message.text.match(/^\/pair\s+(\S+)$/);
+    const canPair = settings.mode !== "fixed" && message.chatType !== "group" && pair && current.pairing?.expiresAt > Date.now() && equalSecret(pair[1], current.pairing.code);
+    if (!authorized(message.openId) && !canPair) {
+      state.seen[fingerprint(message)] = Date.now();
+      saveState();
+      rememberRequest(message);
+      onStatus({ lastAccessRequestAt: Date.now() });
+      return;
+    }
+    if (message.mentionOnly) {
+      const key = fingerprint(message);
+      if (state.seen[key]) return;
+      state.seen[key] = Date.now();
+      saveState();
+      void send(message.chatId, "\u6211\u5728\u3002\u8BF7\u5728 @\u673A\u5668\u4EBA \u540E\u5199\u4E0A\u4F60\u7684\u95EE\u9898\u3002", { kind: "notice", openId: message.openId }).catch(() => onStatus({ lastReceiveErrorAt: Date.now() }));
+      return;
+    }
+    router.acceptMessage(message);
+  };
   const ws = new sdk.WSClient({
     ...sdkOptions,
     onReady: () => onStatus({ state: "connected" }),
@@ -132711,18 +132798,12 @@ function createFeishuChannel({
   const dispatcher = new sdk.EventDispatcher({}).register({
     "im.message.receive_v1": (event) => {
       try {
-        const message = parseMessage(event);
-        if (!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now() - message.timestamp) > 6e5) return {};
-        const current = getConfig(), pair = message.text.match(/^\/pair\s+(\S+)$/);
-        const canPair = settings.mode !== "fixed" && pair && current.pairing?.expiresAt > Date.now() && equalSecret(pair[1], current.pairing.code);
-        if (!current.allowedOpenIds.includes(message.openId) && !canPair) {
-          state.seen[fingerprint(message)] = Date.now();
-          saveState();
-          rememberRequest(message);
-          onStatus({ lastAccessRequestAt: Date.now() });
-          return {};
-        }
-        router.acceptMessage(message);
+        if (!active()) return {};
+        if (event?.message?.chat_type === "group" && !botOpenId) {
+          if (pendingMentions >= 20 || !event.message.mentions?.length) return {};
+          pendingMentions++;
+          void refreshBotIdentity().then(() => receive(event)).catch(() => onStatus({ lastReceiveErrorAt: Date.now() })).finally(() => pendingMentions--);
+        } else receive(event);
       } catch {
         onStatus({ lastReceiveErrorAt: Date.now() });
       }
@@ -132745,13 +132826,17 @@ function createFeishuChannel({
     router,
     start: async () => {
       onStatus({ state: "connecting" });
+      void refreshBotIdentity();
       await ws.start({ eventDispatcher: dispatcher });
     },
     stop: () => {
       stopped = true;
       ws.close();
     },
-    poll: () => active() ? router.poll() : void 0,
+    poll: () => {
+      void refreshBotIdentity();
+      return active() ? router.poll() : void 0;
+    },
     preview: async () => {
       if (settings.mode === "fixed") throw new Error("\u56FA\u5B9A\u4F1A\u8BDD\u673A\u5668\u4EBA\u53EA\u652F\u6301\u804A\u5929");
       const sessions = Object.values(state.sessions).filter((s) => getConfig().allowedOpenIds.includes(s.openId));
@@ -132777,7 +132862,7 @@ var import_promises2 = require("node:timers/promises");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.0";
+var VERSION = "0.5.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -133491,7 +133576,7 @@ async function createDashboard({
       if (!mutation) return json(response, { error: "\u63A5\u53E3\u4E0D\u5B58\u5728" }, 404);
       const input = await body(request);
       if ((request.method === "POST" || request.method === "PUT") && route === "/api/bots") {
-        fields2(input, ["id", "name", "appId", "appSecret", "enabled", "mode", "thread", "cardActionsEnabled"]);
+        fields2(input, ["id", "name", "appId", "appSecret", "enabled", "mode", "thread", "cardActionsEnabled", "accessMode"]);
         if (input.id !== void 0 && typeof input.id !== "string") throw new InputError("\u673A\u5668\u4EBA\u6807\u8BC6\u65E0\u6548");
         const previous = input.id ? feishuBot(input.id) : null, mode = input.mode || previous?.mode || "fixed";
         if (mode === "fixed") {

@@ -8,7 +8,7 @@ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'codex-connections-test-'));
 process.env.FEISHU_CODEX_DATA_DIR=folder;
 delete process.env.FEISHU_APP_ID;delete process.env.FEISHU_APP_SECRET;
 const {readJson,writeJson}=await import('../src/storage.mjs');
-const {feishuBots,saveFeishuBot,publicBot,botStateName,rememberFeishuRequest,authorizeFeishuUser,deleteFeishuBot}=await import('../src/connections.mjs');
+const {feishuBots,saveFeishuBot,publicBot,botStateName,rememberFeishuRequest,authorizeFeishuUser,deleteFeishuBot,allowsFeishuUser}=await import('../src/connections.mjs');
 const {createFeishuChannel}=await import('../src/channels/feishu.mjs');
 const {ChannelManager}=await import('../src/channel-manager.mjs');
 test.beforeEach(()=>{for(const name of fs.readdirSync(folder))fs.unlinkSync(path.join(folder,name));});
@@ -39,9 +39,9 @@ test('local approval can only approve a real application and never stores or rep
   assert.deepEqual(authorizeFeishuUser(bot.id,'owner',true).allowedOpenIds,['owner']);
   assert.deepEqual(authorizeFeishuUser(bot.id,'owner',false).allowedOpenIds,[]);
 });
-function channelFixture(thread=binding) {
-  const settings={...botInput,thread,id:'default',enabled:true,allowedOpenIds:['owner']};const calls=[],sent=[],requests=[];let events;
-  const sdk={Client:class {constructor(){this.im={v1:{message:{create:async args=>{sent.push(args);return {code:0};}}}};}},
+function channelFixture(thread=binding,{identity=async()=>({code:0,bot:{open_id:'ou_robot'}}),accessMode='approved',mode='fixed'}={}) {
+  const settings={...botInput,thread,id:'default',enabled:true,allowedOpenIds:['owner'],accessMode,mode};const calls=[],sent=[],requests=[];let events;
+  const sdk={Client:class {constructor(){this.im={v1:{message:{create:async args=>{sent.push(args);return {code:0};}}}};}request(){return identity();}},
     WSClient:class {async start({eventDispatcher}){events=eventDispatcher;}close(){}},EventDispatcher:class {register(value){return value;}}};
   let snapshot={thread:{status:{type:'idle'}},turns:[{id:'old-turn',status:'completed',items:[{type:'agentMessage',id:'old',text:'旧回复'}]}]};
   const desktop={call:async(name,args,options)=>{calls.push({name,args});options?.beforeSend?.();if(name==='read_thread')return snapshot;return {};}};
@@ -49,6 +49,11 @@ function channelFixture(thread=binding) {
   const event=(text,owner='owner',id=Math.random().toString())=>({sender:{sender_type:'user',sender_id:{open_id:owner}},message:{message_id:id,chat_id:'private-chat',chat_type:'p2p',message_type:'text',create_time:String(Date.now()),content:JSON.stringify({text})}});
   return {channel,calls,sent,settings,requests,event,events:()=>events,setSnapshot:value=>snapshot=value};
 }
+function groupEvent(f,text,{owner='owner',id=Math.random().toString(),chat='group-chat',bot='ou_robot',mentions}={}) {
+  const event=f.event(text,owner,id);Object.assign(event.message,{chat_type:'group',chat_id:chat,
+    mentions:mentions||[{key:'@_user_1',id:{open_id:bot},name:'Codex'}]});return event;
+}
+async function receive(f,event){f.events()['im.message.receive_v1'](event);await new Promise(resolve=>setImmediate(resolve));await Promise.all(f.channel.router.queues.values());}
 test('a fixed bot treats commands, selection numbers and natural aliases as literal text for only its bound chat',async()=>{
   const f=channelFixture();await f.channel.start();
   const inputs=['你好，世界','/chats','/assistant 删除项目','/pair pretend','/new 1 | task','1','选择 2','会话列表'];
@@ -73,6 +78,62 @@ test('a redelivered message cannot execute again after rebinding the same bot',a
   first.events()['im.message.receive_v1'](event);await Promise.all(first.channel.router.queues.values());first.channel.stop();
   const next=channelFixture({...binding,id:'different-chat'});await next.channel.start();next.events()['im.message.receive_v1'](event);
   await Promise.all(next.channel.router.queues.values());assert.equal(next.calls.length,0);next.channel.stop();
+});
+test('group mentions reach the fixed chat as literal text and its answer returns only to the same group',async()=>{
+  const f=channelFixture();await f.channel.start();await receive(f,groupEvent(f,'@_user_1 /chats 中文，标点'));
+  assert.deepEqual(f.calls.find(c=>c.name==='send_message_to_thread').args,{threadId:binding.id,hostId:'local',prompt:'/chats 中文，标点'});assert.equal(f.sent.length,0);
+  f.setSnapshot({thread:{status:{type:'idle'}},turns:[{id:'new-turn',status:'completed',items:[{type:'agentMessage',id:'new',text:'群聊回复'}]}]});
+  await f.channel.poll();assert.equal(f.sent.length,1);assert.equal(f.sent[0].data.receive_id,'group-chat');assert.equal(f.sent[0].data.msg_type,'text');assert.equal(JSON.parse(f.sent[0].data.content).text,'群聊回复');f.channel.stop();
+});
+test('ordinary group chatter, @everyone and @another bot do nothing; new members still need local approval',async()=>{
+  const f=channelFixture();await f.channel.start();
+  for(const event of [groupEvent(f,'你好',{mentions:[]}),groupEvent(f,'@_user_1 task',{bot:'ou_other'}),groupEvent(f,'@_all task',{mentions:[{key:'@_all',id:{open_id:'all'},name:'所有人'}]})])await receive(f,event);
+  assert.equal(f.calls.length,0);assert.equal(f.requests.length,0);
+  const first=groupEvent(f,'@_user_1 first request',{owner:'new-member',id:'group-access'});await receive(f,first);assert.equal(f.requests.length,1);assert.equal(f.calls.length,0);
+  f.settings.allowedOpenIds.push('new-member');await receive(f,first);assert.equal(f.calls.length,0);
+  await receive(f,groupEvent(f,'@_user_1 approved task',{owner:'new-member'}));assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);f.channel.stop();
+});
+test('a bare mention replies with a local hint once without calling any model',async()=>{
+  const f=channelFixture();await f.channel.start();const event=groupEvent(f,'@_user_1');await receive(f,event);await receive(f,event);
+  assert.equal(f.calls.length,0);assert.equal(f.sent.length,1);assert.equal(f.sent[0].data.msg_type,'text');assert.match(JSON.parse(f.sent[0].data.content).text,/写上你的问题/);f.channel.stop();
+});
+test('multiple authorized members share one fixed-group notification while a private chat stays independent',async()=>{
+  const f=channelFixture();f.settings.allowedOpenIds.push('second-owner');await f.channel.start();
+  await receive(f,f.event('private task'));await receive(f,groupEvent(f,'@_user_1 first group task'));await receive(f,groupEvent(f,'@_user_1 second group task',{owner:'second-owner'}));
+  assert.equal(f.channel.router.watches.size,2);
+  f.setSnapshot({thread:{status:{type:'idle'}},turns:[{id:'new-turn',status:'completed',items:[{type:'agentMessage',id:'new',text:'完成'}]}]});await f.channel.poll();
+  assert.deepEqual(f.sent.map(s=>s.data.receive_id).sort(),['group-chat','private-chat']);f.channel.stop();
+});
+test('identity lookup never blocks the event ACK, is shared, and a stopped bot cannot process the delayed event',async()=>{
+  let resolveIdentity,count=0;const pending=new Promise(resolve=>resolveIdentity=resolve),f=channelFixture(binding,{identity:()=>{count++;return pending;}});await f.channel.start();
+  const event=groupEvent(f,'@_user_1 queued task');assert.deepEqual(f.events()['im.message.receive_v1'](event),{});assert.equal(f.calls.length,0);assert.equal(count,1);
+  f.channel.stop();resolveIdentity({code:0,bot:{open_id:'ou_robot'}});await new Promise(resolve=>setImmediate(resolve));assert.equal(f.calls.length,0);assert.equal(f.sent.length,0);
+});
+test('identity lookup failure keeps private chat usable and does not accept unverified group mentions',async()=>{
+  let count=0;const f=channelFixture(binding,{identity:async()=>{count++;throw new Error('lookup failed');}});await f.channel.start();
+  await receive(f,groupEvent(f,'@_user_1 task'));await receive(f,f.event('private task'));assert.equal(count,1);
+  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>c.args.prompt),['private task']);f.channel.stop();
+});
+test('platform visibility is explicit, only supported for fixed bots and cannot open a management bot',()=>{
+  const first=saveFeishuBot(botInput);assert.equal(first.accessMode,'approved');
+  const publicProfile=saveFeishuBot({id:first.id,accessMode:'feishu'});assert.equal(publicProfile.accessMode,'feishu');
+  assert.equal(allowsFeishuUser(publicProfile,'new-user'),true);assert.equal(allowsFeishuUser({...publicProfile,mode:'full'},'new-user'),false);
+  assert.throws(()=>saveFeishuBot({id:first.id,mode:'full',accessMode:'feishu'}),/逐个授权/);
+  assert.equal(saveFeishuBot({id:first.id,mode:'full'}).accessMode,'approved');
+});
+test('a platform-scoped fixed bot accepts new private senders and mentioned group senders without adding local accounts',async()=>{
+  const f=channelFixture(binding,{accessMode:'feishu'});await f.channel.start();
+  await receive(f,f.event('/chats','unapproved-private'));await receive(f,groupEvent(f,'@_user_1 你好，群聊',{owner:'unapproved-member'}));
+  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>c.args.prompt),['/chats','你好，群聊']);assert.equal(f.requests.length,0);assert.deepEqual(f.settings.allowedOpenIds,['owner']);
+  f.setSnapshot({thread:{status:{type:'idle'}},turns:[{id:'new-turn',status:'completed',items:[{type:'agentMessage',id:'new',text:'公开范围答复'}]}]});await f.channel.poll();
+  assert.deepEqual(f.sent.map(s=>s.data.receive_id).sort(),['group-chat','private-chat']);f.channel.stop();
+});
+test('closing platform access blocks already queued work and a forged open policy never opens full management',async()=>{
+  const f=channelFixture(binding,{accessMode:'feishu'});await f.channel.start();let unblock;
+  f.channel.router.queues.set('private-chat',new Promise(resolve=>unblock=resolve));f.events()['im.message.receive_v1'](f.event('queued task','not-approved'));
+  f.settings.accessMode='approved';unblock();await Promise.all(f.channel.router.queues.values());assert.equal(f.calls.length,0);assert.equal(f.sent.length,0);f.channel.stop();
+  const full=channelFixture(binding,{mode:'full',accessMode:'feishu'});await full.channel.start();await receive(full,full.event('/projects','not-approved'));
+  assert.equal(full.calls.length,0);assert.equal(full.requests.length,1);full.channel.stop();
 });
 test('channel manager applies edits without duplicate consumers and isolates a failed bot from healthy channels',async()=>{
   let bots=[{...botInput,id:'default',enabled:true},{...botInput,id:'another',enabled:true,appId:'cli_other'}],stops=0,starts=0;const statuses=[];
