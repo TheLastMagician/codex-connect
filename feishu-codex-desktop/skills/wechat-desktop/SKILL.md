@@ -3,6 +3,8 @@ name: wechat-desktop
 description: 连接、启动、断开或诊断微信 ClawBot 对本机 Codex 桌面会话的控制。通过扫码授权，无需飞书凭据或安装 OpenClaw；支持与飞书并行运行。
 ---
 
+新建首条任务的第三方 HTTP Responses 兼容与飞书共用：首次会自动备份并修改当前用户供应商的 base_url、注册本机兼容服务登录启动项，随后提示重启 Codex；当次不会创建或发送。重启后由用户重新提交。真实供应商、模型和 API Key 不变，正常工具结果不转换。用 responses_compat_status 检查；用户要求关闭时调用 configure_responses_compat(enabled=false, providerId=真实ID) 恢复地址并提示重启。关闭后不会自动重开。需要 Windows、Python 3.11+，不自动修改项目或远程/WebSocket 配置。不要声称已通过用户尚未进行的实机收发验证。
+
 用户明确要求连接微信时，使用本插件的 `wechat_login`。这是微信 ClawBot 的扫码连接，使用腾讯公开 iLink 协议。
 调用需要真实 Codex 桌面上下文。缺少绑定时，先在当前桌面会话终端执行插件的 `src/bind-desktop.mjs`，不得猜测管道或伪造其他会话。
 返回 `qrPath` 后，用绝对路径图片展示二维码，提示用户用手机微信扫一扫并在手机确认。二维码由服务端登录内容本地编码，不用图片生成模型，也不要把二维码或授权凭据发布到外部服务。

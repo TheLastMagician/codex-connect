@@ -4,7 +4,9 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 
-export const dataDir = process.env.FEISHU_CODEX_DATA_DIR || path.join(os.homedir(), '.codex-feishu-desktop');
+const dataArgument=process.argv.indexOf('--codex-connect-data-dir');
+export const dataDir = process.env.FEISHU_CODEX_DATA_DIR ||
+  (dataArgument>=0?process.argv[dataArgument+1]:null) || path.join(os.homedir(), '.codex-feishu-desktop');
 export function secureDirectory(dir = dataDir) {
   fs.mkdirSync(dir, {recursive:true, mode:0o700});
   if (process.platform === 'win32') {

@@ -1569,10 +1569,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version);
-      const path4 = dijkstra.find_path(graph.map, "start", "end");
+      const path5 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path4.length - 1; i++) {
-        optimizedSegs.push(graph.table[path4[i]].node);
+      for (let i = 1; i < path5.length - 1; i++) {
+        optimizedSegs.push(graph.table[path5[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -4008,7 +4008,7 @@ var require_utils2 = __commonJS({
 // node_modules/qrcode/lib/renderer/png.js
 var require_png2 = __commonJS({
   "node_modules/qrcode/lib/renderer/png.js"(exports2) {
-    var fs4 = require("fs");
+    var fs5 = require("fs");
     var PNG = require_png().PNG;
     var Utils = require_utils2();
     exports2.render = function render(qrData, options) {
@@ -4049,7 +4049,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path4, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4060,7 +4060,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs4.createWriteStream(path4);
+      const stream = fs5.createWriteStream(path5);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -4122,14 +4122,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path4, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs4 = require("fs");
+      const fs5 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs4.writeFile(path4, utf8, cb);
+      fs5.writeFile(path5, utf8, cb);
     };
   }
 });
@@ -4250,7 +4250,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path4 = "";
+      let path5 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -4261,19 +4261,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path4 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path5 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path4 += svgCmd("h", lineLength);
+            path5 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path4;
+      return path5;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -4281,10 +4281,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path4 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path5 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path4 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path5 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -4298,15 +4298,15 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path4, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path5, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs4 = require("fs");
+      const fs5 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs4.writeFile(path4, xmlStr, cb);
+      fs5.writeFile(path5, xmlStr, cb);
     };
   }
 });
@@ -4464,8 +4464,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path4) {
-      return path4.slice((path4.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path5) {
+      return path5.slice((path5.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -4529,17 +4529,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path4, text, opts, cb) {
-      if (typeof path4 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path5, text, opts, cb) {
+      if (typeof path5 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path4);
+      const type = params.opts.type || getTypeFromFilename(path5);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path4);
+      const renderToFile = renderer.renderToFile.bind(null, path5);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -4562,9 +4562,9 @@ var require_lib = __commonJS({
 });
 
 // src/setup.mjs
-var import_promises = __toESM(require("node:readline/promises"), 1);
+var import_promises2 = __toESM(require("node:readline/promises"), 1);
 var import_node_stream = require("node:stream");
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 
 // src/storage.mjs
 var import_node_fs = __toESM(require("node:fs"), 1);
@@ -4572,7 +4572,8 @@ var import_node_path = __toESM(require("node:path"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
 var import_node_child_process = require("node:child_process");
 var import_node_crypto = require("node:crypto");
-var dataDir = process.env.FEISHU_CODEX_DATA_DIR || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
+var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
+var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
 function secureDirectory(dir = dataDir) {
   import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
   if (process.platform === "win32") {
@@ -4614,7 +4615,7 @@ var import_qrcode = __toESM(require_lib(), 1);
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.4.0";
+var VERSION = "0.4.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -4861,7 +4862,7 @@ function autostartStatus({ codexHome } = {}) {
   };
 }
 function syncAutostartRuntime(bundleDir) {
-  const required = ["autostart.cjs", "bridge.cjs", "catalog.py"];
+  const required = ["autostart.cjs", "bridge.cjs", "catalog.py", "responses-compat-daemon.cjs", "provider-config.py"];
   if (!bundleDir || required.some((name) => !import_node_fs3.default.existsSync(import_node_path3.default.join(bundleDir, name)))) throw new Error("\u7F3A\u5C11\u81EA\u52A8\u542F\u52A8\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
   secureDirectory();
   for (const name of [...required, "autostart.cjs.LEGAL.txt", "bridge.cjs.LEGAL.txt"]) {
@@ -4891,6 +4892,273 @@ function configureAutostart(enabled, { bundleDir, codexHome } = {}) {
   return autostartStatus({ codexHome });
 }
 
+// src/responses-compat-settings.mjs
+var import_node_fs4 = __toESM(require("node:fs"), 1);
+var import_node_os3 = __toESM(require("node:os"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_child_process3 = require("node:child_process");
+var import_node_util = require("node:util");
+var import_node_crypto5 = require("node:crypto");
+var import_promises = require("node:timers/promises");
+var import_node_url2 = require("node:url");
+
+// src/desktop-input.mjs
+var MAX_FRAME = 8 * 1024 * 1024;
+
+// src/desktop.mjs
+var MAX_FRAME2 = 8 * 1024 * 1024;
+
+// src/bridge-lifecycle.mjs
+function alive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// src/responses-compat-settings.mjs
+var execute = (0, import_node_util.promisify)(import_node_child_process3.execFile);
+var directory2 = typeof __dirname === "string" ? __dirname : import_node_path4.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
+var runtime = import_node_path4.default.join(dataDir, "runtime");
+var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+var registryName = "CodexConnectResponsesCompat";
+var home = () => process.env.CODEX_HOME || import_node_path4.default.join(import_node_os3.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path4.default.join(directory2, "provider-config.py") } = {}) {
+  return new Promise((resolve, reject) => {
+    const child = (0, import_node_child_process3.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    let output = "";
+    const fail = () => reject(new Error("\u65E0\u6CD5\u5B89\u5168\u8BFB\u53D6\u6216\u66F4\u65B0\u4F9B\u5E94\u5546\u914D\u7F6E\uFF0C\u9700\u8981 Python 3.11+\u3002"));
+    const timer = setTimeout(() => {
+      child.kill();
+      fail();
+    }, 1e4);
+    child.once("error", () => {
+      clearTimeout(timer);
+      fail();
+    });
+    child.stdout.on("data", (data) => {
+      output += data;
+      if (output.length > 65536) {
+        child.kill();
+        fail();
+      }
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      try {
+        const parsed = JSON.parse(output);
+        if (code !== 0 || parsed.error) {
+          fail();
+          return;
+        }
+        resolve(parsed);
+      } catch {
+        fail();
+      }
+    });
+    child.stdin.on("error", () => {
+    });
+    child.stdin.end(JSON.stringify({ ...request, codexHome }));
+  });
+}
+function safeBase(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("\u4F9B\u5E94\u5546\u63A5\u53E3\u5730\u5740\u65E0\u6548\u3002");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+    throw new Error("\u4EC5\u652F\u6301\u672A\u5728\u5730\u5740\u4E2D\u5D4C\u5165\u51ED\u636E\u7684 HTTPS Responses \u4F9B\u5E94\u5546\u3002");
+  return url.href.replace(/\/?$/, "/");
+}
+async function providerCatalogStatus() {
+  const catalog = await providerConfig({ action: "list" });
+  return { ...catalog, providers: catalog.providers.map((provider) => {
+    let baseUrl = "[\u63A5\u53E3\u5730\u5740\u65E0\u6548]";
+    try {
+      const url = new URL(provider.baseUrl);
+      baseUrl = url.origin + url.pathname;
+    } catch {
+    }
+    return { ...provider, baseUrl };
+  }) };
+}
+function responsesCompatStatus() {
+  const saved = readJson("responses-compat.json", {}), status = readJson("responses-compat-status.json", {});
+  return {
+    enabled: !!saved.routes?.length,
+    processAlive: alive(status.pid),
+    version: status.version || null,
+    port: saved.port || null,
+    converted: status.instanceId === saved.instanceId ? status.converted || 0 : 0,
+    providers: (saved.routes || []).map((route) => ({ id: route.providerId, upstream: route.upstream, baseUrl: route.baseUrl })),
+    note: "\u53EA\u8F6C\u6362\u7F3A\u5C11 call_id \u7684 Codex \u539F\u751F\u8F6C\u4EA4\u8BB0\u5F55\u3002\u6B63\u5E38\u5DE5\u5177\u7ED3\u679C\u3001\u6A21\u578B\u3001\u8BA4\u8BC1\u53CA\u6743\u9650\u4FDD\u6301\u539F\u8BBE\u7F6E\u3002\u66F4\u6362\u4F9B\u5E94\u5546\u5730\u5740\u540E\u9700\u91CD\u542F Codex \u624D\u80FD\u4F7F\u5DF2\u52A0\u8F7D\u7684\u914D\u7F6E\u751F\u6548\u3002"
+  };
+}
+function syncResponsesCompatRuntime(bundleDir) {
+  secureDirectory();
+  import_node_fs4.default.mkdirSync(runtime, { recursive: true, mode: 448 });
+  for (const name of ["responses-compat-daemon.cjs", "provider-config.py"]) {
+    const source = import_node_path4.default.join(bundleDir, name);
+    if (!import_node_fs4.default.existsSync(source)) throw new Error("\u7F3A\u5C11 Responses \u517C\u5BB9\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
+    const target = import_node_path4.default.join(runtime, name), temp = target + "." + (0, import_node_crypto5.randomUUID)() + ".tmp";
+    try {
+      import_node_fs4.default.copyFileSync(source, temp);
+      import_node_fs4.default.renameSync(temp, target);
+    } finally {
+      try {
+        import_node_fs4.default.unlinkSync(temp);
+      } catch {
+      }
+    }
+  }
+}
+async function lock(name, action) {
+  import_node_fs4.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
+  const file = import_node_path4.default.join(dataDir, name);
+  let descriptor;
+  const deadline = Date.now() + 12e3;
+  while (descriptor === void 0) {
+    try {
+      descriptor = import_node_fs4.default.openSync(file, "wx", 384);
+      import_node_fs4.default.writeFileSync(descriptor, JSON.stringify({ pid: process.pid }));
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      let previous;
+      try {
+        previous = JSON.parse(import_node_fs4.default.readFileSync(file, "utf8"));
+      } catch {
+      }
+      if (previous?.pid && !alive(previous.pid)) {
+        try {
+          import_node_fs4.default.unlinkSync(file);
+        } catch {
+        }
+        continue;
+      }
+      if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u517C\u5BB9\u8BBE\u7F6E\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\u3002");
+      await (0, import_promises.setTimeout)(100);
+    }
+  }
+  try {
+    return await action();
+  } finally {
+    import_node_fs4.default.closeSync(descriptor);
+    try {
+      import_node_fs4.default.unlinkSync(file);
+    } catch {
+    }
+  }
+}
+async function healthy(settings, status) {
+  if (!alive(status.pid) || settings.instanceId !== status.instanceId || !Number.isInteger(status.port)) return false;
+  try {
+    const response = await fetch(`http://127.0.0.1:${status.port}/health/${settings.instanceId}`, { signal: AbortSignal.timeout(1e3), redirect: "error" });
+    const result = await response.json();
+    return response.ok && result.service === "codex-connect-responses" && result.instanceId === settings.instanceId;
+  } catch {
+    return false;
+  }
+}
+async function ensureResponsesCompat() {
+  if (!readJson("responses-compat.json", {}).routes?.length) return { enabled: false };
+  return lock("responses-compat-start.lock", async () => {
+    const settings = readJson("responses-compat.json", {});
+    if (!settings.routes?.length) return { enabled: false };
+    let status = readJson("responses-compat-status.json", {});
+    if (await healthy(settings, status)) return status;
+    const entry = import_node_path4.default.join(runtime, "responses-compat-daemon.cjs");
+    if (!import_node_fs4.default.existsSync(entry)) throw new Error("\u672C\u673A Responses \u517C\u5BB9\u8FD0\u884C\u6587\u4EF6\u4E22\u5931\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
+    const child = (0, import_node_child_process3.spawn)(process.execPath, [entry, "--codex-connect-data-dir", dataDir], { windowsHide: true, detached: true, stdio: "ignore", env: process.env });
+    await new Promise((resolve, reject) => {
+      child.once("spawn", resolve);
+      child.once("error", reject);
+    });
+    child.unref();
+    for (let index = 0; index < 50; index++) {
+      await (0, import_promises.setTimeout)(100);
+      status = readJson("responses-compat-status.json", {});
+      if (status.pid === child.pid && await healthy(settings, status)) return status;
+      if (!alive(child.pid)) break;
+    }
+    throw new Error("\u672C\u673A Responses \u517C\u5BB9\u670D\u52A1\u672A\u80FD\u5C31\u7EEA\uFF1B\u672A\u4FEE\u6539\u4F9B\u5E94\u5546\u5730\u5740\u3002");
+  });
+}
+async function setCompatStartup(enabled, { entry = import_node_path4.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+  if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
+  if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
+  else await execute("reg.exe", ["delete", registry, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
+  });
+}
+async function configureResponsesCompat({ providerId, enabled }, {
+  bundleDir,
+  desktopPipePath,
+  config: configOverride,
+  codexHome,
+  startup = setCompatStartup,
+  ensure = ensureResponsesCompat
+} = {}) {
+  if (typeof enabled !== "boolean" || typeof providerId !== "string" || !providerId) throw new Error("\u9700\u8981\u771F\u5B9E\u4F9B\u5E94\u5546 ID \u548C enabled\u3002");
+  return lock("responses-compat-config.lock", async () => {
+    const previous = readJson("responses-compat.json", {}), existing = previous.routes?.find((r) => r.providerId === providerId);
+    const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
+    const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
+    if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
+    const backup = () => import_node_path4.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto5.randomUUID)()}.toml`);
+    if (!enabled) {
+      if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
+      const next = {
+        ...previous,
+        routes: (previous.routes || []).filter((r) => r.providerId !== providerId),
+        disabledProviders: [.../* @__PURE__ */ new Set([...previous.disabledProviders || [], providerId])]
+      };
+      writeJson("responses-compat.json", next);
+      if (!next.routes.length) await startup(false);
+      return responsesCompatStatus();
+    }
+    if (existing) {
+      if (provider.baseUrl !== existing.baseUrl) throw new Error("\u4F9B\u5E94\u5546\u5730\u5740\u5DF2\u5728\u63D2\u4EF6\u5916\u66F4\u6539\uFF1B\u8BF7\u5148\u5173\u95ED\u6B64\u4F9B\u5E94\u5546\u7684\u517C\u5BB9\u8BBE\u7F6E\u3002");
+      writeJson("responses-compat.json", { ...previous, disabledProviders: (previous.disabledProviders || []).filter((id) => id !== providerId) });
+      await ensure();
+      return responsesCompatStatus();
+    }
+    if (provider.wireApi !== "responses" || provider.supportsWebsockets) throw new Error("\u517C\u5BB9\u5C42\u4EC5\u652F\u6301 HTTP Responses\uFF1B\u5F53\u524D\u4F9B\u5E94\u5546\u542F\u7528\u4E86\u5176\u4ED6\u534F\u8BAE\u6216 WebSocket\u3002");
+    const upstream = safeBase(provider.baseUrl);
+    syncResponsesCompatRuntime(bundleDir);
+    const route = {
+      providerId,
+      codexHome: codexHome || home(),
+      upstream,
+      originalBaseUrl: provider.baseUrl,
+      token: (0, import_node_crypto5.randomBytes)(24).toString("hex"),
+      ...desktopPipePath ? { restartRequiredForPipe: desktopPipePath } : {}
+    };
+    writeJson("responses-compat.json", {
+      ...previous,
+      instanceId: previous.instanceId || (0, import_node_crypto5.randomBytes)(24).toString("hex"),
+      routes: [...previous.routes || [], route],
+      disabledProviders: (previous.disabledProviders || []).filter((id) => id !== providerId)
+    });
+    try {
+      const status = await ensure();
+      const next = readJson("responses-compat.json", {});
+      route.baseUrl = `http://127.0.0.1:${status.port}/${route.token}`;
+      writeJson("responses-compat.json", { ...next, port: status.port, routes: next.routes.map((r) => r.providerId === providerId ? route : r) });
+      await startup(true);
+      await config2({ action: "update", providerId, expected: provider.baseUrl, replacement: route.baseUrl, backupPath: backup() });
+      return responsesCompatStatus();
+    } catch (error) {
+      writeJson("responses-compat.json", previous);
+      if (!previous.routes?.length) await startup(false);
+      throw error;
+    }
+  });
+}
+
 // src/setup.mjs
 async function hiddenQuestion(prompt) {
   let muted = false;
@@ -4898,7 +5166,7 @@ async function hiddenQuestion(prompt) {
     if (!muted) process.stdout.write(chunk);
     next();
   } });
-  const input = import_promises.default.createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
+  const input = import_promises2.default.createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
   const answer = input.question(prompt);
   muted = true;
   try {
@@ -4909,6 +5177,16 @@ async function hiddenQuestion(prompt) {
   }
 }
 async function main() {
+  if (process.argv[2] === "compat") {
+    const mode = process.argv[3] || "status";
+    if (mode === "status") console.log(JSON.stringify({ ...responsesCompatStatus(), catalog: await providerCatalogStatus() }, null, 2));
+    else if (["on", "off"].includes(mode) && process.argv[4]) console.log(JSON.stringify(await configureResponsesCompat(
+      { providerId: process.argv[4], enabled: mode === "on" },
+      { bundleDir: __dirname, desktopPipePath: readJson("desktop-context.json", {}).pipePath }
+    ), null, 2));
+    else throw new Error("\u4F7F\u7528 node dist/setup.cjs compat status\uFF0C\u6216 compat on/off \u4F9B\u5E94\u5546ID");
+    return;
+  }
   if (process.argv[2] === "autostart") {
     if (!["on", "off"].includes(process.argv[3])) throw new Error("\u4F7F\u7528 node dist/setup.cjs autostart on \u6216 off");
     console.log(JSON.stringify(configureAutostart(process.argv[3] === "on", { bundleDir: __dirname }), null, 2));
@@ -4916,7 +5194,7 @@ async function main() {
   }
   if (process.argv[2] === "assistant") {
     const previous2 = assistantSettings();
-    const rl2 = import_promises.default.createInterface({ input: process.stdin, output: process.stdout });
+    const rl2 = import_promises2.default.createInterface({ input: process.stdin, output: process.stdout });
     let baseUrl, model, reasoningEffort;
     try {
       baseUrl = (await rl2.question("\u52A9\u624B\u63A5\u53E3\u5730\u5740\uFF08\u56DE\u8F66\u4FDD\u7559\uFF09: ")).trim() || previous2.baseUrl;
@@ -4937,7 +5215,7 @@ async function main() {
   }
   secureDirectory();
   const previous = readJson("config.json", {});
-  const rl = import_promises.default.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = import_promises2.default.createInterface({ input: process.stdin, output: process.stdout });
   console.log("\u98DE\u4E66 Codex \u684C\u9762\u6865\u63A5 \xB7 \u672C\u5730\u914D\u7F6E\n\u521B\u5EFA\u98DE\u4E66\u81EA\u5EFA\u5E94\u7528\u5E76\u542F\u7528\u673A\u5668\u4EBA\u540E\u586B\u5199\u51ED\u636E\u3002");
   let appId;
   try {
@@ -4947,7 +5225,7 @@ async function main() {
   }
   const appSecret = await hiddenQuestion(`App Secret${previous.appSecret ? "\uFF08\u56DE\u8F66\u4FDD\u7559\uFF09" : ""}: `) || previous.appSecret;
   if (!appId || !appSecret) throw new Error("App ID \u548C App Secret \u90FD\u4E0D\u80FD\u4E3A\u7A7A");
-  const code = (0, import_node_crypto5.randomBytes)(12).toString("hex");
+  const code = (0, import_node_crypto6.randomBytes)(12).toString("hex");
   writeJson("config.json", { ...previous, appId, appSecret, allowedOpenIds: previous.allowedOpenIds || [], pairing: { code, expiresAt: Date.now() + 10 * 60 * 1e3 } });
   console.log(`\u914D\u7F6E\u5DF2\u4FDD\u5B58\u5230 ${dataDir}\uFF08\u4EC5\u5F53\u524D Windows \u7528\u6237\u53EF\u8BBF\u95EE\uFF09\u3002
 \u56DE\u5230 Codex \u684C\u9762\uFF0C\u8C03\u7528\u63D2\u4EF6 start_bridge\u3002

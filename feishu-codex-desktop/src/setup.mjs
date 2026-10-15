@@ -5,6 +5,7 @@ import {secureDirectory,readJson,writeJson,dataDir} from './storage.mjs';
 import {beginWechatLogin} from './wechat-auth.mjs';
 import {configureAssistant,assistantSettings} from './assistant.mjs';
 import {configureAutostart} from './autostart-settings.mjs';
+import {providerCatalogStatus,responsesCompatStatus,configureResponsesCompat} from './responses-compat-settings.mjs';
 
 async function hiddenQuestion(prompt) {
   let muted=false;
@@ -14,6 +15,14 @@ async function hiddenQuestion(prompt) {
   try{return (await answer).trim();}finally{input.close();process.stdout.write('\n');}
 }
 async function main() {
+  if(process.argv[2]==='compat') {
+    const mode=process.argv[3]||'status';
+    if(mode==='status')console.log(JSON.stringify({...responsesCompatStatus(),catalog:await providerCatalogStatus()},null,2));
+    else if(['on','off'].includes(mode) && process.argv[4])console.log(JSON.stringify(await configureResponsesCompat(
+      {providerId:process.argv[4],enabled:mode==='on'},{bundleDir:__dirname,desktopPipePath:readJson('desktop-context.json',{}).pipePath}),null,2));
+    else throw new Error('使用 node dist/setup.cjs compat status，或 compat on/off 供应商ID');
+    return;
+  }
   if(process.argv[2]==='autostart') {
     if(!['on','off'].includes(process.argv[3]))throw new Error('使用 node dist/setup.cjs autostart on 或 off');
     console.log(JSON.stringify(configureAutostart(process.argv[3]==='on',{bundleDir:__dirname}),null,2));return;

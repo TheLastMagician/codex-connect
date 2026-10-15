@@ -4579,7 +4579,8 @@ var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
 var import_node_crypto = require("node:crypto");
-var dataDir = process.env.FEISHU_CODEX_DATA_DIR || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
+var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
+var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path.default.join(import_node_os.default.homedir(), ".codex-feishu-desktop");
 function readJson(name, fallback) {
   try {
     return JSON.parse(import_node_fs.default.readFileSync(import_node_path.default.join(dataDir, name), "utf8"));
@@ -4604,7 +4605,7 @@ function writeJson(name, value) {
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.4.0";
+var VERSION = "0.4.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

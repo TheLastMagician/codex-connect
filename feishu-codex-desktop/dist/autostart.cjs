@@ -280,8 +280,9 @@ function encodeFrame(value) {
   return frame2;
 }
 var DesktopClient = class {
-  constructor(context) {
+  constructor(context, { beforeCreateThread } = {}) {
     this.context = context;
+    this.beforeCreateThread = beforeCreateThread;
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
@@ -325,8 +326,9 @@ var DesktopClient = class {
     this.connecting = connecting;
     return connecting;
   }
-  async request(method, params, timeoutMs = 3e4) {
+  async request(method, params, timeoutMs = 3e4, beforeSend) {
     await this.connect();
+    beforeSend?.();
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -400,6 +402,11 @@ var DesktopClient = class {
     if (!ALLOWED_TOOLS.has(tool)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
     if (tool === "send_message_to_thread") return this.input.send(args, options.beforeSend);
+    if (tool === "create_thread" && this.beforeCreateThread) {
+      options.beforeSend?.();
+      await this.beforeCreateThread(this.context, args);
+      options.beforeSend?.();
+    }
     const result = await this.request("tools/call", {
       namespace: "codex_app",
       tool,
@@ -409,7 +416,7 @@ var DesktopClient = class {
       hostId: "local",
       turnId: `feishu-${(0, import_node_crypto2.randomUUID)()}`,
       callId: `feishu-${(0, import_node_crypto2.randomUUID)()}`
-    }, tool === "wait_threads" ? 45e3 : 3e4);
+    }, tool === "wait_threads" ? 45e3 : 3e4, options.beforeSend);
     const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
     if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
     try {
@@ -426,7 +433,8 @@ var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
 var import_node_child_process = require("node:child_process");
 var import_node_crypto3 = require("node:crypto");
-var dataDir = process.env.FEISHU_CODEX_DATA_DIR || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex-feishu-desktop");
+var dataArgument = process.argv.indexOf("--codex-connect-data-dir");
+var dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex-feishu-desktop");
 function secureDirectory(dir = dataDir) {
   import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
   if (process.platform === "win32") {

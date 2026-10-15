@@ -7,6 +7,7 @@ import {createFeishuChannel} from './channels/feishu.mjs';
 import {createWechatChannel} from './channels/wechat.mjs';
 import {VERSION} from './version.mjs';
 import {readWechatAccount} from './wechat-storage.mjs';
+import {prepareNewThreadCompat} from './responses-compat-settings.mjs';
 
 export async function main() {
   secureDirectory();
@@ -73,7 +74,15 @@ export async function main() {
       const channel=channels.get(id);if(!channel)throw new Error('这个通道尚未连接。');
       await channel.preview();
     });
-    desktop=new DesktopClient(readJson('desktop-context.json',{}));
+    desktop=new DesktopClient(readJson('desktop-context.json',{}),{
+      beforeCreateThread:async(context,args)=>{
+        if(args.target?.type==='project') {
+          const catalog=await desktop.call('list_projects');
+          const project=catalog.projects?.find(p=>p.projectId===args.target.projectId);
+          if(!project || project.projectKind!=='local' || (project.hostId && project.hostId!=='local'))return;
+        }
+        await prepareNewThreadCompat({bundleDir:__dirname,desktopPipePath:context.pipePath});
+      }});
     const tools=await desktop.tools();
     if(!tools.some(tool=>tool.name==='send_message_to_thread'))throw new Error('当前桌面版没有提供消息转发能力');
     await desktop.call('list_threads',{limit:1});status.desktopConnected=true;saveStatus();

@@ -29,6 +29,7 @@ fs.writeFileSync(path.join(bundles,'bridge.cjs'),fakeBridge);
 fs.writeFileSync(path.join(bundles,'catalog.py'),'# test fixture');
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 fs.copyFileSync(path.join(root,'dist/autostart.cjs'),path.join(bundles,'autostart.cjs'));
+for(const name of ['responses-compat-daemon.cjs','provider-config.py'])fs.copyFileSync(path.join(root,'dist',name),path.join(bundles,name));
 const validate=async()=>{};
 const options={entryPath:path.join(bundles,'bridge.cjs'),validate};
 async function stopChildren() {

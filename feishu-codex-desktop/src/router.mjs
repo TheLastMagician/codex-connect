@@ -388,7 +388,7 @@ export class Router {
           if(!/^\d+$/.test(project) || !entry) throw new Error('项目编号无效。先发送 /projects，再用列表里的编号：/new 1 | 帮我检查项目');
           target={type:'project',projectId:entry.projectId,environment:{type:'local'}};
         }
-        authorize();const result=await this.desktop.call('create_thread',{prompt,target});
+        authorize();const result=await this.desktop.call('create_thread',{prompt,target},{beforeSend:authorize});
         if(!result.threadId) throw new Error('桌面没有返回已就绪会话 ID，请用 /chats 查看创建结果，不要重复创建');
         session.selected={id:result.threadId,hostId:result.hostId||'local',title:result.title||result.threadId,kind:'codex'};
         session.mode=this.defaultMode();session.awaitingChoice=null;this.saveState();this.watch(session);

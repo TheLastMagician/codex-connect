@@ -17,7 +17,7 @@ export function encodeFrame(value) {
   frame.writeUInt32LE(body.length); body.copy(frame,4); return frame;
 }
 export class DesktopClient {
-  constructor(context) { this.context = context; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
+  constructor(context,{beforeCreateThread}={}) { this.context = context; this.beforeCreateThread=beforeCreateThread; this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
     this.connectionGeneration=0;
     this.input=new DesktopInput({pipePath:context.inputPipePath,
       activateThread:({threadId})=>this.call('navigate_to_codex_page',{threadId})}); }
@@ -42,8 +42,9 @@ export class DesktopClient {
     }).finally(() => {if(this.connecting===connecting)this.connecting=null;});
     this.connecting=connecting;return connecting;
   }
-  async request(method,params,timeoutMs=30000) {
+  async request(method,params,timeoutMs=30000,beforeSend) {
     await this.connect();
+    beforeSend?.();
     const id = this.nextId++;
     return new Promise((resolve,reject) => {
       const timer = setTimeout(() => {
@@ -92,11 +93,16 @@ export class DesktopClient {
     if(!ALLOWED_TOOLS.has(tool)) throw new Error('不支持的桌面操作');
     if(!this.context.threadId) throw new Error('缺少真实调用会话，请从 Codex 桌面内启动桥接');
     if(tool==='send_message_to_thread')return this.input.send(args,options.beforeSend);
+    if(tool==='create_thread' && this.beforeCreateThread) {
+      options.beforeSend?.();
+      await this.beforeCreateThread(this.context,args);
+      options.beforeSend?.();
+    }
     const result=await this.request('tools/call',{
       namespace:'codex_app',tool,arguments:args,callerSource:'codex',
       threadId:this.context.threadId,hostId:'local',
       turnId:`feishu-${randomUUID()}`,callId:`feishu-${randomUUID()}`
-    },tool==='wait_threads'?45000:30000);
+    },tool==='wait_threads'?45000:30000,options.beforeSend);
     const output=(result.contentItems||[]).filter(item=>item.type==='inputText').map(item=>item.text).join('\n');
     if(!result.success) throw new Error(output || '桌面操作失败');
     try {return JSON.parse(output);} catch {return {text:output};}
