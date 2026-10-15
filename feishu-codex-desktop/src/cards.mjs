@@ -103,9 +103,9 @@ export function replyCard(text,meta={},issue) {
     elements.push({tag:'hr'});
     if(meta.kind==='assistant') elements.push(md(`**回复来自**  ${escapeLabel(selected.title||'桌面会话')}`));
     if(meta.kind==='conversation')elements.push(md(`**会话**  ${escapeLabel(selected.title||'桌面会话')}`));
-    options.push({label:'选择此会话',type:'primary',action:{kind:'select',thread:selected}},
-      {label:'进入直聊',action:{kind:'direct',thread:selected}});
-    if(session?.selected?.id===selected.id) options.push({label:'查看对话',action:{kind:'command',command:'read',threadKey:`${selected.hostId||'local'}:${selected.id}`}},
+    const isCurrent=!!session?.selected && session.selected.id===selected.id && (session.selected.hostId||'local')===(selected.hostId||'local');
+    if(!isCurrent || session.mode!=='chat')options.push({label:isCurrent?'返回当前会话':'切换到此会话',type:'primary',action:{kind:'select',thread:selected}});
+    if(isCurrent) options.push({label:'查看对话',action:{kind:'command',command:'read',threadKey:`${selected.hostId||'local'}:${selected.id}`}},
       {label:'状态',action:{kind:'command',command:'status',threadKey:`${selected.hostId||'local'}:${selected.id}`}});
   }
   options.push({label:'会话列表',action:{kind:'command',command:'chats'}},{label:'项目',action:{kind:'command',command:'projects'}});

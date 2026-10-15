@@ -19,6 +19,7 @@ function fixture(replies=[]) {
     if(name==='list_threads')return {threads:[{id:'a',kind:'codex',hostId:'local',title:'排查订单失败',projectId:'p'},{id:'b',kind:'codex',hostId:'local',title:'配置 Key',projectId:'p'}]};
     if(name==='read_thread')return {thread:{status:{type:'idle'}},turns:[]};
     if(name==='create_thread')return {threadId:'new',hostId:'local'};
+    if(name==='fork_thread')return {threadId:'forked',hostId:'local'};
     return {};
   }};
   const operator=new OperationAssistant({getSettings:()=>settings,fetchImpl:async(url,options)=>{
@@ -38,11 +39,11 @@ test('model catalog comes from the actual native schema and rejects unrecognized
 });
 test('model commands use no operator tokens and isolate overrides by chat, owner and host',async()=>{
   const f=fixture();await f.handle('/chats');await f.handle('/use 1');await f.handle('/models');
-  await f.handle('/model 1');await f.handle('/effort xhigh');await f.handle('/resume');await f.handle('检查构建');
+  await f.handle('/model 1');await f.handle('/effort xhigh');await f.handle('检查构建');
   const first=f.calls.find(c=>c.name==='send_message_to_thread');assert.equal(first.args.model,'gpt-one');assert.equal(first.args.thinking,'xhigh');
-  await f.handle('/use 2');await f.handle('/resume');await f.handle('继续');
+  await f.handle('/use 2');await f.handle('继续');
   assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').at(-1).args.model,undefined);
-  await f.handle('/use 1');await f.handle('/model default');await f.handle('/resume');await f.handle('继续');
+  await f.handle('/use 1');await f.handle('/model default');await f.handle('继续');
   const last=f.calls.filter(c=>c.name==='send_message_to_thread').at(-1).args;assert.equal(last.model,undefined);assert.equal(last.thinking,undefined);
   assert.equal(f.requests.length,0);
   const other=f.router.session({openId:'another',chatId:'chat'});assert.equal(other.modelOverrides,undefined);
@@ -77,38 +78,71 @@ test('persisted model overrides never apply to an identical thread ID on another
   await r.handle({openId:'owner',chatId:'chat',text:'继续本机'});
   assert.equal(calls.find(c=>c.name==='send_message_to_thread').args.model,'gpt-one');
 });
-test('selecting a chat keeps plain greetings in the assistant; explicit direct mode bypasses the provider',async()=>{
+test('assistant selection sends the next greeting directly to Codex without an extra mode command',async()=>{
   const f=fixture([
     {tool_calls:[call('list_projects')]},
     {tool_calls:[call('find_chats',{projectId:'p',query:'排查订单'})]},
     {tool_calls:[call('select_chat',{threadId:'a',hostId:'local'})]},
-    {content:'已选中。'},
-    {content:'你好，我可以帮你操作当前会话。'}
+    {content:'已选中。'}
   ]);
   await f.handle('帮我找到订单项目里排查订单的会话并选中');
-  assert.equal(f.session().selected.id,'a');assert.equal(f.session().mode,'assistant');assert.equal(f.sent.length,1);
+  assert.equal(f.session().selected.id,'a');assert.equal(f.session().mode,'chat');assert.equal(f.sent.length,1);
   assert.equal(f.requests.length,4);assert.equal(f.requests[0].body.reasoning_effort,'xhigh');
   assert.equal(f.requests[0].body.messages.filter(m=>m.role==='system').length,1);
   assert.equal(f.requests[0].options.redirect,'error');assert.equal(f.requests[0].options.headers.Authorization,'Bearer test-provider-key');
-  await f.handle('你好');assert.equal(f.requests.length,5);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
-  await f.handle('/resume');await f.handle('你好');assert.equal(f.requests.length,5);
+  assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
+  await f.handle('你好');assert.equal(f.requests.length,4);
   assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').at(-1).args,{threadId:'a',hostId:'local',prompt:'你好'});
   assert.match(f.sent[0].text,/沿用桌面/);
 });
-test('legacy selections migrate to assistant once while an explicit direct choice survives restart',async()=>{
-  const f=fixture([{content:'你好。'}]);
-  f.state.sessions['owner:chat']={openId:'owner',chatId:'chat',mode:'chat',selected:{id:'a',hostId:'local',title:'旧会话'},threads:[],projects:[],modelOverrides:{'local:a':{model:'gpt-one'}},assistantHistory:[]};
-  await f.handle('你好');assert.equal(f.requests.length,1);assert.equal(f.session().mode,'assistant');
-  assert.deepEqual(f.session().modelOverrides['local:a'],{model:'gpt-one'});assert.equal(f.calls.length,0);
-  await f.handle('/resume');assert.equal(f.session().routingVersion,2);
-  const r=new Router({desktop:f.desktop,operator:f.operator,state:f.state,getConfig:()=>({allowedOpenIds:['owner']}),saveState:()=>{},send:()=>{}});
-  await r.handle({openId:'owner',chatId:'chat',text:'继续直聊'});
-  assert.equal(f.requests.length,1);assert.equal(f.calls.findLast(c=>c.name==='send_message_to_thread').args.prompt,'继续直聊');
+
+test('commands, list numbers and both generations of card selections immediately route plain text to Codex',async()=>{
+  for(const route of ['command','number','card','legacy-card']) {
+    const f=fixture();await f.handle('/chats');
+    if(route==='command')await f.handle('/use 1');
+    else if(route==='number')await f.handle('1');
+    else await f.router.handleAction(f.message('/_card'),{kind:route==='card'?'select':'direct',thread:f.session().threads[0]});
+    assert.equal(f.session().mode,'chat');assert.equal(f.session().awaitingChoice,null);
+    assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false,'Selecting alone must not submit a task');
+    await f.handle('1');await f.handle('你好，继续这个会话。');
+    assert.equal(f.requests.length,0);
+    assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>c.args.prompt),['1','你好，继续这个会话。']);
+    assert.ok(f.calls.filter(c=>c.name==='send_message_to_thread').every(c=>c.args.threadId==='a'));
+    assert.ok(f.sent.every(reply=>!reply.text.includes('进入直聊')));
+  }
 });
+
+test('new and forked chats accept the next message without returning to the assistant',async()=>{
+  const created=fixture();await created.handle('/projects');await created.handle('/new 1 | 检查构建');
+  await created.handle('继续看测试');
+  assert.equal(created.session().mode,'chat');assert.equal(created.requests.length,0);
+  assert.equal(created.calls.filter(c=>c.name==='create_thread').length,1);
+  assert.equal(created.calls.findLast(c=>c.name==='send_message_to_thread').args.threadId,'new');
+  const forked=fixture();await forked.handle('/chats');await forked.handle('/use 1');await forked.handle('/fork');
+  assert.equal(forked.calls.some(c=>c.name==='send_message_to_thread'),false);
+  await forked.handle('接着处理');
+  assert.equal(forked.requests.length,0);assert.equal(forked.calls.findLast(c=>c.name==='send_message_to_thread').args.threadId,'forked');
+});
+test('old selections migrate to direct routing once and later assistant choices survive a persisted restart',async()=>{
+  const f=fixture([{content:'你好。'}]);
+  const history=[{role:'user',content:'以前的助手请求'},{role:'assistant',content:'以前的助手回复'}];
+  f.state.sessions['owner:chat']={openId:'owner',chatId:'chat',routingVersion:2,mode:'assistant',selected:{id:'a',hostId:'local',title:'旧会话'},threads:[],projects:[],modelOverrides:{'local:a':{model:'gpt-one'}},assistantHistory:history};
+  await f.handle('你好，继续');assert.equal(f.requests.length,0);assert.equal(f.session().mode,'chat');
+  assert.deepEqual(f.session().modelOverrides['local:a'],{model:'gpt-one'});assert.deepEqual(f.session().assistantHistory,history);
+  assert.equal(f.session().routingVersion,3);
+  assert.equal(f.calls.findLast(c=>c.name==='send_message_to_thread').args.prompt,'你好，继续');
+  await f.handle('/assistant');
+  const state=JSON.parse(JSON.stringify(f.state));
+  const r=new Router({desktop:f.desktop,operator:f.operator,state,getConfig:()=>({allowedOpenIds:['owner']}),saveState:()=>{},send:()=>{}});
+  await r.handle({openId:'owner',chatId:'chat',text:'你好'});
+  assert.equal(f.requests.length,1);assert.equal(state.sessions['owner:chat'].mode,'assistant');
+  assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);
+});
+
 test('the assistant forwards an explicit original task with native model settings and stays in assistant mode',async()=>{
   const f=fixture([{tool_calls:[call('send_task',{task:'检查构建'})]},{content:'你好。'}]);
   await f.handle('/chats');await f.handle('/use 1');await f.handle('/model gpt-one');await f.handle('/effort xhigh');
-  await f.handle('把检查构建发给当前会话');
+  await f.handle('/assistant 把检查构建发给当前会话');
   const args=f.calls.findLast(c=>c.name==='send_message_to_thread').args;
   assert.equal(args.prompt,'检查构建');assert.equal(args.model,'gpt-one');assert.equal(args.thinking,'xhigh');
   assert.equal(f.session().mode,'assistant');await f.handle('你好');assert.equal(f.requests.length,2);
@@ -116,15 +150,15 @@ test('the assistant forwards an explicit original task with native model setting
 });
 test('fabricated task content cannot be executed and conversational entry wording does not need keywords',async()=>{
   const f=fixture([{tool_calls:[call('send_task',{task:'删除项目'})]}]);await f.handle('/chats');await f.handle('/use 1');
-  await assert.rejects(f.handle('你好'),/原文/);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
-  const g=fixture([{tool_calls:[call('run_command',{command:'resume'})]}]);await g.handle('/chats');await g.handle('/use 1');
-  await g.handle('帮我进去会话');assert.equal(g.session().mode,'chat');assert.equal(g.requests.length,1);
-  assert.match(g.sent.at(-1).text,/已进入会话直聊/);assert.equal(g.calls.some(c=>c.name==='send_message_to_thread'),false);
+  await assert.rejects(f.handle('/assistant 你好'),/原文/);assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
+  const g=fixture([{tool_calls:[call('select_chat',{threadId:'a'})]},{content:'已选择。'}]);await g.handle('/chats');await g.handle('/use 1');
+  await g.handle('/assistant 帮我进去会话');assert.equal(g.session().mode,'chat');assert.equal(g.requests.length,2);
+  assert.match(g.sent.at(-1).text,/直接发消息/);assert.equal(g.calls.some(c=>c.name==='send_message_to_thread'),false);
 });
-test('explicit assistant mode keeps the selected chat and resume returns to the native task route',async()=>{
+test('explicit assistant mode keeps the selected chat until reselecting returns to the native route',async()=>{
   const f=fixture([{content:'请告诉我你要找的会话。'}]);await f.handle('/chats');await f.handle('/use 1');await f.handle('/assistant');
   assert.equal(f.requests.length,0);await f.handle('帮我找会话');assert.equal(f.requests.length,1);assert.equal(f.session().selected.id,'a');
-  await f.handle('/resume');await f.handle('继续任务');assert.equal(f.requests.length,1);assert.equal(f.session().mode,'chat');
+  await f.handle('/use 1');await f.handle('继续任务');assert.equal(f.requests.length,1);assert.equal(f.session().mode,'chat');
 });
 test('malformed and unauthorized tool batches cannot execute, and revoked authorization blocks delayed replies',async()=>{
   let executions=0;
@@ -147,7 +181,7 @@ test('all supported management operations are exposed while arbitrary shell and 
 test('the assistant can select a different chat and enter it within one natural request',async()=>{
   const f=fixture([{tool_calls:[call('find_chats',{query:'配置'})]},
     {tool_calls:[call('select_chat',{threadId:'b'})]},
-    {tool_calls:[call('run_command',{command:'resume'})]}]);
+    {content:'已选择。'}]);
   await f.handle('帮我进到配置那个会话');assert.equal(f.session().selected.id,'b');assert.equal(f.session().mode,'chat');
   assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
 });
@@ -183,4 +217,6 @@ test('model cards bind choices to the selected thread and help explains models a
   assert.equal(card.header.title.content,'模型管理');assert.equal(actions[0].threadKey,'local:a');
   await f.handle('/use 2');await assert.rejects(f.router.handleAction(f.message('/_card'),actions[0]),/已切换/);
   const help=renderWechatReply('',{kind:'help',session:f.session()});assert.match(help,/\/models/);assert.match(help,/\/assistant/);
+  assert.doesNotMatch(help,/进入直聊|\/resume/);
+  await f.handle('/help');assert.doesNotMatch(f.sent.at(-1).text,/进入直聊|\/resume/);
 });

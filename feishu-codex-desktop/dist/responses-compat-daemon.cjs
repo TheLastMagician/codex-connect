@@ -49,7 +49,7 @@ function writeJson(name, value) {
 }
 
 // src/version.mjs
-var VERSION = "0.4.2";
+var VERSION = "0.4.3";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);

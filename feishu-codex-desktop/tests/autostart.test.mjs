@@ -35,12 +35,13 @@ const options={entryPath:path.join(bundles,'bridge.cjs'),validate};
 async function stopChildren() {
   const running=readJson('bridge.lock',{}).pid;if(running)children.add(running);
   for(const pid of children){try{process.kill(pid);}catch{}}
-  for(let i=0;i<100 && [...children].some(alive);i++)await delay(10);
+  for(let i=0;i<500 && [...children].some(alive);i++)await delay(10);
+  assert.ok(![...children].some(alive),'Fixture processes must exit before deleting their files');
   children.clear();
 }
 test.beforeEach(async()=>{
   await stopChildren();
-  if(fs.existsSync(dataDir))fs.rmSync(dataDir,{recursive:true,force:true});
+  if(fs.existsSync(dataDir))fs.rmSync(dataDir,{recursive:true,force:true,maxRetries:15,retryDelay:25});
   fs.mkdirSync(dataDir,{recursive:true});
   writeJson('config.json',{appId:'fixture-app',appSecret:'fixture-secret'});
   fs.writeFileSync(path.join(home,'hooks.json'),JSON.stringify({description:'Existing user hooks',hooks:{
@@ -50,7 +51,7 @@ test.beforeEach(async()=>{
 test.after(async()=>{
   await stopChildren();
   assert.ok(path.resolve(folder).startsWith(path.resolve(os.tmpdir())+path.sep+'codex-autostart-test-'));
-  fs.rmSync(folder,{recursive:true,force:true});
+  fs.rmSync(folder,{recursive:true,force:true,maxRetries:15,retryDelay:25});
 });
 
 test('autostart is opt-in and installing it preserves other hooks; repeated enable and disable are reversible',()=>{

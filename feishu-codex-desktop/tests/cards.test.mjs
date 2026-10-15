@@ -16,9 +16,14 @@ test('project cards use native layout and omit full private paths from the list'
   assert.equal(escapeLabel('**title**<at>'), '\\*\\*title\\*\\*\\<at\\>');
 });
 test('assistant replies preserve Markdown and identify the actual source chat',()=>{
-  const card=replyCard('**完成**\n```js\nconst x = 1;\n```',{kind:'assistant',thread:session.selected,session},()=> 'token');
+  const actions=[];
+  const card=replyCard('**完成**\n```js\nconst x = 1;\n```',{kind:'assistant',thread:session.selected,session:{...session,mode:'chat'}},action=>{actions.push(action);return 'token';});
   assert.equal(card.header.title.content,'Codex 回复');assert.match(card.body.elements[0].content,/```js/);
-  assert.ok(JSON.stringify(card).includes('选择此会话'));assert.ok(JSON.stringify(card).includes('进入直聊'));
+  assert.ok(!JSON.stringify(card).includes('进入直聊'));assert.ok(!actions.some(action=>action.kind==='direct' || action.kind==='select'));
+  const previous={...session.selected,id:'previous',title:'之前的会话'};
+  const notification=replyCard('旧会话的回复',{kind:'assistant',thread:previous,session:{...session,mode:'chat'}},action=>{actions.push(action);return 'token';});
+  assert.ok(JSON.stringify(notification).includes('切换到此会话'));
+  assert.ok(actions.some(action=>action.kind==='select' && action.thread.id==='previous'));
 });
 function fixture() {
   const state={};const actions=new CardActions({state,saveState:()=>{},getConfig:()=>({allowedOpenIds:['owner']}),now:()=>10000});
