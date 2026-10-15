@@ -65,7 +65,7 @@ var init_storage = __esm({
 init_storage();
 
 // src/version.mjs
-var VERSION = "0.4.4";
+var VERSION = "0.5.0";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);
@@ -207,6 +207,9 @@ var MAX_FRAME2 = 8 * 1024 * 1024;
 init_storage();
 
 // src/wechat-storage.mjs
+init_storage();
+
+// src/connections.mjs
 init_storage();
 
 // src/bridge-lifecycle.mjs

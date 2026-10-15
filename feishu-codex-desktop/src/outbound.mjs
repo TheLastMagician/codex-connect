@@ -37,7 +37,7 @@ function conversationParts(conversation,limit=3500) {
   return pages.slice(-20).map((messages,index)=>({conversation:{...conversation,messages},historyTruncated:truncated && index===0}));
 }
 
-export function createSender({client,actions,state,saveState,getConfig}) {
+export function createSender({client,actions,state,saveState,getConfig,canSend=()=>true}) {
   return async(chatId,text,meta={})=>{
     const session=meta.session||Object.values(state.sessions||{}).find(s=>s.chatId===chatId);
     const openId=meta.openId||session?.openId;
@@ -45,6 +45,7 @@ export function createSender({client,actions,state,saveState,getConfig}) {
     const parts=meta.kind==='conversation' && meta.conversation?conversationParts(meta.conversation):
       (meta.kind==='list'?[String(text)]:chunkMarkdown(text).slice(0,20)).map(text=>({text}));
     for(const [index,part] of parts.entries()) {
+      if(!canSend(openId))return;
       const tokens=[];const issue=getConfig().cardActionsEnabled && openId?action=>{
         const token=actions.issue({chatId,openId},action);tokens.push(token);return token;
       }:undefined;
@@ -57,6 +58,7 @@ export function createSender({client,actions,state,saveState,getConfig}) {
         messageId=meta.updateMessageId;
       }
       if(!result || result.code!==0) {
+        if(!canSend(openId))return;
         result=await client.im.v1.message.create({params:{receive_id_type:'chat_id'},data:{receive_id:chatId,msg_type:'interactive',content}});
         messageId=result.data?.message_id;
       }

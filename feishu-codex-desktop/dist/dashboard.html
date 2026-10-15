@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codex 连接 · 通道管理</title><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script></head>
+<body>
+  <aside><a class="brand" href="#"><img src="/icon.png" alt=""><span>Codex 连接<small>本机控制台</small></span></a><nav aria-label="导航"><a href="#feishu" class="active">◈　飞书机器人</a><a href="#wechat">◎　微信 ClawBot</a><a href="#runtime">▤　运行设置</a></nav><div class="local"><span class="dot"></span>仅在这台电脑上运行<small>配置保存在本机</small></div></aside>
+  <main>
+    <header><div><p class="eyebrow">CHANNELS</p><h1>连接你的工作会话</h1><p class="muted">从手机继续 Codex，把不同的机器人交给不同的工作。</p></div><div class="desktop-status" id="desktop-status">正在读取状态…</div></header>
+    <div id="locked" class="notice hidden"><strong>需要本机访问授权</strong><p>请在 Codex 中让插件“打开配置页面”，使用返回的本机链接进入。</p></div>
+    <div id="paused" class="notice hidden"><strong>聊天通道已暂停</strong><p>恢复后会重新连接已启用的机器人。</p><button id="resume">恢复连接</button></div>
+    <div id="content" class="hidden">
+      <section id="feishu"><div class="section-head"><div><h2>飞书机器人 <span id="bot-count" class="count"></span></h2><p class="muted">完整管理，或只与一个固定会话聊天。</p></div><button class="primary" id="add-bot">＋ 添加机器人</button></div><div id="bots" class="bot-grid"></div></section>
+      <section id="wechat"><div class="section-head"><div><h2>微信 ClawBot</h2><p class="muted">扫码连接你的微信，无需填写应用凭据。</p></div></div><div class="panel wechat-panel"><div class="channel-icon wechat">微</div><div class="grow"><h3>个人微信 <span id="wechat-state" class="badge"></span></h3><p class="muted" id="wechat-detail"></p></div><div class="button-row" id="wechat-actions"></div></div></section>
+      <section id="runtime"><div class="section-head"><div><h2>运行设置</h2><p class="muted">页面随插件启动，可以收藏当前地址。</p></div></div><div class="panel runtime"><div><h3>桌面启动钩子</h3><p class="muted">插件加载时连接已启用的通道；钩子还能在启动或恢复桌面会话时触发连接。</p><p class="small muted" id="hook-note"></p></div><label class="switch"><input type="checkbox" id="autostart"><span>启用钩子</span></label></div></section>
+      <footer><span>Codex 连接 <span id="version"></span></span><span>管理页面不调用模型 · 凭据仅保存在本机</span></footer>
+    </div>
+  </main>
+  <dialog id="bot-dialog" aria-labelledby="form-title"><form id="bot-form"><div class="dialog-head"><div><p class="eyebrow">FEISHU</p><h2 id="form-title">添加机器人</h2></div><button type="button" class="icon-button" data-close="bot-dialog" aria-label="关闭">×</button></div><div class="dialog-body">
+    <label>机器人名称<input name="name" id="bot-name" required maxlength="80" placeholder="例如：产线排查助手"></label>
+    <div class="field-row"><label>App ID<input name="appId" id="app-id" required placeholder="cli_…" autocomplete="off"></label><label>App Secret<input name="appSecret" id="app-secret" type="password" placeholder="输入应用凭据" autocomplete="new-password"></label></div>
+    <p class="field-help" id="credential-note">在飞书开放平台启用机器人，并订阅消息接收事件，接收方式选择长连接。</p>
+    <fieldset><legend>这个机器人用来做什么</legend><label class="mode-option"><input type="radio" name="mode" value="fixed" checked><span><strong>固定会话聊天</strong><small>所有消息都发给绑定会话，没有命令和管理菜单。</small></span></label><label class="mode-option"><input type="radio" name="mode" value="full"><span><strong>完整管理</strong><small>保留项目、会话列表、操作助手和飞书卡片。</small></span></label></fieldset>
+    <div id="binding"><div class="binding-head"><strong>绑定 Codex 会话</strong><button type="button" id="refresh-catalog" class="text-button">刷新列表</button></div><p id="current-binding" class="field-help"></p><label>项目<select id="project-select" aria-label="项目"><option value="">全部项目</option></select></label><label>查找会话<input id="thread-search" type="search" placeholder="输入会话名称"></label><label>会话<select id="thread-select" aria-label="会话" size="5" required></select></label><p id="catalog-note" class="field-help" role="status"></p></div>
+    <label id="card-field" class="check-row hidden"><input id="card-actions" type="checkbox"><span>已在飞书启用卡片交互回调 card.action.trigger</span></label>
+    <label class="check-row"><input id="bot-enabled" type="checkbox" checked><span>保存后启用连接</span></label>
+    <p class="notice compact">新机器人首次收到你的私聊后，会在页面显示使用申请。点“允许”后再发消息即可；首次消息不会自动执行。</p><p id="form-error" class="form-error" role="alert"></p>
+  </div><div class="dialog-footer"><button type="button" data-close="bot-dialog">取消</button><button type="submit" class="primary" id="save-bot">保存并应用</button></div></form></dialog>
+  <dialog id="qr-dialog" aria-labelledby="qr-title"><div class="dialog-head"><div><p class="eyebrow">WECHAT</p><h2 id="qr-title">连接微信</h2></div><button class="icon-button" data-close="qr-dialog" aria-label="关闭">×</button></div><div class="qr-body"><div id="qr-image"></div><p id="qr-status" role="status"></p><p class="muted small">用微信扫一扫，按手机提示确认连接。</p><form id="verify-form" class="hidden"><label>手机配对验证码<input id="verify-code" required autocomplete="one-time-code"></label><button class="primary" type="submit">提交验证码</button></form><button id="refresh-qr">刷新二维码</button></div></dialog>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title"><div class="dialog-body"><h2 id="confirm-title"></h2><p id="confirm-detail" class="muted"></p></div><div class="dialog-footer"><button id="confirm-cancel">取消</button><button id="confirm-ok" class="danger">确认</button></div></dialog>
+  <div id="toast" role="status" class="toast hidden"></div>
+</body></html>

@@ -3269,8 +3269,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path9) {
-      let input = path9;
+    function removeDotSegments(path11) {
+      let input = path11;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3679,8 +3679,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path9 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
+        const path11 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path11 && path11 !== "/" ? path11 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -8804,10 +8804,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version2);
-      const path9 = dijkstra.find_path(graph.map, "start", "end");
+      const path11 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path9.length - 1; i++) {
-        optimizedSegs.push(graph.table[path9[i]].node);
+      for (let i = 1; i < path11.length - 1; i++) {
+        optimizedSegs.push(graph.table[path11[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -11284,7 +11284,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path9, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -11295,7 +11295,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs7.createWriteStream(path9);
+      const stream = fs7.createWriteStream(path11);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -11357,14 +11357,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path9, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
       const fs7 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs7.writeFile(path9, utf8, cb);
+      fs7.writeFile(path11, utf8, cb);
     };
   }
 });
@@ -11485,7 +11485,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path9 = "";
+      let path11 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -11496,19 +11496,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path9 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path11 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path9 += svgCmd("h", lineLength);
+            path11 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path9;
+      return path11;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -11516,10 +11516,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path9 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path11 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path9 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path11 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -11533,7 +11533,7 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path9, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -11541,7 +11541,7 @@ var require_svg = __commonJS({
       const fs7 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs7.writeFile(path9, xmlStr, cb);
+      fs7.writeFile(path11, xmlStr, cb);
     };
   }
 });
@@ -11699,8 +11699,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path9) {
-      return path9.slice((path9.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path11) {
+      return path11.slice((path11.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -11764,17 +11764,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path9, text, opts, cb) {
-      if (typeof path9 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path11, text, opts, cb) {
+      if (typeof path11 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path9);
+      const type = params.opts.type || getTypeFromFilename(path11);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path9);
+      const renderToFile = renderer.renderToFile.bind(null, path11);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -11797,7 +11797,7 @@ var require_lib = __commonJS({
 });
 
 // src/server.mjs
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 
 // node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -12036,10 +12036,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path9) {
-  if (!path9)
+function getElementAtPath(obj, path11) {
+  if (!path11)
     return obj;
-  return path9.reduce((acc, key) => acc?.[key], obj);
+  return path11.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12379,11 +12379,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path9, issues) {
+function prefixIssues(path11, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path9);
+    iss.path.unshift(path11);
     return iss;
   });
 }
@@ -12841,16 +12841,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path9 = []) => {
+  const processError = (error3, path11 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else {
-        const fullpath = [...path9, ...issue2.path];
+        const fullpath = [...path11, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -22134,7 +22134,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.4.4";
+var VERSION = "0.5.0";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -22371,6 +22371,37 @@ var import_node_path5 = __toESM(require("node:path"), 1);
 var import_node_child_process4 = require("node:child_process");
 var import_promises2 = require("node:timers/promises");
 init_storage();
+
+// src/connections.mjs
+init_storage();
+function feishuBots() {
+  const legacy = config2();
+  return [{
+    ...legacy,
+    id: "default",
+    name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
+    enabled: legacy.feishuEnabled !== false,
+    mode: legacy.feishuMode || "full",
+    thread: legacy.feishuThread || null
+  }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
+}
+function publicBot(bot) {
+  return {
+    id: bot.id,
+    name: bot.name,
+    appId: bot.appId || "",
+    secretConfigured: !!bot.appSecret,
+    enabled: bot.enabled,
+    mode: bot.mode,
+    thread: bot.thread || null,
+    cardActionsEnabled: !!bot.cardActionsEnabled,
+    allowedOpenIds: bot.allowedOpenIds || [],
+    configured: !!(bot.appId && bot.appSecret),
+    environmentCredentials: bot.id === "default" && !!(process.env.FEISHU_APP_ID || process.env.FEISHU_APP_SECRET)
+  };
+}
+
+// src/bridge-lifecycle.mjs
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -22405,8 +22436,8 @@ function desktopContext(extra, { env = process.env, event = {}, saved = readJson
   return { pipePath, threadId };
 }
 function hasConfiguredChannel() {
-  const settings = config2(), wechat = readWechatAccount(), login = readJson("wechat-login.json", {});
-  return !!(settings.appId && settings.appSecret && settings.feishuEnabled !== false) || !!(wechat.enabled && wechat.token && wechat.botId && wechat.ownerUserId) || ["wait", "scaned", "need_verifycode"].includes(login.status) && login.expiresAt > Date.now();
+  const wechat = readWechatAccount(), login = readJson("wechat-login.json", {});
+  return feishuBots().some((bot) => bot.appId && bot.appSecret && bot.enabled) || !!(wechat.enabled && wechat.token && wechat.botId && wechat.ownerUserId) || ["wait", "scaned", "need_verifycode"].includes(login.status) && login.expiresAt > Date.now();
 }
 async function validateDesktopContext(context2) {
   const desktop = new DesktopClient(context2);
@@ -22426,10 +22457,10 @@ function automaticSkip(context2) {
   if (readJson("autostart-pause.json", {}).pipePath === context2.pipePath) return "paused";
   if (!hasConfiguredChannel()) return "not_configured";
 }
-async function ensureBridge(context2, { entryPath, automatic = false, validate: validate2 = validateDesktopContext } = {}) {
+async function ensureBridge(context2, { entryPath, automatic = false, management = false, validate: validate2 = validateDesktopContext } = {}) {
   const skipped = automatic && automaticSkip(context2);
   if (skipped) return { skipped };
-  if (!hasConfiguredChannel()) {
+  if (!management && !hasConfiguredChannel()) {
     if (automatic) return { skipped: "not_configured" };
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
@@ -22456,11 +22487,19 @@ async function ensureBridge(context2, { entryPath, automatic = false, validate: 
     }
   }
   try {
-    context2 = await validate2(context2) || context2;
+    let validated = false;
+    try {
+      if (context2?.pipePath && context2?.threadId) {
+        context2 = await validate2(context2) || context2;
+        validated = true;
+      } else if (!management) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u684C\u9762\u8FDE\u63A5");
+    } catch (error2) {
+      if (!management) throw error2;
+    }
     const skipped2 = automatic && automaticSkip(context2);
     if (skipped2) return { skipped: skipped2 };
-    writeJson("desktop-context.json", context2);
-    if (!automatic) writeJson("autostart-pause.json", {});
+    if (validated) writeJson("desktop-context.json", context2);
+    if (!automatic && !management) writeJson("autostart-pause.json", {});
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs4.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
@@ -22543,7 +22582,19 @@ function autostartStatus({ codexHome } = {}) {
   };
 }
 function syncAutostartRuntime(bundleDir) {
-  const required2 = ["autostart.cjs", "bridge.cjs", "catalog.py", "responses-compat-daemon.cjs", "provider-config.py", "discover-desktop.ps1"];
+  const required2 = [
+    "autostart.cjs",
+    "bridge.cjs",
+    "catalog.py",
+    "responses-compat-daemon.cjs",
+    "provider-config.py",
+    "discover-desktop.ps1",
+    "wechat-auth-worker.cjs",
+    "dashboard.html",
+    "dashboard.js",
+    "dashboard.css",
+    "dashboard-icon.png"
+  ];
   if (!bundleDir || required2.some((name) => !import_node_fs5.default.existsSync(import_node_path6.default.join(bundleDir, name)))) throw new Error("\u7F3A\u5C11\u81EA\u52A8\u542F\u52A8\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
   secureDirectory();
   for (const name of [...required2, "autostart.cjs.LEGAL.txt", "bridge.cjs.LEGAL.txt"]) {
@@ -22771,11 +22822,34 @@ async function configureResponsesCompat({ providerId, enabled }, {
   });
 }
 
+// src/dashboard.mjs
+var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_url5 = require("node:url");
+init_storage();
+
+// src/catalog.mjs
+var import_node_child_process6 = require("node:child_process");
+var import_node_util2 = require("node:util");
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_url4 = require("node:url");
+var execute2 = (0, import_node_util2.promisify)(import_node_child_process6.execFile);
+var directory4 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
+
+// src/dashboard.mjs
+var directory5 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
+function dashboardLink() {
+  const saved = readJson("dashboard.json", {});
+  if (!saved.port || !saved.token) throw new Error("\u7BA1\u7406\u9875\u9762\u5C1A\u672A\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+  return `http://127.0.0.1:${saved.port}/#${saved.token}`;
+}
+
 // src/server.mjs
+var import_promises4 = require("node:timers/promises");
 function context(extra) {
   return desktopContext(extra);
 }
 var tools = [
+  { name: "open_settings", description: "\u6253\u5F00 Codex \u8FDE\u63A5\u7684\u672C\u673A\u7BA1\u7406\u9875\u9762\u3002\u914D\u7F6E\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u548C\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\uFF1B\u9875\u9762\u53EA\u5728\u672C\u673A\u53EF\u8BBF\u95EE\u3002\u8FD4\u56DE\u7684\u8BBF\u95EE\u94FE\u63A5\u89C6\u4E3A\u79C1\u5BC6\u51ED\u636E\uFF0C\u4EC5\u5C55\u793A\u7ED9\u672C\u673A\u7528\u6237\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false } },
   { name: "responses_compat_status", description: "\u67E5\u770B\u672C\u673A\u7B2C\u4E09\u65B9 Responses \u517C\u5BB9\u5C42\u4E0E\u4F9B\u5E94\u5546\u5730\u5740\uFF0C\u4E0D\u8BFB\u53D6\u6216\u8FD4\u56DE API Key\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } },
   { name: "configure_responses_compat", description: "\u4EC5\u7528\u4E8E\u5173\u95ED 0.4.1 \u5DF2\u542F\u7528\u7684\u5168\u5C40 Responses \u517C\u5BB9\uFF0C\u6062\u590D\u4F9B\u5E94\u5546\u539F\u5730\u5740\u3002enabled \u53EA\u80FD\u4E3A false\uFF1B\u6062\u590D\u540E\u9700\u91CD\u542F\u684C\u9762\u3002\u4E0D\u80FD\u542F\u7528\u5168\u5C40\u4EE3\u7406\u6216\u58F0\u79F0\u4EC5\u517C\u5BB9\u65B0\u5EFA\u3002", inputSchema: { type: "object", properties: { providerId: { type: "string" }, enabled: { type: "boolean", enum: [false] } }, required: ["providerId", "enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
   { name: "configure_autostart", description: "\u7528\u6237\u8981\u6C42\u968F Codex \u81EA\u52A8\u8FDE\u63A5\u65F6\u5F00\u542F\uFF1B\u5728\u672C\u673A\u6CE8\u518C\u542F\u52A8/\u6062\u590D\u4F1A\u8BDD\u94A9\u5B50\uFF0C\u9700\u8981\u7528\u6237\u5728\u8BBE\u7F6E\u7684\u94A9\u5B50\u9875\u4FE1\u4EFB\u4E00\u6B21\u3002\u5173\u95ED\u4EC5\u53D6\u6D88\u81EA\u542F\u52A8\uFF0C\u4E0D\u505C\u6B62\u5F53\u524D\u6865\u63A5\u3002", inputSchema: { type: "object", properties: { enabled: { type: "boolean" } }, required: ["enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
@@ -22793,12 +22867,22 @@ var tools = [
   { name: "stop_bridge", description: "\u505C\u6B62\u6240\u6709\u804A\u5929\u901A\u9053\u7684\u6865\u63A5\u670D\u52A1\u3002\u4E0D\u4F1A\u505C\u6B62\u4EFB\u4F55 Codex \u4F1A\u8BDD\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false } }
 ];
 async function startBridge(extra) {
-  return ensureBridge(context(extra), { entryPath: import_node_path8.default.join(__dirname, "bridge.cjs") });
+  return ensureBridge(context(extra), { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs") });
+}
+async function managementService(extra) {
+  syncAutostartRuntime(__dirname);
+  let current;
+  try {
+    current = context(extra);
+  } catch {
+    current = {};
+  }
+  return ensureBridge(current, { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), management: true });
 }
 async function autoConnect(extra) {
   if (readJson("autostart.json", {}).enabled !== true) return;
   try {
-    const result = await ensureBridge(context(extra), { entryPath: import_node_path8.default.join(__dirname, "bridge.cjs"), automatic: true });
+    const result = await ensureBridge(context(extra), { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), automatic: true });
     writeJson("autostart-status.json", { state: result.skipped || "started", checkedAt: Date.now() });
   } catch {
     writeJson("autostart-status.json", { state: "waiting_desktop", checkedAt: Date.now() });
@@ -22810,6 +22894,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   try {
     let result;
     switch (request.params.name) {
+      case "open_settings": {
+        const started = await managementService(extra);
+        let ready = false;
+        for (let i = 0; i < 100; i++) {
+          const saved = readJson("dashboard.json", {});
+          if (saved.pid === started.pid && saved.port) {
+            ready = true;
+            break;
+          }
+          await (0, import_promises4.setTimeout)(100);
+        }
+        if (!ready) throw new Error("\u7BA1\u7406\u9875\u9762\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5");
+        result = { url: dashboardLink(), note: "\u672C\u673A\u7BA1\u7406\u9875\u9762\u3002\u53EF\u6536\u85CF\u53BB\u6389 # \u540E\u5185\u5BB9\u7684\u5730\u5740\uFF1B\u8BBF\u95EE\u6388\u6743\u4FDD\u5B58\u5728\u672C\u673A\u6D4F\u89C8\u5668\u4E2D\u3002" };
+        break;
+      }
       case "responses_compat_status":
         result = { ...responsesCompatStatus(), catalog: await providerCatalogStatus() };
         break;
@@ -22856,6 +22955,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           cardActionsEnabled: !!settings.cardActionsEnabled,
           ...status,
           processAlive: !!status.pid && alive(status.pid),
+          bots: feishuBots().map(publicBot),
           assistant: assistantStatus(),
           responsesCompat: responsesCompatStatus(),
           autostart: { ...autostartStatus(), lastAttempt: readJson("autostart-status.json", {}) },
@@ -22918,14 +23018,8 @@ async function main() {
     } catch {
     }
   }
+  await managementService().catch(() => writeJson("dashboard-startup.json", { state: "failed", checkedAt: Date.now() }));
   await server.connect(new StdioServerTransport());
-  if (readJson("autostart.json", {}).enabled === true) {
-    try {
-      syncAutostartRuntime(__dirname);
-    } catch {
-    }
-  }
-  void autoConnect();
   process.stdin.once("end", () => server.close().finally(() => process.exit(0)));
 }
 main().catch((error2) => {

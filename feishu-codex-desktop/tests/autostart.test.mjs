@@ -29,7 +29,7 @@ fs.writeFileSync(path.join(bundles,'bridge.cjs'),fakeBridge);
 fs.writeFileSync(path.join(bundles,'catalog.py'),'# test fixture');
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 fs.copyFileSync(path.join(root,'dist/autostart.cjs'),path.join(bundles,'autostart.cjs'));
-for(const name of ['responses-compat-daemon.cjs','provider-config.py','discover-desktop.ps1'])fs.copyFileSync(path.join(root,'dist',name),path.join(bundles,name));
+for(const name of ['responses-compat-daemon.cjs','provider-config.py','discover-desktop.ps1','wechat-auth-worker.cjs','dashboard.html','dashboard.js','dashboard.css','dashboard-icon.png'])fs.copyFileSync(path.join(root,'dist',name),path.join(bundles,name));
 const validate=async()=>{};
 const options={entryPath:path.join(bundles,'bridge.cjs'),validate};
 async function stopChildren() {
@@ -203,12 +203,13 @@ test('rebinding a client survives old socket closure and keeps the same channel 
   }finally{client.close();await first.close();await second.close();}
 });
 test('the packaged MCP exposes autostart configuration and reports registration without claiming hook trust',async()=>{
+  writeJson('config.json',{}); // Only the local dashboard starts; no real bot SDK connection.
   const transport=new StdioClientTransport({command:process.execPath,args:[path.join(root,'dist/server.cjs')],
     env:{...process.env,CODEX_HOME:home,CODEX_APP_TOOLS_PIPE_PATH:'',CODEX_THREAD_ID:''},stderr:'pipe'});
   const client=new Client({name:'autostart-integration-test',version:'1'},{capabilities:{}});
   try {
     await client.connect(transport);
-    assert.ok((await client.listTools()).tools.some(tool=>tool.name==='configure_autostart'));
+    const tools=(await client.listTools()).tools;assert.ok(tools.some(tool=>tool.name==='configure_autostart'));assert.ok(tools.some(tool=>tool.name==='open_settings'));
     const result=await client.callTool({name:'configure_autostart',arguments:{enabled:true}});
     assert.ok(!result.isError);const configured=JSON.parse(result.content[0].text);
     assert.equal(configured.enabled,true);assert.equal(configured.hookRegistered,true);

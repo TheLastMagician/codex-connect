@@ -36,7 +36,8 @@ export function autostartStatus({codexHome}={}) {
     note:'首次需在 Codex 设置的钩子页审阅并信任一次（CLI 可用 /hooks）；启动或恢复桌面会话时自动连接，无需发送启动指令。'};
 }
 export function syncAutostartRuntime(bundleDir) {
-  const required=['autostart.cjs','bridge.cjs','catalog.py','responses-compat-daemon.cjs','provider-config.py','discover-desktop.ps1'];
+  const required=['autostart.cjs','bridge.cjs','catalog.py','responses-compat-daemon.cjs','provider-config.py','discover-desktop.ps1',
+    'wechat-auth-worker.cjs','dashboard.html','dashboard.js','dashboard.css','dashboard-icon.png'];
   if(!bundleDir || required.some(name=>!fs.existsSync(path.join(bundleDir,name))))throw new Error('缺少自动启动组件，请更新插件后重试。');
   secureDirectory();
   for(const name of [...required,'autostart.cjs.LEGAL.txt','bridge.cjs.LEGAL.txt']) {

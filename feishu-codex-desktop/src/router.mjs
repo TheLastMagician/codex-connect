@@ -100,7 +100,7 @@ export class Router {
       if(message.cardAction) await this.handleAction(message,message.cardAction);else await this.handle(message);
     }).catch(async error=>{
       try {await this.send(message.chatId,`${error.message}\n\n${currentTarget(this.session(message))}\n${HELP_HINT}`,
-        {kind:'error',title:'操作未完成',session:this.session(message),openId:message.openId,updateMessageId:message.updateMessageId});}catch{/* Avoid unhandled retries and duplicate mutations. */}
+        {kind:'error',error,title:'操作未完成',session:this.session(message),openId:message.openId,updateMessageId:message.updateMessageId});}catch{/* Avoid unhandled retries and duplicate mutations. */}
     }).finally(()=>{
       this.cardRequests.delete(message.id);
       this.pendingCounts.set(message.chatId,(this.pendingCounts.get(message.chatId)||1)-1);

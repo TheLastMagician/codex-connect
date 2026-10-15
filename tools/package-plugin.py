@@ -17,7 +17,7 @@ assert len(manifest['extensions']['com.openai']['interface']['shortDescription']
 legacy = json.loads((root/'.codex-plugin/plugin.json').read_text(encoding='utf-8'))
 assert (manifest['name'], manifest['version']) == (legacy['name'], legacy['version'])
 files = [root/name for name in ('plugin.json','mcp.json','.mcp.json','README.md','LICENSE','setup.cmd','package.json','package-lock.json')]
-for directory in ('.codex-plugin','assets','skills','src','scripts','dist','tests'):
+for directory in ('.codex-plugin','assets','skills','src','scripts','dist','tests','web'):
     files.extend(path for path in (root/directory).rglob('*') if path.is_file())
 config = Path.home()/'.codex-feishu-desktop/config.json'
 secret = json.loads(config.read_text(encoding='utf-8')).get('appSecret','') if config.exists() else ''
@@ -25,6 +25,8 @@ wechat_config = Path.home()/'.codex-feishu-desktop/wechat.json'
 wechat_secret = json.loads(wechat_config.read_text(encoding='utf-8')).get('token','') if wechat_config.exists() else ''
 assistant_config = Path.home()/'.codex-feishu-desktop/assistant.json'
 assistant_secret = json.loads(assistant_config.read_text(encoding='utf-8')).get('apiKey','') if assistant_config.exists() else ''
+bots_config = Path.home()/'.codex-feishu-desktop/feishu-bots.json'
+bot_secrets = [bot.get('appSecret','') for bot in json.loads(bots_config.read_text(encoding='utf-8')).get('bots',[])] if bots_config.exists() else []
 archive = workspace/f"{manifest['name']}-{manifest['version']}.zip"
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
     for file in files:
@@ -35,6 +37,7 @@ with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
         assert not secret or secret.encode() not in data, 'Credentials present in package'
         assert not wechat_secret or wechat_secret.encode() not in data, 'WeChat credentials present in package'
         assert not assistant_secret or assistant_secret.encode() not in data, 'Assistant credentials present in package'
+        assert all(not value or value.encode() not in data for value in bot_secrets), 'Bot credentials present in package'
         zipped.writestr(str(Path(root.name)/relative).replace('\\','/'),data)
 with zipfile.ZipFile(archive) as zipped:
     assert zipped.testzip() is None

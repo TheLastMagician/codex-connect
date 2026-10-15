@@ -8,3 +8,5 @@ for(const entry of ['server','bridge','setup','wechat-auth-worker','autostart','
 await copyFile('src/catalog.py','dist/catalog.py');
 await copyFile('src/provider-config.py','dist/provider-config.py');
 await copyFile('src/discover-desktop.ps1','dist/discover-desktop.ps1');
+for(const name of ['dashboard.html','dashboard.js','dashboard.css'])await copyFile('web/'+name,'dist/'+name);
+await copyFile('assets/icon.png','dist/dashboard-icon.png');

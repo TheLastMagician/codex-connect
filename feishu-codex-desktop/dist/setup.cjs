@@ -19,6 +19,10 @@ var __commonJS = (cb, mod) => function __require() {
     throw mod = 0, e;
   }
 };
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -37,6 +41,14 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 
 // src/storage.mjs
+var storage_exports = {};
+__export(storage_exports, {
+  config: () => config,
+  dataDir: () => dataDir,
+  readJson: () => readJson,
+  secureDirectory: () => secureDirectory,
+  writeJson: () => writeJson
+});
 function secureDirectory(dir = dataDir) {
   import_node_fs.default.mkdirSync(dir, { recursive: true, mode: 448 });
   if (process.platform === "win32") {
@@ -64,6 +76,13 @@ function writeJson(name, value) {
   } finally {
     if (import_node_fs.default.existsSync(temp)) import_node_fs.default.unlinkSync(temp);
   }
+}
+function config() {
+  const result = readJson("config.json", {});
+  const appId = process.env.FEISHU_APP_ID || result.appId;
+  const appSecret = process.env.FEISHU_APP_SECRET || result.appSecret;
+  if (!Array.isArray(result.allowedOpenIds)) result.allowedOpenIds = [];
+  return { ...result, appId, appSecret };
 }
 var import_node_fs, import_node_path, import_node_os, import_node_child_process, import_node_crypto, dataArgument, dataDir;
 var init_storage = __esm({
@@ -1619,10 +1638,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version);
-      const path6 = dijkstra.find_path(graph.map, "start", "end");
+      const path11 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path6.length - 1; i++) {
-        optimizedSegs.push(graph.table[path6[i]].node);
+      for (let i = 1; i < path11.length - 1; i++) {
+        optimizedSegs.push(graph.table[path11[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -4058,7 +4077,7 @@ var require_utils2 = __commonJS({
 // node_modules/qrcode/lib/renderer/png.js
 var require_png2 = __commonJS({
   "node_modules/qrcode/lib/renderer/png.js"(exports2) {
-    var fs5 = require("fs");
+    var fs7 = require("fs");
     var PNG = require_png().PNG;
     var Utils = require_utils2();
     exports2.render = function render(qrData, options) {
@@ -4099,7 +4118,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path6, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4110,7 +4129,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs5.createWriteStream(path6);
+      const stream = fs7.createWriteStream(path11);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -4172,14 +4191,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path6, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs5 = require("fs");
+      const fs7 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs5.writeFile(path6, utf8, cb);
+      fs7.writeFile(path11, utf8, cb);
     };
   }
 });
@@ -4300,7 +4319,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path6 = "";
+      let path11 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -4311,19 +4330,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path6 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path11 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path6 += svgCmd("h", lineLength);
+            path11 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path6;
+      return path11;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -4331,10 +4350,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path6 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path11 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path6 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path11 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -4348,15 +4367,15 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path6, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs5 = require("fs");
+      const fs7 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs5.writeFile(path6, xmlStr, cb);
+      fs7.writeFile(path11, xmlStr, cb);
     };
   }
 });
@@ -4514,8 +4533,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path6) {
-      return path6.slice((path6.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path11) {
+      return path11.slice((path11.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -4579,17 +4598,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path6, text, opts, cb) {
-      if (typeof path6 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path11, text, opts, cb) {
+      if (typeof path11 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path6);
+      const type = params.opts.type || getTypeFromFilename(path11);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path6);
+      const renderToFile = renderer.renderToFile.bind(null, path11);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -4612,9 +4631,9 @@ var require_lib = __commonJS({
 });
 
 // src/setup.mjs
-var import_promises2 = __toESM(require("node:readline/promises"), 1);
+var import_promises4 = __toESM(require("node:readline/promises"), 1);
 var import_node_stream = require("node:stream");
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto8 = require("node:crypto");
 init_storage();
 
 // src/wechat-auth.mjs
@@ -4630,7 +4649,7 @@ init_storage();
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.4.4";
+var VERSION = "0.5.0";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -4880,7 +4899,19 @@ function autostartStatus({ codexHome } = {}) {
   };
 }
 function syncAutostartRuntime(bundleDir) {
-  const required = ["autostart.cjs", "bridge.cjs", "catalog.py", "responses-compat-daemon.cjs", "provider-config.py", "discover-desktop.ps1"];
+  const required = [
+    "autostart.cjs",
+    "bridge.cjs",
+    "catalog.py",
+    "responses-compat-daemon.cjs",
+    "provider-config.py",
+    "discover-desktop.ps1",
+    "wechat-auth-worker.cjs",
+    "dashboard.html",
+    "dashboard.js",
+    "dashboard.css",
+    "dashboard-icon.png"
+  ];
   if (!bundleDir || required.some((name) => !import_node_fs3.default.existsSync(import_node_path3.default.join(bundleDir, name)))) throw new Error("\u7F3A\u5C11\u81EA\u52A8\u542F\u52A8\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
   secureDirectory();
   for (const name of [...required, "autostart.cjs.LEGAL.txt", "bridge.cjs.LEGAL.txt"]) {
@@ -4911,29 +4942,552 @@ function configureAutostart(enabled, { bundleDir, codexHome } = {}) {
 }
 
 // src/responses-compat-settings.mjs
-var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_os3 = __toESM(require("node:os"), 1);
-var import_node_path5 = __toESM(require("node:path"), 1);
-var import_node_child_process3 = require("node:child_process");
+var import_node_fs6 = __toESM(require("node:fs"), 1);
+var import_node_os4 = __toESM(require("node:os"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_child_process5 = require("node:child_process");
 var import_node_util = require("node:util");
-var import_node_crypto5 = require("node:crypto");
-var import_promises = require("node:timers/promises");
+var import_node_crypto7 = require("node:crypto");
+var import_promises3 = require("node:timers/promises");
 var import_node_url3 = require("node:url");
 init_storage();
 
+// src/bridge-lifecycle.mjs
+var import_node_fs5 = __toESM(require("node:fs"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_child_process4 = require("node:child_process");
+var import_promises2 = require("node:timers/promises");
+
+// src/desktop.mjs
+var import_node_net2 = __toESM(require("node:net"), 1);
+var import_node_crypto6 = require("node:crypto");
+
 // src/desktop-input.mjs
+var import_node_net = __toESM(require("node:net"), 1);
+var import_node_os3 = __toESM(require("node:os"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_crypto5 = require("node:crypto");
+var import_promises = require("node:timers/promises");
 var MAX_FRAME = 8 * 1024 * 1024;
+var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
+function desktopInputPath() {
+  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path4.default.join(process.env.CODEX_HOME || import_node_path4.default.join(import_node_os3.default.homedir(), ".codex"), "ipc", "ipc.sock");
+}
+function frame(message) {
+  const data = Buffer.from(JSON.stringify(message), "utf8");
+  if (data.length > MAX_FRAME) throw new Error("\u6D88\u606F\u8FC7\u5927");
+  const header = Buffer.alloc(4);
+  header.writeUInt32LE(data.length);
+  return Buffer.concat([header, data]);
+}
+function inputError(message, notSent = false) {
+  return Object.assign(new Error(message), { notSent });
+}
+var DesktopInput = class {
+  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4, activateThread, loadTimeoutMs = 2e4, pollIntervalMs = 300 } = {}) {
+    Object.assign(this, { pipePath, timeoutMs, activateThread, loadTimeoutMs, pollIntervalMs });
+    this.pending = /* @__PURE__ */ new Map();
+    this.buffer = Buffer.alloc(0);
+    this.loading = /* @__PURE__ */ new Map();
+  }
+  async connect() {
+    if (this.socket && !this.socket.destroyed && this.clientId) return;
+    if (this.connecting) return this.connecting;
+    this.connecting = (async () => {
+      this.clientId = null;
+      this.buffer = Buffer.alloc(0);
+      await new Promise((resolve, reject) => {
+        const socket = import_node_net.default.createConnection(this.pipePath);
+        this.socket = socket;
+        const timer = setTimeout(() => socket.destroy(new Error("connect-timeout")), this.timeoutMs);
+        socket.once("error", reject);
+        socket.once("close", () => clearTimeout(timer));
+        socket.once("connect", () => {
+          clearTimeout(timer);
+          socket.off("error", reject);
+          socket.on("data", (chunk) => this.onData(chunk));
+          socket.on("error", () => {
+            if (this.socket === socket) this.disconnect();
+          });
+          socket.on("close", () => {
+            if (this.socket === socket) this.disconnect();
+          });
+          resolve();
+        });
+      });
+      const response = await this.request("initialize", { clientType: "codex-connect" });
+      if (response.resultType !== "success" || typeof response.result?.clientId !== "string") throw new Error("initialize-failed");
+      this.clientId = response.result.clientId;
+    })().catch(() => {
+      this.disconnect();
+      throw inputError("\u684C\u9762\u666E\u901A\u6D88\u606F\u5165\u53E3\u4E0D\u53EF\u7528\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\u5E76\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
+    }).finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+  request(method, params, { targetClientId, hostId, timeoutMs = this.timeoutMs } = {}) {
+    if (!Object.hasOwn(VERSIONS, method)) throw inputError("\u4E0D\u652F\u6301\u7684\u684C\u9762\u8F93\u5165\u64CD\u4F5C", true);
+    if (!this.socket || this.socket.destroyed) throw inputError("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+    const requestId = (0, import_node_crypto5.randomUUID)();
+    const remote = hostId && hostId !== "local";
+    const message = {
+      type: "request",
+      requestId,
+      sourceClientId: this.clientId || "initializing-client",
+      version: VERSIONS[method] + (remote && method.startsWith("thread-follower-") ? 1 : 0),
+      method,
+      params,
+      ...targetClientId ? { targetClientId } : {},
+      ...remote ? { hostId } : {},
+      timeoutMs
+    };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        reject(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"));
+      }, timeoutMs);
+      this.pending.set(requestId, { resolve, reject, timer });
+      try {
+        this.socket.write(frame(message));
+      } catch {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+      }
+    });
+  }
+  onData(chunk) {
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    while (this.buffer.length >= 4) {
+      const size = this.buffer.readUInt32LE(0);
+      if (!size || size > MAX_FRAME) {
+        this.disconnect();
+        return;
+      }
+      if (this.buffer.length < size + 4) return;
+      let message;
+      try {
+        message = JSON.parse(this.buffer.subarray(4, size + 4).toString("utf8"));
+      } catch {
+        this.disconnect();
+        return;
+      }
+      this.buffer = this.buffer.subarray(size + 4);
+      if (message.type === "client-discovery-request") {
+        try {
+          this.socket?.write(frame({ type: "client-discovery-response", requestId: message.requestId, response: { canHandle: false } }));
+        } catch {
+          this.disconnect();
+          return;
+        }
+      } else if (message.type === "response") {
+        const pending = this.pending.get(message.requestId);
+        if (!pending) continue;
+        clearTimeout(pending.timer);
+        this.pending.delete(message.requestId);
+        pending.resolve(message);
+      }
+    }
+  }
+  async findOwner(threadId, hostId = "local", timeoutMs = this.timeoutMs) {
+    const response = await this.request("thread-owner-discovery", { hostId, conversationId: threadId }, { timeoutMs });
+    if (response.resultType === "success" && typeof response.handledByClientId === "string") return response.handledByClientId;
+    if (response.resultType === "error" && response.error === "no-client-found") return null;
+    throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
+  }
+  async loadOwner(threadId, hostId, authorize) {
+    if (!this.activateThread) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u4EE5\u542F\u7528\u81EA\u52A8\u6253\u5F00\u4F1A\u8BDD\u3002", true);
+    const key = JSON.stringify([hostId, threadId]);
+    let loading = this.loading.get(key);
+    if (!loading) {
+      loading = (async () => {
+        authorize();
+        try {
+          await this.activateThread({ threadId, hostId });
+        } catch {
+          throw inputError("\u672A\u80FD\u786E\u8BA4\u76EE\u6807\u4F1A\u8BDD\u5DF2\u6253\u5F00\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
+        }
+        const deadline = Date.now() + this.loadTimeoutMs;
+        while (Date.now() < deadline) {
+          authorize();
+          let owner;
+          try {
+            owner = await this.findOwner(threadId, hostId, Math.min(this.timeoutMs, Math.max(1, deadline - Date.now())));
+          } catch {
+            throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u65E0\u6CD5\u786E\u8BA4\u52A0\u8F7D\u72B6\u6001\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
+          }
+          if (owner) return owner;
+          await (0, import_promises.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
+        }
+        throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u52A0\u8F7D\u5C1A\u672A\u5B8C\u6210\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
+      })();
+      this.loading.set(key, loading);
+    }
+    try {
+      return await loading;
+    } finally {
+      if (this.loading.get(key) === loading) this.loading.delete(key);
+    }
+  }
+  async send({ threadId, hostId = "local", prompt, model, thinking }, beforeSend) {
+    if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
+      throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+    const authorize = () => {
+      try {
+        beforeSend?.();
+      } catch {
+        throw inputError("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+      }
+    };
+    authorize();
+    await this.connect();
+    let owner;
+    try {
+      owner = await this.findOwner(threadId, hostId);
+    } catch (error) {
+      if (error.notSent) throw error;
+      throw inputError("\u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
+    }
+    authorize();
+    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize);
+    authorize();
+    const request = {
+      threadId,
+      clientUserMessageId: (0, import_node_crypto5.randomUUID)(),
+      input: [{ type: "text", text: prompt, text_elements: [] }],
+      ...model ? { model } : {},
+      ...thinking ? { effort: thinking } : {}
+    };
+    const response = await this.request("thread-follower-start-turn", {
+      conversationId: threadId,
+      turnStart: { request, context: { inheritThreadSettings: true } }
+    }, { hostId, targetClientId: owner });
+    if (response.resultType !== "success") throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+    return { threadId, accepted: true };
+  }
+  disconnect() {
+    const socket = this.socket;
+    this.socket = null;
+    this.clientId = null;
+    this.buffer = Buffer.alloc(0);
+    socket?.destroy();
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+    }
+    this.pending.clear();
+  }
+  close() {
+    this.disconnect();
+  }
+};
 
 // src/desktop-context.mjs
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_fs4 = __toESM(require("node:fs"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_child_process3 = require("node:child_process");
 var import_node_url2 = require("node:url");
-var directory2 = typeof __dirname === "string" ? __dirname : import_node_path4.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
+var directory2 = typeof __dirname === "string" ? __dirname : import_node_path5.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
+var discovery;
+function desktopUnavailable() {
+  return Object.assign(new Error("Codex \u684C\u9762\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5\u3002\u672C\u6B21\u64CD\u4F5C\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\uFF0C\u7A0D\u540E\u91CD\u8BD5\u3002"), { code: "DESKTOP_DISCONNECTED", notSent: true });
+}
+async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path5.default.join(directory2, "discover-desktop.ps1") } = {}) {
+  if (platform !== "win32") return [];
+  return new Promise((resolve) => {
+    let source;
+    try {
+      source = import_node_fs4.default.readFileSync(script, "utf8");
+    } catch {
+      return resolve([]);
+    }
+    const child = (0, import_node_child_process3.spawn)("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    let output = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve([]);
+    }, 15e3);
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve([]);
+    });
+    child.stdout.on("data", (chunk) => {
+      output += chunk;
+      if (output.length > 16384) {
+        child.kill();
+        resolve([]);
+      }
+    });
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      try {
+        const endpoints = JSON.parse(output.trim().replace(/^\uFEFF/, ""));
+        resolve(code === 0 && Array.isArray(endpoints) ? endpoints.filter((e) => typeof e.pipePath === "string" && /^\\\\\.\\pipe\\codex-browser-use-[0-9a-f-]{36}$/i.test(e.pipePath) && Number.isInteger(e.serverPid) && e.serverPid > 0) : []);
+      } catch {
+        resolve([]);
+      }
+    });
+    child.stdin.on("error", () => {
+    });
+    child.stdin.end("& {\n" + source + "\n}\n\n");
+  });
+}
+async function recoverDesktopContext(current, { probe, discover = discoverDesktopEndpoints, read, publish } = {}) {
+  if (!read || !publish) {
+    const storage = await Promise.resolve().then(() => (init_storage(), storage_exports));
+    read ||= () => storage.readJson("desktop-context.json", {});
+    publish ||= (context) => storage.writeJson("desktop-context.json", context);
+  }
+  const saved = read();
+  if (saved.pipePath && saved.threadId && saved.pipePath !== current.pipePath) {
+    try {
+      await probe(saved);
+      return saved;
+    } catch {
+    }
+  }
+  const source = saved.threadId ? saved : current;
+  if (!source.threadId) throw desktopUnavailable();
+  discovery ||= discover().finally(() => {
+    discovery = null;
+  });
+  const endpoints = await discovery;
+  const candidates = endpoints.filter((e) => e.pipePath !== current.pipePath).slice(0, 8).map((e) => ({ pipePath: e.pipePath, threadId: source.threadId }));
+  const checked = await Promise.allSettled(candidates.map(async (candidate2) => {
+    await probe(candidate2);
+    return candidate2;
+  }));
+  const usable = checked.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  if (usable.length !== 1) throw desktopUnavailable();
+  const candidate = usable[0];
+  const latest = read();
+  if (latest.pipePath && latest.threadId && (latest.pipePath !== saved.pipePath || latest.threadId !== saved.threadId)) {
+    try {
+      await probe(latest);
+      return latest;
+    } catch {
+    }
+  }
+  publish(candidate);
+  return candidate;
+}
 
 // src/desktop.mjs
 var MAX_FRAME2 = 8 * 1024 * 1024;
+var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
+  "list_threads",
+  "list_archived_threads",
+  "list_projects",
+  "read_thread",
+  "wait_threads",
+  "send_message_to_thread",
+  "create_thread",
+  "set_thread_title",
+  "set_thread_archived",
+  "fork_thread",
+  "move_thread_to_sidebar_section",
+  "navigate_to_codex_page"
+]);
+function encodeFrame(value) {
+  const body = Buffer.from(JSON.stringify(value), "utf8");
+  if (body.length > MAX_FRAME2) throw new Error("\u8BF7\u6C42\u8FC7\u5927");
+  const frame2 = Buffer.alloc(body.length + 4);
+  frame2.writeUInt32LE(body.length);
+  body.copy(frame2, 4);
+  return frame2;
+}
+var DesktopClient = class _DesktopClient {
+  constructor(context, { recover = true, resolveContext = recoverDesktopContext } = {}) {
+    this.context = context;
+    this.recover = recover;
+    this.resolveContext = resolveContext;
+    this.pending = /* @__PURE__ */ new Map();
+    this.nextId = 1;
+    this.buffer = Buffer.alloc(0);
+    this.connectionGeneration = 0;
+    this.input = new DesktopInput({
+      pipePath: context.inputPipePath,
+      activateThread: ({ threadId }) => this.call("navigate_to_codex_page", { threadId })
+    });
+  }
+  async connect() {
+    if (this.socket && !this.socket.destroyed) return;
+    if (this.connecting) return this.connecting;
+    if (!this.context.pipePath) throw new Error("\u672A\u6536\u5230\u684C\u9762\u7248\u8FDE\u63A5\u4FE1\u606F\uFF0C\u8BF7\u5728 Codex \u5185\u542F\u52A8\u63D2\u4EF6");
+    const generation = this.connectionGeneration;
+    const connecting = this.openSocket(generation).catch(async (error) => {
+      if (!this.recover || !["ENOENT", "ECONNREFUSED", "EPIPE", "ECONNRESET"].includes(error.code)) throw error;
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      let next;
+      try {
+        next = await this.resolveContext(this.context, { probe: async (context) => {
+          const probe = new _DesktopClient(context, { recover: false });
+          try {
+            const tools = await probe.tools({ timeoutMs: 1500 });
+            if (!tools.some((tool2) => tool2.name === "list_threads") || !tools.some((tool2) => tool2.name === "read_thread")) throw desktopUnavailable();
+            await probe.call("list_threads", { limit: 1 }, { timeoutMs: 3e3 });
+          } finally {
+            probe.close();
+          }
+        } });
+      } catch {
+        throw desktopUnavailable();
+      }
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      this.context = { ...this.context, ...next };
+      try {
+        await this.openSocket(generation);
+      } catch {
+        throw desktopUnavailable();
+      }
+    }).finally(() => {
+      if (this.connecting === connecting) this.connecting = null;
+    });
+    this.connecting = connecting;
+    return connecting;
+  }
+  openSocket(generation) {
+    return new Promise((resolve, reject) => {
+      const socket = import_node_net2.default.createConnection(this.context.pipePath);
+      const timer = setTimeout(() => socket.destroy(new Error("\u8FDE\u63A5\u684C\u9762\u7248\u8D85\u65F6")), 5e3);
+      socket.once("error", reject);
+      socket.once("connect", () => {
+        if (generation !== this.connectionGeneration) {
+          socket.destroy();
+          reject(new Error("\u684C\u9762\u8FDE\u63A5\u5DF2\u66F4\u65B0"));
+          return;
+        }
+        clearTimeout(timer);
+        socket.off("error", reject);
+        this.socket = socket;
+        socket.on("data", (chunk) => this.onData(chunk));
+        socket.on("error", (error) => {
+          if (this.socket === socket) this.disconnect(error);
+        });
+        socket.on("close", () => {
+          if (this.socket === socket) this.disconnect(new Error("Codex \u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5"));
+        });
+        resolve();
+      });
+      socket.once("close", () => clearTimeout(timer));
+    });
+  }
+  async request(method, params, timeoutMs = 3e4, beforeSend) {
+    await this.connect();
+    beforeSend?.();
+    if (method === "tools/call" && params.namespace === "codex_app") params = { ...params, threadId: this.context.threadId };
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        if (method === "tools/call") this.socket?.write(encodeFrame({ jsonrpc: "2.0", id, method: "tools/cancel" }));
+        reject(new Error("\u684C\u9762\u64CD\u4F5C\u8D85\u65F6\uFF1B\u64CD\u4F5C\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1"));
+      }, timeoutMs);
+      this.pending.set(id, { resolve, reject, timer });
+      try {
+        this.socket.write(encodeFrame({ jsonrpc: "2.0", id, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error);
+      }
+    });
+  }
+  onData(chunk) {
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    while (this.buffer.length >= 4) {
+      const size = this.buffer.readUInt32LE(0);
+      if (size > MAX_FRAME2) {
+        this.close();
+        return;
+      }
+      if (this.buffer.length < size + 4) return;
+      const raw = this.buffer.subarray(4, size + 4);
+      this.buffer = this.buffer.subarray(size + 4);
+      let value;
+      try {
+        value = JSON.parse(raw.toString("utf8"));
+      } catch {
+        this.close();
+        return;
+      }
+      const pending = this.pending.get(value.id);
+      if (!pending) continue;
+      clearTimeout(pending.timer);
+      this.pending.delete(value.id);
+      if (value.error) pending.reject(new Error(value.error.message));
+      else pending.resolve(value.result);
+    }
+  }
+  disconnect(error) {
+    this.socket?.destroy();
+    this.socket = null;
+    this.buffer = Buffer.alloc(0);
+    for (const item of this.pending.values()) {
+      clearTimeout(item.timer);
+      item.reject(error);
+    }
+    this.pending.clear();
+  }
+  close() {
+    this.connectionGeneration++;
+    this.connecting = null;
+    this.input.close();
+    this.disconnect(new Error("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED"));
+  }
+  updateContext(context) {
+    if (this.context.pipePath !== context.pipePath) {
+      this.close();
+    }
+    this.context = { ...this.context, ...context };
+  }
+  async tools({ timeoutMs = 3e4 } = {}) {
+    const result = await this.request("tools/list", { threadStartKind: "all" }, timeoutMs);
+    return (result.tools || []).filter((tool2) => tool2.namespace === "codex_app" && ALLOWED_TOOLS.has(tool2.name));
+  }
+  async call(tool2, args = {}, options = {}) {
+    if (!ALLOWED_TOOLS.has(tool2)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
+    if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
+    if (tool2 === "send_message_to_thread") return this.input.send(args, options.beforeSend);
+    const result = await this.request("tools/call", {
+      namespace: "codex_app",
+      tool: tool2,
+      arguments: args,
+      callerSource: "codex",
+      threadId: this.context.threadId,
+      hostId: "local",
+      turnId: `feishu-${(0, import_node_crypto6.randomUUID)()}`,
+      callId: `feishu-${(0, import_node_crypto6.randomUUID)()}`
+    }, options.timeoutMs ?? (tool2 === "wait_threads" ? 45e3 : 3e4), options.beforeSend);
+    const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
+    if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
+    try {
+      return JSON.parse(output);
+    } catch {
+      return { text: output };
+    }
+  }
+};
 
 // src/bridge-lifecycle.mjs
 init_storage();
+
+// src/connections.mjs
+init_storage();
+function feishuBots() {
+  const legacy = config();
+  return [{
+    ...legacy,
+    id: "default",
+    name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
+    enabled: legacy.feishuEnabled !== false,
+    mode: legacy.feishuMode || "full",
+    thread: legacy.feishuThread || null
+  }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
+}
+
+// src/bridge-lifecycle.mjs
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -4943,17 +5497,131 @@ function alive(pid) {
     return false;
   }
 }
+function readLock(name) {
+  try {
+    return readJson(name, {});
+  } catch (error) {
+    if (error instanceof SyntaxError) return {};
+    throw error;
+  }
+}
+function desktopContext(extra, { env = process.env, event = {}, saved = readJson("desktop-context.json", {}) } = {}) {
+  const meta = extra?._meta || {};
+  let turn = meta["x-codex-turn-metadata"];
+  if (typeof turn === "string") {
+    try {
+      turn = JSON.parse(turn);
+    } catch {
+      turn = {};
+    }
+  }
+  const threadId = turn?.thread_id || meta["openai/threadId"] || meta.threadId || event.session_id || env.CODEX_THREAD_ID || saved.threadId;
+  const pipePath = env.CODEX_APP_TOOLS_PIPE_PATH || saved.pipePath;
+  if (typeof threadId !== "string" || !threadId || typeof pipePath !== "string" || !pipePath)
+    throw new Error("\u7F3A\u5C11\u771F\u5B9E\u684C\u9762\u8FDE\u63A5\uFF1B\u8BF7\u5728 Codex \u684C\u9762\u6062\u590D\u4E00\u4E2A\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002");
+  return { pipePath, threadId };
+}
+function hasConfiguredChannel() {
+  const wechat = readWechatAccount(), login = readJson("wechat-login.json", {});
+  return feishuBots().some((bot) => bot.appId && bot.appSecret && bot.enabled) || !!(wechat.enabled && wechat.token && wechat.botId && wechat.ownerUserId) || ["wait", "scaned", "need_verifycode"].includes(login.status) && login.expiresAt > Date.now();
+}
+async function validateDesktopContext(context) {
+  const desktop = new DesktopClient(context);
+  try {
+    await desktop.call("list_threads", { limit: 1 });
+    return desktop.context;
+  } finally {
+    desktop.close();
+  }
+}
+function automaticSkip(context) {
+  if (readJson("autostart.json", {}).enabled !== true) return "disabled";
+  if (readJson("autostart-pause.json", {}).pipePath === context.pipePath) return "paused";
+  if (!hasConfiguredChannel()) return "not_configured";
+}
+async function ensureBridge(context, { entryPath, automatic = false, management = false, validate = validateDesktopContext } = {}) {
+  const skipped = automatic && automaticSkip(context);
+  if (skipped) return { skipped };
+  if (!management && !hasConfiguredChannel()) {
+    if (automatic) return { skipped: "not_configured" };
+    throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
+  }
+  secureDirectory();
+  const lockPath = import_node_path6.default.join(dataDir, "bridge-start.lock");
+  let lock2;
+  const deadline = Date.now() + 6e3;
+  while (lock2 === void 0) {
+    try {
+      lock2 = import_node_fs5.default.openSync(lockPath, "wx", 384);
+      import_node_fs5.default.writeFileSync(lock2, JSON.stringify({ pid: process.pid }));
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const owner = readLock("bridge-start.lock");
+      if (owner.pid && !alive(owner.pid)) {
+        try {
+          import_node_fs5.default.unlinkSync(lockPath);
+        } catch {
+        }
+        continue;
+      }
+      if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u542F\u52A8\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\uFF0C\u8BF7\u7A0D\u540E\u68C0\u67E5\u6865\u63A5\u72B6\u6001\u3002");
+      await (0, import_promises2.setTimeout)(50);
+    }
+  }
+  try {
+    let validated = false;
+    try {
+      if (context?.pipePath && context?.threadId) {
+        context = await validate(context) || context;
+        validated = true;
+      } else if (!management) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u684C\u9762\u8FDE\u63A5");
+    } catch (error) {
+      if (!management) throw error;
+    }
+    const skipped2 = automatic && automaticSkip(context);
+    if (skipped2) return { skipped: skipped2 };
+    if (validated) writeJson("desktop-context.json", context);
+    if (!automatic && !management) writeJson("autostart-pause.json", {});
+    const previous = readJson("status.json", {}), running = readLock("bridge.lock");
+    if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
+    if (!entryPath || !import_node_fs5.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
+    const log = import_node_fs5.default.openSync(import_node_path6.default.join(dataDir, "bridge.log"), "a", 384);
+    let child;
+    try {
+      child = (0, import_node_child_process4.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
+      await new Promise((resolve, reject) => {
+        child.once("spawn", resolve);
+        child.once("error", reject);
+      });
+      child.unref();
+    } finally {
+      import_node_fs5.default.closeSync(log);
+    }
+    const readyBy = Date.now() + 3e3;
+    while (Date.now() < readyBy && alive(child.pid)) {
+      if (readLock("bridge.lock").pid === child.pid) return { startedProcess: true, pid: child.pid, note: "\u6865\u63A5\u5DF2\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u901A\u9053\u8FDE\u63A5\u72B6\u6001\u3002" };
+      await (0, import_promises2.setTimeout)(50);
+    }
+    throw new Error("\u6865\u63A5\u672A\u80FD\u786E\u8BA4\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u6865\u63A5\u72B6\u6001\u3002");
+  } finally {
+    import_node_fs5.default.closeSync(lock2);
+    try {
+      import_node_fs5.default.unlinkSync(lockPath);
+    } catch {
+    }
+  }
+}
 
 // src/responses-compat-settings.mjs
-var execute = (0, import_node_util.promisify)(import_node_child_process3.execFile);
-var directory3 = typeof __dirname === "string" ? __dirname : import_node_path5.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
-var runtime = import_node_path5.default.join(dataDir, "runtime");
+var execute = (0, import_node_util.promisify)(import_node_child_process5.execFile);
+var directory3 = typeof __dirname === "string" ? __dirname : import_node_path7.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
+var runtime = import_node_path7.default.join(dataDir, "runtime");
 var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 var registryName = "CodexConnectResponsesCompat";
-var home = () => process.env.CODEX_HOME || import_node_path5.default.join(import_node_os3.default.homedir(), ".codex");
-async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path5.default.join(directory3, "provider-config.py") } = {}) {
+var home = () => process.env.CODEX_HOME || import_node_path7.default.join(import_node_os4.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path7.default.join(directory3, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
-    const child = (0, import_node_child_process3.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    const child = (0, import_node_child_process5.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
     const fail = () => reject(new Error("\u65E0\u6CD5\u5B89\u5168\u8BFB\u53D6\u6216\u66F4\u65B0\u4F9B\u5E94\u5546\u914D\u7F6E\uFF0C\u9700\u8981 Python 3.11+\u3002"));
     const timer = setTimeout(() => {
@@ -5014,43 +5682,43 @@ function responsesCompatStatus() {
   };
 }
 async function lock(name, action) {
-  import_node_fs4.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const file = import_node_path5.default.join(dataDir, name);
+  import_node_fs6.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
+  const file = import_node_path7.default.join(dataDir, name);
   let descriptor;
   const deadline = Date.now() + 12e3;
   while (descriptor === void 0) {
     try {
-      descriptor = import_node_fs4.default.openSync(file, "wx", 384);
-      import_node_fs4.default.writeFileSync(descriptor, JSON.stringify({ pid: process.pid }));
+      descriptor = import_node_fs6.default.openSync(file, "wx", 384);
+      import_node_fs6.default.writeFileSync(descriptor, JSON.stringify({ pid: process.pid }));
     } catch (error) {
       if (error.code !== "EEXIST") throw error;
       let previous;
       try {
-        previous = JSON.parse(import_node_fs4.default.readFileSync(file, "utf8"));
+        previous = JSON.parse(import_node_fs6.default.readFileSync(file, "utf8"));
       } catch {
       }
       if (previous?.pid && !alive(previous.pid)) {
         try {
-          import_node_fs4.default.unlinkSync(file);
+          import_node_fs6.default.unlinkSync(file);
         } catch {
         }
         continue;
       }
       if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u517C\u5BB9\u8BBE\u7F6E\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\u3002");
-      await (0, import_promises.setTimeout)(100);
+      await (0, import_promises3.setTimeout)(100);
     }
   }
   try {
     return await action();
   } finally {
-    import_node_fs4.default.closeSync(descriptor);
+    import_node_fs6.default.closeSync(descriptor);
     try {
-      import_node_fs4.default.unlinkSync(file);
+      import_node_fs6.default.unlinkSync(file);
     } catch {
     }
   }
 }
-async function setCompatStartup(enabled, { entry = import_node_path5.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+async function setCompatStartup(enabled, { entry = import_node_path7.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
   else await execute("reg.exe", ["delete", registry, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
@@ -5068,7 +5736,7 @@ async function configureResponsesCompat({ providerId, enabled }, {
     const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
-    const backup = () => import_node_path5.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto5.randomUUID)()}.toml`);
+    const backup = () => import_node_path7.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto7.randomUUID)()}.toml`);
     if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
     const next = {
       ...previous,
@@ -5081,14 +5749,37 @@ async function configureResponsesCompat({ providerId, enabled }, {
   });
 }
 
+// src/dashboard.mjs
+var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_url5 = require("node:url");
+init_storage();
+
+// src/catalog.mjs
+var import_node_child_process6 = require("node:child_process");
+var import_node_util2 = require("node:util");
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_url4 = require("node:url");
+var execute2 = (0, import_node_util2.promisify)(import_node_child_process6.execFile);
+var directory4 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
+
+// src/dashboard.mjs
+var directory5 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
+function dashboardLink() {
+  const saved = readJson("dashboard.json", {});
+  if (!saved.port || !saved.token) throw new Error("\u7BA1\u7406\u9875\u9762\u5C1A\u672A\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+  return `http://127.0.0.1:${saved.port}/#${saved.token}`;
+}
+
 // src/setup.mjs
+var import_node_path10 = __toESM(require("node:path"), 1);
+var import_promises5 = require("node:timers/promises");
 async function hiddenQuestion(prompt) {
   let muted = false;
   const output = new import_node_stream.Writable({ write(chunk, encoding, next) {
     if (!muted) process.stdout.write(chunk);
     next();
   } });
-  const input = import_promises2.default.createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
+  const input = import_promises4.default.createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
   const answer = input.question(prompt);
   muted = true;
   try {
@@ -5099,6 +5790,24 @@ async function hiddenQuestion(prompt) {
   }
 }
 async function main() {
+  if (process.argv[2] === "dashboard") {
+    syncAutostartRuntime(__dirname);
+    let context;
+    try {
+      context = desktopContext();
+    } catch {
+      context = {};
+    }
+    const started = await ensureBridge(context, { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), management: true });
+    for (let i = 0; i < 100; i++) {
+      if (readJson("dashboard.json", {}).pid === started.pid) {
+        console.log(dashboardLink());
+        return;
+      }
+      await (0, import_promises5.setTimeout)(100);
+    }
+    throw new Error("\u7BA1\u7406\u9875\u9762\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+  }
   if (process.argv[2] === "compat") {
     const mode = process.argv[3] || "status";
     if (mode === "status") console.log(JSON.stringify({ ...responsesCompatStatus(), catalog: await providerCatalogStatus() }, null, 2));
@@ -5115,7 +5824,7 @@ async function main() {
   }
   if (process.argv[2] === "assistant") {
     const previous2 = assistantSettings();
-    const rl2 = import_promises2.default.createInterface({ input: process.stdin, output: process.stdout });
+    const rl2 = import_promises4.default.createInterface({ input: process.stdin, output: process.stdout });
     let baseUrl, model, reasoningEffort;
     try {
       baseUrl = (await rl2.question("\u52A9\u624B\u63A5\u53E3\u5730\u5740\uFF08\u56DE\u8F66\u4FDD\u7559\uFF09: ")).trim() || previous2.baseUrl;
@@ -5136,7 +5845,7 @@ async function main() {
   }
   secureDirectory();
   const previous = readJson("config.json", {});
-  const rl = import_promises2.default.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = import_promises4.default.createInterface({ input: process.stdin, output: process.stdout });
   console.log("\u98DE\u4E66 Codex \u684C\u9762\u6865\u63A5 \xB7 \u672C\u5730\u914D\u7F6E\n\u521B\u5EFA\u98DE\u4E66\u81EA\u5EFA\u5E94\u7528\u5E76\u542F\u7528\u673A\u5668\u4EBA\u540E\u586B\u5199\u51ED\u636E\u3002");
   let appId;
   try {
@@ -5146,7 +5855,7 @@ async function main() {
   }
   const appSecret = await hiddenQuestion(`App Secret${previous.appSecret ? "\uFF08\u56DE\u8F66\u4FDD\u7559\uFF09" : ""}: `) || previous.appSecret;
   if (!appId || !appSecret) throw new Error("App ID \u548C App Secret \u90FD\u4E0D\u80FD\u4E3A\u7A7A");
-  const code = (0, import_node_crypto6.randomBytes)(12).toString("hex");
+  const code = (0, import_node_crypto8.randomBytes)(12).toString("hex");
   writeJson("config.json", { ...previous, appId, appSecret, allowedOpenIds: previous.allowedOpenIds || [], pairing: { code, expiresAt: Date.now() + 10 * 60 * 1e3 } });
   console.log(`\u914D\u7F6E\u5DF2\u4FDD\u5B58\u5230 ${dataDir}\uFF08\u4EC5\u5F53\u524D Windows \u7528\u6237\u53EF\u8BBF\u95EE\uFF09\u3002
 \u56DE\u5230 Codex \u684C\u9762\uFF0C\u8C03\u7528\u63D2\u4EF6 start_bridge\u3002

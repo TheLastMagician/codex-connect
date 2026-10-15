@@ -3,8 +3,9 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
 import {DesktopClient} from './desktop.mjs';
-import {dataDir,secureDirectory,config,readJson,writeJson} from './storage.mjs';
+import {dataDir,secureDirectory,readJson,writeJson} from './storage.mjs';
 import {readWechatAccount} from './wechat-storage.mjs';
+import {feishuBots} from './connections.mjs';
 
 export function alive(pid) {
   if(!Number.isInteger(pid) || pid<=0)return false;
@@ -21,8 +22,8 @@ export function desktopContext(extra,{env=process.env,event={},saved=readJson('d
   return {pipePath,threadId};
 }
 export function hasConfiguredChannel() {
-  const settings=config(),wechat=readWechatAccount(),login=readJson('wechat-login.json',{});
-  return !!(settings.appId && settings.appSecret && settings.feishuEnabled!==false) ||
+  const wechat=readWechatAccount(),login=readJson('wechat-login.json',{});
+  return feishuBots().some(bot=>bot.appId && bot.appSecret && bot.enabled) ||
     !!(wechat.enabled && wechat.token && wechat.botId && wechat.ownerUserId) ||
     (['wait','scaned','need_verifycode'].includes(login.status) && login.expiresAt>Date.now());
 }
@@ -39,9 +40,9 @@ function automaticSkip(context) {
   if(readJson('autostart-pause.json',{}).pipePath===context.pipePath)return 'paused';
   if(!hasConfiguredChannel())return 'not_configured';
 }
-export async function ensureBridge(context,{entryPath,automatic=false,validate=validateDesktopContext}={}) {
+export async function ensureBridge(context,{entryPath,automatic=false,management=false,validate=validateDesktopContext}={}) {
   const skipped=automatic && automaticSkip(context);if(skipped)return {skipped};
-  if(!hasConfiguredChannel()) {
+  if(!management && !hasConfiguredChannel()) {
     if(automatic)return {skipped:'not_configured'};
     throw new Error('请先配置飞书，或扫码连接微信。');
   }
@@ -62,10 +63,12 @@ export async function ensureBridge(context,{entryPath,automatic=false,validate=v
   }
   try {
     // Verify the host-supplied context before publishing it to a running bridge.
-    context=await validate(context)||context;
+    let validated=false;
+    try{if(context?.pipePath && context?.threadId){context=await validate(context)||context;validated=true;}else if(!management)throw new Error('缺少真实桌面连接');}
+    catch(error){if(!management)throw error;}
     const skipped=automatic && automaticSkip(context);if(skipped)return {skipped};
-    writeJson('desktop-context.json',context);
-    if(!automatic)writeJson('autostart-pause.json',{});
+    if(validated)writeJson('desktop-context.json',context);
+    if(!automatic && !management)writeJson('autostart-pause.json',{});
     const previous=readJson('status.json',{}),running=readLock('bridge.lock');
     if(alive(running.pid))return {alreadyRunning:true,pid:running.pid,state:previous.state||'starting'};
     if(!entryPath || !fs.existsSync(entryPath))throw new Error('缺少桥接运行文件，请更新插件后重试。');

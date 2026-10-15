@@ -6,6 +6,11 @@ import {beginWechatLogin} from './wechat-auth.mjs';
 import {configureAssistant,assistantSettings} from './assistant.mjs';
 import {configureAutostart} from './autostart-settings.mjs';
 import {providerCatalogStatus,responsesCompatStatus,configureResponsesCompat} from './responses-compat-settings.mjs';
+import {ensureBridge,desktopContext} from './bridge-lifecycle.mjs';
+import {syncAutostartRuntime} from './autostart-settings.mjs';
+import {dashboardLink} from './dashboard.mjs';
+import path from 'node:path';
+import {setTimeout as delay} from 'node:timers/promises';
 
 async function hiddenQuestion(prompt) {
   let muted=false;
@@ -15,6 +20,12 @@ async function hiddenQuestion(prompt) {
   try{return (await answer).trim();}finally{input.close();process.stdout.write('\n');}
 }
 async function main() {
+  if(process.argv[2]==='dashboard') {
+    syncAutostartRuntime(__dirname);let context;try{context=desktopContext();}catch{context={};}
+    const started=await ensureBridge(context,{entryPath:path.join(__dirname,'bridge.cjs'),management:true});
+    for(let i=0;i<100;i++){if(readJson('dashboard.json',{}).pid===started.pid){console.log(dashboardLink());return;}await delay(100);}
+    throw new Error('管理页面正在启动，请稍后重试');
+  }
   if(process.argv[2]==='compat') {
     const mode=process.argv[3]||'status';
     if(mode==='status')console.log(JSON.stringify({...responsesCompatStatus(),catalog:await providerCatalogStatus()},null,2));

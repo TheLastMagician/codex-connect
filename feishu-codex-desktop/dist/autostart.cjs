@@ -622,6 +622,20 @@ function readWechatAccount() {
   return account.loginId && revoked.loginIds.includes(account.loginId) ? { ...account, enabled: false } : account;
 }
 
+// src/connections.mjs
+init_storage();
+function feishuBots() {
+  const legacy = config();
+  return [{
+    ...legacy,
+    id: "default",
+    name: legacy.feishuName || "\u4E3B\u673A\u5668\u4EBA",
+    enabled: legacy.feishuEnabled !== false,
+    mode: legacy.feishuMode || "full",
+    thread: legacy.feishuThread || null
+  }, ...readJson("feishu-bots.json", { bots: [] }).bots || []];
+}
+
 // src/bridge-lifecycle.mjs
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -657,8 +671,8 @@ function desktopContext(extra, { env = process.env, event = {}, saved = readJson
   return { pipePath, threadId };
 }
 function hasConfiguredChannel() {
-  const settings = config(), wechat = readWechatAccount(), login = readJson("wechat-login.json", {});
-  return !!(settings.appId && settings.appSecret && settings.feishuEnabled !== false) || !!(wechat.enabled && wechat.token && wechat.botId && wechat.ownerUserId) || ["wait", "scaned", "need_verifycode"].includes(login.status) && login.expiresAt > Date.now();
+  const wechat = readWechatAccount(), login = readJson("wechat-login.json", {});
+  return feishuBots().some((bot) => bot.appId && bot.appSecret && bot.enabled) || !!(wechat.enabled && wechat.token && wechat.botId && wechat.ownerUserId) || ["wait", "scaned", "need_verifycode"].includes(login.status) && login.expiresAt > Date.now();
 }
 async function validateDesktopContext(context) {
   const desktop = new DesktopClient(context);
@@ -674,10 +688,10 @@ function automaticSkip(context) {
   if (readJson("autostart-pause.json", {}).pipePath === context.pipePath) return "paused";
   if (!hasConfiguredChannel()) return "not_configured";
 }
-async function ensureBridge(context, { entryPath, automatic = false, validate = validateDesktopContext } = {}) {
+async function ensureBridge(context, { entryPath, automatic = false, management = false, validate = validateDesktopContext } = {}) {
   const skipped = automatic && automaticSkip(context);
   if (skipped) return { skipped };
-  if (!hasConfiguredChannel()) {
+  if (!management && !hasConfiguredChannel()) {
     if (automatic) return { skipped: "not_configured" };
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
@@ -704,11 +718,19 @@ async function ensureBridge(context, { entryPath, automatic = false, validate = 
     }
   }
   try {
-    context = await validate(context) || context;
+    let validated = false;
+    try {
+      if (context?.pipePath && context?.threadId) {
+        context = await validate(context) || context;
+        validated = true;
+      } else if (!management) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u684C\u9762\u8FDE\u63A5");
+    } catch (error) {
+      if (!management) throw error;
+    }
     const skipped2 = automatic && automaticSkip(context);
     if (skipped2) return { skipped: skipped2 };
-    writeJson("desktop-context.json", context);
-    if (!automatic) writeJson("autostart-pause.json", {});
+    if (validated) writeJson("desktop-context.json", context);
+    if (!automatic && !management) writeJson("autostart-pause.json", {});
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs3.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
