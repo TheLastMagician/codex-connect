@@ -15,28 +15,43 @@ export class FixedChatRouter extends Router {
   acceptCard() {return false;}
   async handleAction() {throw new Error('此机器人只支持聊天');}
   watch(session,baseline) {
-    // One fixed conversation in a group needs one notification, even when
-    // several authorized members talk to it before the answer arrives.
-    if(session.chatType==='group')for(const [key,watch] of this.watches)
-      if(watch.chatId===session.chatId)this.watches.delete(key);
+    const people=new Set([session.openId]);
+    if(session.chatType==='group')for(const [key,watch] of this.watches) {
+      if(watch.chatId!==session.chatId)continue;
+      for(const id of watch.replyOpenIds||[watch.openId])if(this.authorized(id))people.add(id);
+      this.watches.delete(key);
+    }
     super.watch(session,baseline);
+    if(session.chatType==='group') {
+      const watch=[...this.watches.values()].find(w=>w.openId===session.openId && w.chatId===session.chatId);
+      if(watch){watch.chatType='group';watch.replyOpenIds=[...people];this.persistWatches();}
+    }
   }
   async poll() {
     for(const [key,watch] of [...this.watches]) {
-      if(!this.authorized(watch.openId) || watch.thread.id!==this.thread.id || (watch.thread.hostId||'local')!==(this.thread.hostId||'local')){this.watches.delete(key);continue;}
+      const session=this.state.sessions[`${watch.openId}:${watch.chatId}`];
+      const group=(watch.chatType||session?.chatType)==='group';
+      const audience=()=>group?(watch.replyOpenIds||[watch.openId]).filter(id=>this.authorized(id)):[watch.openId].filter(id=>this.authorized(id));
+      if(!audience().length || watch.thread.id!==this.thread.id || (watch.thread.hostId||'local')!==(this.thread.hostId||'local')){this.watches.delete(key);continue;}
       try {
         const snapshot=threadSnapshot(await this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:1,maxOutputCharsPerItem:20000}));
+        // A new request may replace this watch during the asynchronous read.
+        if(this.watches.get(key)!==watch)continue;
+        const people=audience();if(!people.length)continue;
+        const meta={openId:people[0],...(group?{chatType:'group',replyOpenIds:people}:{})};
         const assistant=snapshot.latestAssistantMessage;
         if(snapshot.latestTurn?.status==='completed' && assistant?.text && assistant.id!==watch.messageId) {
-          await this.send(watch.chatId,assistant.text,{kind:'assistant',openId:watch.openId});watch.messageId=assistant.id;
+          await this.send(watch.chatId,assistant.text,{...meta,kind:'assistant'});watch.messageId=assistant.id;
         }
+        if(this.watches.get(key)!==watch)continue;
         if(snapshot.thread?.status?.type==='needsAttention' && !watch.attentionNotified) {
-          await this.send(watch.chatId,'这个会话需要你在 Codex 桌面处理审批或输入。',{kind:'notice',openId:watch.openId});watch.attentionNotified=true;
+          await this.send(watch.chatId,'这个会话需要你在 Codex 桌面处理审批或输入。',{...meta,kind:'notice'});watch.attentionNotified=true;
         }
+        if(this.watches.get(key)!==watch)continue;
         if(snapshot.thread?.status?.type!=='needsAttention')watch.attentionNotified=false;
         if(['completed','failed','interrupted'].includes(snapshot.latestTurn?.status) && snapshot.latestTurn?.id!==watch.baselineTurnId) {
-          if(snapshot.latestTurn.status!=='completed')await this.send(watch.chatId,snapshot.latestTurn.status==='failed'?'会话执行失败，请在 Codex 桌面查看详情。':'这次会话已中断。',{kind:'notice',openId:watch.openId});
-          this.watches.delete(key);
+          if(snapshot.latestTurn.status!=='completed')await this.send(watch.chatId,snapshot.latestTurn.status==='failed'?'会话执行失败，请在 Codex 桌面查看详情。':'这次会话已中断。',{...meta,kind:'notice'});
+          if(this.watches.get(key)===watch)this.watches.delete(key);
         }
       }catch{/* Retry only notification reads after reconnection; never replay a task. */}
     }

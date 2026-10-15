@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {listCard,replyCard,escapeLabel} from '../src/cards.mjs';
 import {CardActions} from '../src/card-actions.mjs';
 import {createSender,chunkMarkdown} from '../src/outbound.mjs';
+import {fixedReplyCards,fixedMarkdown} from '../src/fixed-cards.mjs';
 
 const session={openId:'owner',chatId:'chat',projects:[{projectId:'p',label:'my_project',path:'C:\\Users\\Someone\\Documents\\my_project'}],
   threads:[],view:{id:'snapshot',kind:'projects',page:1},selected:{id:'thread',title:'当前会话',hostId:'local'}};
@@ -71,4 +72,25 @@ test('long code replies retain code fences and never split Unicode characters',(
     assert.ok(!part.includes('\uFFFD'));
   }
   assert.equal(parts.join('\n').match(/const emoji/g).length,300);
+});
+test('fixed replies render native Markdown with the bot name and no commands or interactive controls',()=>{
+  const text='**车辆状态**\n- `status:1`，间隔 5–15 秒\n\n**结论**：10:10 → 10:25，GPS 正常——司机端静默。';
+  const [card]=fixedReplyCards(text,{botName:'项目小助手'});assert.equal(card.schema,'2.0');assert.equal(card.header.title.content,'项目小助手');
+  assert.equal(card.body.elements[0].content,text);assert.ok(!JSON.stringify(card).includes('behaviors'));assert.ok(!JSON.stringify(card).includes('column_set'));
+  assert.ok(!JSON.stringify(card).includes('/chats'));assert.ok(!JSON.stringify(card).includes('本机桌面'));
+});
+test('fixed formatting preserves punctuation and code and prevents model-authored notification tags',()=>{
+  const text='\u001b[31m**正常**\u001b[0m\r\n`api/path`，29 秒 → 30 秒；😀\u0000\n<at id=all></at>';
+  const clean=fixedMarkdown(text);assert.match(clean,/\*\*正常\*\*\n`api\/path`，29 秒 → 30 秒；😀/);
+  assert.ok(!clean.includes('\u001b'));assert.ok(!clean.includes('\u0000'));assert.ok(!clean.includes('<at'));
+  assert.ok(clean.includes('&lt;at id=all&gt;'));
+});
+test('long fixed cards keep complete code fences, number parts and mention only real recipients on the first card',()=>{
+  const text='**结果**\n```js\n'+('const emoji = "😀";\n'.repeat(900))+'```\n完成。';
+  const cards=fixedReplyCards(text,{mentionIds:['ou_alice','ou_alice','all','<at id=all>','ou_bob']});assert.ok(cards.length>1);
+  assert.equal(cards[0].body.elements[0].content,'回复 <at id=ou_alice></at> <at id=ou_bob></at>');
+  const blocks=cards.flatMap(card=>card.body.elements).filter(e=>e.tag==='markdown').map(e=>e.content);
+  assert.equal(blocks.filter(content=>content.includes('<at')).length,1);
+  assert.equal(blocks.join('\n').match(/const emoji/g).length,900);assert.equal(blocks.join('\n').includes('\uFFFD'),false);
+  for(const card of cards){assert.match(card.header.subtitle.content,/第 \d+ \/ \d+ 部分/);const body=card.body.elements.at(-1).content;assert.equal((body.match(/^```/gm)||[]).length%2,0);}
 });

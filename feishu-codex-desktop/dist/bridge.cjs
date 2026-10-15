@@ -123959,8 +123959,8 @@ ${block}
               return this.rawSendWithRetry(Object.assign(Object.assign({}, args), { replyTo: void 0 }));
             }
             if (isFormatError(err) && args.msgType === "post") {
-              const plain2 = postToPlainText(args.content);
-              return this.rawSendWithRetry(Object.assign(Object.assign({}, args), { msgType: "text", content: { text: plain2 || "[message]" } }));
+              const plain3 = postToPlainText(args.content);
+              return this.rawSendWithRetry(Object.assign(Object.assign({}, args), { msgType: "text", content: { text: plain3 || "[message]" } }));
             }
             throw err;
           }
@@ -132308,33 +132308,52 @@ var FixedChatRouter = class extends Router {
     throw new Error("\u6B64\u673A\u5668\u4EBA\u53EA\u652F\u6301\u804A\u5929");
   }
   watch(session, baseline) {
-    if (session.chatType === "group") {
-      for (const [key, watch] of this.watches)
-        if (watch.chatId === session.chatId) this.watches.delete(key);
+    const people = /* @__PURE__ */ new Set([session.openId]);
+    if (session.chatType === "group") for (const [key, watch] of this.watches) {
+      if (watch.chatId !== session.chatId) continue;
+      for (const id of watch.replyOpenIds || [watch.openId]) if (this.authorized(id)) people.add(id);
+      this.watches.delete(key);
     }
     super.watch(session, baseline);
+    if (session.chatType === "group") {
+      const watch = [...this.watches.values()].find((w) => w.openId === session.openId && w.chatId === session.chatId);
+      if (watch) {
+        watch.chatType = "group";
+        watch.replyOpenIds = [...people];
+        this.persistWatches();
+      }
+    }
   }
   async poll() {
     for (const [key, watch] of [...this.watches]) {
-      if (!this.authorized(watch.openId) || watch.thread.id !== this.thread.id || (watch.thread.hostId || "local") !== (this.thread.hostId || "local")) {
+      const session = this.state.sessions[`${watch.openId}:${watch.chatId}`];
+      const group = (watch.chatType || session?.chatType) === "group";
+      const audience = () => group ? (watch.replyOpenIds || [watch.openId]).filter((id) => this.authorized(id)) : [watch.openId].filter((id) => this.authorized(id));
+      if (!audience().length || watch.thread.id !== this.thread.id || (watch.thread.hostId || "local") !== (this.thread.hostId || "local")) {
         this.watches.delete(key);
         continue;
       }
       try {
         const snapshot = threadSnapshot(await this.desktop.call("read_thread", { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, turnLimit: 1, maxOutputCharsPerItem: 2e4 }));
+        if (this.watches.get(key) !== watch) continue;
+        const people = audience();
+        if (!people.length) continue;
+        const meta = { openId: people[0], ...group ? { chatType: "group", replyOpenIds: people } : {} };
         const assistant = snapshot.latestAssistantMessage;
         if (snapshot.latestTurn?.status === "completed" && assistant?.text && assistant.id !== watch.messageId) {
-          await this.send(watch.chatId, assistant.text, { kind: "assistant", openId: watch.openId });
+          await this.send(watch.chatId, assistant.text, { ...meta, kind: "assistant" });
           watch.messageId = assistant.id;
         }
+        if (this.watches.get(key) !== watch) continue;
         if (snapshot.thread?.status?.type === "needsAttention" && !watch.attentionNotified) {
-          await this.send(watch.chatId, "\u8FD9\u4E2A\u4F1A\u8BDD\u9700\u8981\u4F60\u5728 Codex \u684C\u9762\u5904\u7406\u5BA1\u6279\u6216\u8F93\u5165\u3002", { kind: "notice", openId: watch.openId });
+          await this.send(watch.chatId, "\u8FD9\u4E2A\u4F1A\u8BDD\u9700\u8981\u4F60\u5728 Codex \u684C\u9762\u5904\u7406\u5BA1\u6279\u6216\u8F93\u5165\u3002", { ...meta, kind: "notice" });
           watch.attentionNotified = true;
         }
+        if (this.watches.get(key) !== watch) continue;
         if (snapshot.thread?.status?.type !== "needsAttention") watch.attentionNotified = false;
         if (["completed", "failed", "interrupted"].includes(snapshot.latestTurn?.status) && snapshot.latestTurn?.id !== watch.baselineTurnId) {
-          if (snapshot.latestTurn.status !== "completed") await this.send(watch.chatId, snapshot.latestTurn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002", { kind: "notice", openId: watch.openId });
-          this.watches.delete(key);
+          if (snapshot.latestTurn.status !== "completed") await this.send(watch.chatId, snapshot.latestTurn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002", { ...meta, kind: "notice" });
+          if (this.watches.get(key) === watch) this.watches.delete(key);
         }
       } catch {
       }
@@ -132465,6 +132484,28 @@ function createSender({ client, actions, state, saveState, getConfig, canSend = 
       if (tokens.length && messageId) actions.bind(tokens, messageId);
     }
   };
+}
+
+// src/fixed-cards.mjs
+var plain2 = (content) => ({ tag: "plain_text", content: String(content) });
+function fixedMarkdown(text) {
+  return String(text).replace(/\r\n?/g, "\n").replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").replace(/<\s*\/?\s*at\b[^>]*>/gi, (tag) => tag.replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+}
+function fixedReplyCards(text, { botName = "\u4F1A\u8BDD\u52A9\u624B", kind = "assistant", mentionIds = [] } = {}) {
+  const parts = chunkMarkdown(fixedMarkdown(text)).slice(0, 20);
+  const people = [...new Set(mentionIds.filter((id) => typeof id === "string" && /^ou_[A-Za-z0-9_-]{1,200}$/.test(id)))];
+  const title = Array.from(botName || "\u4F1A\u8BDD\u52A9\u624B").slice(0, 40).join("");
+  return parts.map((part, index) => {
+    const elements = [];
+    if (index === 0 && people.length) elements.push({ tag: "markdown", content: "\u56DE\u590D " + people.map((id) => `<at id=${id}></at>`).join(" ") }, { tag: "hr" });
+    elements.push({ tag: "markdown", content: part });
+    return {
+      schema: "2.0",
+      config: { update_multi: true, summary: { content: title + (kind === "error" ? " \xB7 \u63D0\u793A" : " \xB7 \u56DE\u590D") } },
+      header: { title: plain2(title), subtitle: plain2((kind === "assistant" ? "\u56DE\u590D" : "\u63D0\u793A") + (parts.length > 1 ? ` \xB7 \u7B2C ${index + 1} / ${parts.length} \u90E8\u5206` : "")), template: kind === "error" ? "orange" : "turquoise" },
+      body: { direction: "vertical", padding: "16px 16px 16px 16px", elements }
+    };
+  });
 }
 
 // src/channels/feishu.mjs
@@ -132758,10 +132799,13 @@ function createFeishuChannel({
     if (settings.mode !== "fixed") return fullSend(chatId, text, meta);
     const reply = fixedReply(text, meta);
     if (reply === null) return;
-    for (const part of chunkMarkdown(reply).slice(0, 20)) {
+    const session = meta.session || state.sessions?.[`${openId}:${chatId}`];
+    const group = (meta.chatType || session?.chatType) === "group";
+    const mentionIds = group ? (meta.replyOpenIds || [openId]).filter(authorized) : [];
+    for (const card of fixedReplyCards(reply, { botName: getSettings()?.name || settings.name, kind: meta.kind, mentionIds })) {
       if (!authorized(openId)) return;
-      const result = await client.im.v1.message.create({ params: { receive_id_type: "chat_id" }, data: { receive_id: chatId, msg_type: "text", content: JSON.stringify({ text: part }) } });
-      if (result.code !== 0) throw new Error("\u98DE\u4E66\u6D88\u606F\u53D1\u9001\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u673A\u5668\u4EBA\u6743\u9650");
+      const result = await client.im.v1.message.create({ params: { receive_id_type: "chat_id" }, data: { receive_id: chatId, msg_type: "interactive", content: JSON.stringify(card) } });
+      if (result.code !== 0) throw new Error("\u98DE\u4E66\u5361\u7247\u53D1\u9001\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u673A\u5668\u4EBA\u6743\u9650");
     }
   };
   const options = { desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: saveSettings, state, saveState, send, operator, isAuthorized: authorized };
@@ -132783,7 +132827,7 @@ function createFeishuChannel({
       if (state.seen[key]) return;
       state.seen[key] = Date.now();
       saveState();
-      void send(message.chatId, "\u6211\u5728\u3002\u8BF7\u5728 @\u673A\u5668\u4EBA \u540E\u5199\u4E0A\u4F60\u7684\u95EE\u9898\u3002", { kind: "notice", openId: message.openId }).catch(() => onStatus({ lastReceiveErrorAt: Date.now() }));
+      void send(message.chatId, "\u6211\u5728\u3002\u8BF7\u5728 @\u673A\u5668\u4EBA \u540E\u5199\u4E0A\u4F60\u7684\u95EE\u9898\u3002", { kind: "notice", openId: message.openId, chatType: message.chatType }).catch(() => onStatus({ lastReceiveErrorAt: Date.now() }));
       return;
     }
     router.acceptMessage(message);
@@ -132862,7 +132906,7 @@ var import_promises2 = require("node:timers/promises");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.1";
+var VERSION = "0.5.2";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

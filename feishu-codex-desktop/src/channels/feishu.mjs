@@ -2,7 +2,8 @@ import {Client,WSClient,EventDispatcher,Domain,LoggerLevel} from '@larksuiteoapi
 import {Router,parseMessage,equalSecret,fingerprint} from '../router.mjs';
 import {FixedChatRouter,fixedReply} from '../fixed-router.mjs';
 import {CardActions} from '../card-actions.mjs';
-import {createSender,chunkMarkdown} from '../outbound.mjs';
+import {createSender} from '../outbound.mjs';
+import {fixedReplyCards} from '../fixed-cards.mjs';
 import {readJson,writeJson} from '../storage.mjs';
 import {readLocalThreads} from '../catalog.mjs';
 import {OperationAssistant} from '../assistant.mjs';
@@ -47,10 +48,13 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
     if(!authorized(openId))return;
     if(settings.mode!=='fixed')return fullSend(chatId,text,meta);
     const reply=fixedReply(text,meta);if(reply===null)return;
-    for(const part of chunkMarkdown(reply).slice(0,20)) {
+    const session=meta.session||state.sessions?.[`${openId}:${chatId}`];
+    const group=(meta.chatType||session?.chatType)==='group';
+    const mentionIds=group?(meta.replyOpenIds||[openId]).filter(authorized):[];
+    for(const card of fixedReplyCards(reply,{botName:getSettings()?.name||settings.name,kind:meta.kind,mentionIds})) {
       if(!authorized(openId))return;
-      const result=await client.im.v1.message.create({params:{receive_id_type:'chat_id'},data:{receive_id:chatId,msg_type:'text',content:JSON.stringify({text:part})}});
-      if(result.code!==0)throw new Error('飞书消息发送失败，请检查机器人权限');
+      const result=await client.im.v1.message.create({params:{receive_id_type:'chat_id'},data:{receive_id:chatId,msg_type:'interactive',content:JSON.stringify(card)}});
+      if(result.code!==0)throw new Error('飞书卡片发送失败，请检查机器人权限');
     }
   };
   const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,operator,isAuthorized:authorized};
@@ -63,7 +67,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
     if(!authorized(message.openId) && !canPair){state.seen[fingerprint(message)]=Date.now();saveState();rememberRequest(message);onStatus({lastAccessRequestAt:Date.now()});return;}
     if(message.mentionOnly) {
       const key=fingerprint(message);if(state.seen[key])return;state.seen[key]=Date.now();saveState();
-      void send(message.chatId,'我在。请在 @机器人 后写上你的问题。',{kind:'notice',openId:message.openId}).catch(()=>onStatus({lastReceiveErrorAt:Date.now()}));return;
+      void send(message.chatId,'我在。请在 @机器人 后写上你的问题。',{kind:'notice',openId:message.openId,chatType:message.chatType}).catch(()=>onStatus({lastReceiveErrorAt:Date.now()}));return;
     }
     router.acceptMessage(message);
   };
