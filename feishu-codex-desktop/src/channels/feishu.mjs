@@ -19,7 +19,10 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
     // Deduplication survives mode changes and rebinding while selections and
     // reply watches stay isolated to their original destination.
     const seen={...readJson(seenName,{}),...state.seen};for(const [key,at] of Object.entries(seen))if(Date.now()-at>86400000)delete seen[key];
-    writeJson(seenName,seen);return save?save(state):writeJson(botStateName(settings),state);
+    // Save the durable input and its deduplication mark in the same profile
+    // before updating the shared mark used across rebinding.
+    const saved=save?save(state):writeJson(botStateName(settings),state);
+    writeJson(seenName,seen);return saved;
   };
   const identity=feishuIdentity(settings);let stopped=false;
   const active=()=>{const current=getSettings();return !stopped && current?.enabled && identity===feishuIdentity(current);};
@@ -58,7 +61,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
     }
   };
   const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,operator,isAuthorized:authorized};
-  const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread}):new Router(options);
+  const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new Router(options);
   const receive=event=>{
     const message=parseMessage(event,{botOpenId,appId:settings.appId});
     if(!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now()-message.timestamp)>600000)return;
@@ -95,7 +98,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
   });
   return {id:settings.id==='default'?'feishu':`feishu:${settings.id}`,router,
     start:async()=>{onStatus({state:'connecting'});void refreshBotIdentity();await ws.start({eventDispatcher:dispatcher});},
-    stop:()=>{stopped=true;ws.close();},poll:()=>{void refreshBotIdentity();return active()?router.poll():undefined;},
+    stop:()=>{stopped=true;router.stop?.();ws.close();},poll:()=>{void refreshBotIdentity();return active()?router.poll():undefined;},
     preview:async()=>{
       if(settings.mode==='fixed')throw new Error('固定会话机器人只支持聊天');
       const sessions=Object.values(state.sessions).filter(s=>getConfig().allowedOpenIds.includes(s.openId));

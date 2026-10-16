@@ -132286,10 +132286,19 @@ function revokeWechatLogin(loginId, accountLoginId) {
 var import_node_sdk = __toESM(require_lib2(), 1);
 
 // src/fixed-router.mjs
+var leases = /* @__PURE__ */ new WeakMap();
+var terminal = (turn) => ["completed", "failed", "interrupted"].includes(turn?.status);
+var statusOf = (thread) => typeof thread?.status === "string" ? thread.status : thread?.status?.type;
+var inputsOf = (turn) => (turn?.items || []).filter((item) => item.type === "userMessage").map((item) => Array.isArray(item.content) ? item.content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : item.text || "");
 var FixedChatRouter = class extends Router {
-  constructor({ thread, ...options }) {
+  constructor({ thread, isActive = () => true, ...options }) {
     super({ ...options, operator: void 0 });
     this.thread = { ...thread };
+    this.isActive = isActive;
+    this.state.fixedQueue ||= { pending: [], active: null };
+    this.target = JSON.stringify([thread.hostId || "local", thread.id]);
+    if (!leases.has(this.desktop)) leases.set(this.desktop, /* @__PURE__ */ new Map());
+    this.leases = leases.get(this.desktop);
   }
   session(message) {
     const session = super.session(message);
@@ -132298,8 +132307,39 @@ var FixedChatRouter = class extends Router {
     session.awaitingChoice = null;
     return session;
   }
-  async handle(message) {
-    return super.handle({ ...message, text: "/send " + message.text });
+  live() {
+    return !this.stopped && this.isActive();
+  }
+  meta(message, kind = "notice") {
+    return { kind, openId: message.openId, ...message.chatType === "group" ? { chatType: "group", replyOpenIds: [message.openId] } : {} };
+  }
+  notify(message, text) {
+    return this.send(message.chatId, text, this.meta(message));
+  }
+  acceptMessage(message) {
+    if (!this.live() || !message?.id || !message.openId || !message.chatId || typeof message.text !== "string" || !message.text.trim() || message.text.length > 12e3 || !Number.isFinite(message.timestamp) || Math.abs(this.now() - message.timestamp) > 6e5 || !this.authorized(message.openId)) return false;
+    const key = fingerprint(message);
+    if (this.state.seen[key]) return false;
+    const queue = this.state.fixedQueue, ahead = queue.pending.length + (queue.active ? 1 : 0) + (this.watches.size ? 1 : 0);
+    this.state.seen[key] = this.now();
+    for (const [id, at] of Object.entries(this.state.seen)) if (this.now() - at > 864e5) delete this.state.seen[id];
+    if (queue.pending.length >= 100) {
+      this.saveState();
+      void this.notify(message, "\u7B49\u5F85\u961F\u5217\u5DF2\u6EE1\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u63A5\u6536\uFF0C\u8BF7\u7A0D\u540E\u91CD\u65B0\u53D1\u9001\u3002").catch(() => {
+      });
+      return false;
+    }
+    const item = { ...message };
+    queue.pending.push(item);
+    this.saveState();
+    if (ahead) {
+      item.notified = true;
+      this.saveState();
+      void this.notify(item, `\u5DF2\u6392\u961F\uFF0C\u524D\u9762\u8FD8\u6709 ${ahead} \u6761\u8BF7\u6C42\u3002\u8F6E\u5230\u4F60\u65F6\u4F1A\u81EA\u52A8\u5904\u7406\u5E76\u56DE\u590D\u3002`).catch(() => {
+      });
+    }
+    void this.poll();
+    return true;
   }
   acceptCard() {
     return false;
@@ -132307,24 +132347,118 @@ var FixedChatRouter = class extends Router {
   async handleAction() {
     throw new Error("\u6B64\u673A\u5668\u4EBA\u53EA\u652F\u6301\u804A\u5929");
   }
-  watch(session, baseline) {
-    const people = /* @__PURE__ */ new Set([session.openId]);
-    if (session.chatType === "group") for (const [key, watch] of this.watches) {
-      if (watch.chatId !== session.chatId) continue;
-      for (const id of watch.replyOpenIds || [watch.openId]) if (this.authorized(id)) people.add(id);
-      this.watches.delete(key);
+  stop() {
+    this.stopped = true;
+    if (!this.queues.has(this.target) && this.leases.get(this.target) === this) this.leases.delete(this.target);
+  }
+  poll() {
+    const running = this.queues.get(this.target);
+    if (running) return running;
+    if (!this.live()) return Promise.resolve();
+    const work = Promise.resolve().then(() => this.advance()).catch(() => {
+    }).finally(() => {
+      if (this.queues.get(this.target) === work) this.queues.delete(this.target);
+      if ((!this.live() || !this.state.fixedQueue.active && !this.watches.size) && this.leases.get(this.target) === this) this.leases.delete(this.target);
+    });
+    this.queues.set(this.target, work);
+    return work;
+  }
+  async read() {
+    return this.desktop.call("read_thread", { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, turnLimit: 10, maxOutputCharsPerItem: 2e4 });
+  }
+  async waitingNotice(message, text) {
+    if (message.notified || !this.live() || !this.authorized(message.openId)) return;
+    message.notified = true;
+    this.saveState();
+    await this.notify(message, text);
+  }
+  async advance() {
+    const queue = this.state.fixedQueue;
+    if (!this.live() || !queue.active && !queue.pending.length && !this.watches.size) return;
+    const owner = this.leases.get(this.target);
+    if (owner && owner !== this) {
+      if (queue.pending[0]) await this.waitingNotice(queue.pending[0], "\u5DF2\u6392\u961F\uFF0C\u8FD9\u4E2A\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u5176\u4ED6\u8BF7\u6C42\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002");
+      return;
     }
-    super.watch(session, baseline);
-    if (session.chatType === "group") {
-      const watch = [...this.watches.values()].find((w) => w.openId === session.openId && w.chatId === session.chatId);
-      if (watch) {
-        watch.chatType = "group";
-        watch.replyOpenIds = [...people];
-        this.persistWatches();
+    this.leases.set(this.target, this);
+    if (this.watches.size) {
+      await this.pollLegacy();
+      if (this.watches.size || !this.live()) return;
+    }
+    if (queue.active) {
+      const active2 = queue.active;
+      if (!active2.reply) {
+        const result2 = await this.read();
+        if (!this.live()) return;
+        const turns = result2.turns || [];
+        const turn = active2.turnId ? turns.find((t) => t.id === active2.turnId) : turns.find((t) => t.id !== active2.baselineTurnId && !active2.baselineTurnIds?.includes(t.id) && (inputsOf(t).includes(active2.message.text) || active2.phase === "waiting" && !inputsOf(t).length));
+        if (turn) {
+          active2.turnId = turn.id;
+          this.saveState();
+        }
+        if (statusOf(result2.thread) === "needsAttention" && !active2.attentionNotified && this.authorized(active2.message.openId)) {
+          active2.attentionNotified = true;
+          this.saveState();
+          await this.notify(active2.message, "\u8FD9\u4E2A\u4F1A\u8BDD\u9700\u8981\u4F60\u5728 Codex \u684C\u9762\u5904\u7406\u5BA1\u6279\u6216\u8F93\u5165\uFF1B\u540E\u7EED\u95EE\u9898\u4F1A\u7EE7\u7EED\u6392\u961F\u3002");
+        }
+        if (!turn || !terminal(turn)) return;
+        const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
+        active2.reply = { kind: turn.status === "completed" ? "assistant" : "notice", text: turn.status === "completed" ? assistant?.text || "\u8FD9\u6B21\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002" };
+        this.saveState();
+      }
+      if (!this.live()) return;
+      if (this.authorized(active2.message.openId)) await this.send(active2.message.chatId, active2.reply.text, this.meta(active2.message, active2.reply.kind));
+      if (!this.live()) return;
+      queue.active = null;
+      this.saveState();
+    }
+    while (queue.pending.length && !this.authorized(queue.pending[0].openId)) {
+      queue.pending.shift();
+      this.saveState();
+    }
+    if (!queue.pending.length || !this.live()) return;
+    const message = queue.pending[0];
+    let result;
+    try {
+      result = await this.read();
+    } catch {
+      await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u6B63\u5728\u7B49\u5F85 Codex \u8FDE\u63A5\u6062\u590D\uFF1B\u6062\u590D\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u3002");
+      return;
+    }
+    if (!this.live() || !this.authorized(message.openId)) return;
+    const latest = result.turns?.[0], status = statusOf(result.thread);
+    if (!["idle", "notLoaded"].includes(status) || latest && !terminal(latest)) {
+      await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u524D\u9762\u7684\u4EFB\u52A1\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002");
+      return;
+    }
+    const active = { message, phase: "sending", baselineTurnId: latest?.id, baselineTurnIds: (result.turns || []).map((turn) => turn.id) };
+    queue.pending.shift();
+    queue.active = active;
+    this.saveState();
+    try {
+      await this.desktop.call(
+        "send_message_to_thread",
+        { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, prompt: message.text },
+        { beforeSend: () => {
+          if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
+        } }
+      );
+      active.phase = "waiting";
+      this.saveState();
+    } catch (error) {
+      if (error.notSent) {
+        queue.active = null;
+        queue.pending.unshift(message);
+        this.saveState();
+        await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u3002");
+      } else {
+        active.phase = "uncertain";
+        this.saveState();
+        if (this.live() && this.authorized(message.openId)) await this.notify(message, "\u6682\u65F6\u65E0\u6CD5\u786E\u8BA4\u6D88\u606F\u662F\u5426\u9001\u8FBE\uFF0C\u5DF2\u6682\u505C\u540E\u7EED\u961F\u5217\u4EE5\u907F\u514D\u91CD\u590D\u6267\u884C\uFF1B\u6B63\u5728\u7B49\u5F85\u684C\u9762\u786E\u8BA4\u3002");
       }
     }
   }
-  async poll() {
+  async pollLegacy() {
     for (const [key, watch] of [...this.watches]) {
       const session = this.state.sessions[`${watch.openId}:${watch.chatId}`];
       const group = (watch.chatType || session?.chatType) === "group";
@@ -132351,7 +132485,7 @@ var FixedChatRouter = class extends Router {
         }
         if (this.watches.get(key) !== watch) continue;
         if (snapshot.thread?.status?.type !== "needsAttention") watch.attentionNotified = false;
-        if (["completed", "failed", "interrupted"].includes(snapshot.latestTurn?.status) && snapshot.latestTurn?.id !== watch.baselineTurnId) {
+        if (terminal(snapshot.latestTurn) && (snapshot.latestTurn.id !== watch.baselineTurnId || ["idle", "notLoaded"].includes(statusOf(snapshot.thread)))) {
           if (snapshot.latestTurn.status !== "completed") await this.send(watch.chatId, snapshot.latestTurn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002", { ...meta, kind: "notice" });
           if (this.watches.get(key) === watch) this.watches.delete(key);
         }
@@ -132743,8 +132877,9 @@ function createFeishuChannel({
   const saveState = () => {
     const seen = { ...readJson(seenName, {}), ...state.seen };
     for (const [key, at] of Object.entries(seen)) if (Date.now() - at > 864e5) delete seen[key];
+    const saved = save ? save(state) : writeJson(botStateName(settings), state);
     writeJson(seenName, seen);
-    return save ? save(state) : writeJson(botStateName(settings), state);
+    return saved;
   };
   const identity = feishuIdentity(settings);
   let stopped = false;
@@ -132809,7 +132944,7 @@ function createFeishuChannel({
     }
   };
   const options = { desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: saveSettings, state, saveState, send, operator, isAuthorized: authorized };
-  const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread }) : new Router(options);
+  const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread, isActive: active }) : new Router(options);
   const receive = (event) => {
     const message = parseMessage(event, { botOpenId, appId: settings.appId });
     if (!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now() - message.timestamp) > 6e5) return;
@@ -132875,6 +133010,7 @@ function createFeishuChannel({
     },
     stop: () => {
       stopped = true;
+      router.stop?.();
       ws.close();
     },
     poll: () => {
@@ -132906,7 +133042,7 @@ var import_promises2 = require("node:timers/promises");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.2";
+var VERSION = "0.5.3";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

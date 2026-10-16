@@ -1,0 +1,133 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {FixedChatRouter} from '../src/fixed-router.mjs';
+
+const turn=(id,prompt,status='completed',text='答复 '+prompt)=>({id,status,items:[
+  {type:'userMessage',content:[{type:'text',text:prompt}]},{type:'agentMessage',id:'reply-'+id,text,phase:'final_answer'}]});
+const snapshot=(...turns)=>({thread:{status:{type:'idle'}},turns});
+function fixture({state={},desktop,threadId='bound'}={}) {
+  const f={sent:[],writes:[],saved:[],state,allowed:new Set(['alice','bob','carol']),live:true,snapshot:snapshot(turn('old','old'))};
+  f.desktop=desktop||{call:async(name,args,options)=>{
+    if(name==='read_thread'){if(f.readError)throw f.readError;return f.snapshot;}
+    options?.beforeSend?.();f.writes.push(args.prompt);if(f.writeError)throw f.writeError;return {accepted:true};
+  }};
+  f.router=new FixedChatRouter({thread:{id:threadId,hostId:'local'},desktop:f.desktop,state,saveState:()=>f.saved.push(structuredClone(state)),
+    isActive:()=>f.live,isAuthorized:id=>f.allowed.has(id),getConfig:()=>({}),
+    send:async(chatId,text,meta)=>{if(f.sendError)throw f.sendError;f.sent.push({chatId,text,meta});}});
+  f.message=(text,owner='alice',chatId='group',id=Math.random().toString())=>({id,text,openId:owner,chatId,chatType:chatId==='private'?undefined:'group',timestamp:Date.now()});
+  f.accept=(...messages)=>{for(const m of messages)assert.equal(f.router.acceptMessage(m),true);return f.router.poll();};
+  f.complete=async(id,prompt,status='completed')=>{f.snapshot=snapshot(turn(id,prompt,status));await f.router.poll();};
+  f.answers=()=>f.sent.filter(s=>s.meta.kind==='assistant');return f;
+}
+
+test('simultaneous senders wait for separate native turn completions, never ACKs or progress',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'),f.message('C','carol'));
+  assert.deepEqual(f.writes,['A']);assert.ok(f.saved.some(s=>s.fixedQueue.pending.length===3 && Object.keys(s.seen).length===3));
+  f.snapshot={thread:{status:{type:'active'}},turns:[turn('a','A','inProgress')]};
+  await Promise.all([f.router.poll(),f.router.poll(),f.router.poll()]);assert.deepEqual(f.writes,['A']);assert.equal(f.answers().length,0);
+  await f.complete('a','A');assert.deepEqual(f.writes,['A','B']);
+  await f.complete('b','B');assert.deepEqual(f.writes,['A','B','C']);await f.complete('c','C');
+  assert.deepEqual(f.answers().map(a=>[a.text,a.meta.replyOpenIds]),[['答复 A',['alice']],['答复 B',['bob']],['答复 C',['carol']]]);
+  assert.equal(f.state.fixedQueue.active,null);assert.equal(f.state.fixedQueue.pending.length,0);
+});
+
+test('the same sender and requests in different groups or private chats keep separate FIFO entries',async()=>{
+  const f=fixture();await f.accept(f.message('A','alice','group1'),f.message('B','alice','group2'),f.message('C','bob','private'));
+  await f.complete('a','A');await f.complete('b','B');await f.complete('c','C');
+  assert.deepEqual(f.answers().map(a=>a.chatId),['group1','group2','private']);assert.equal(f.answers()[2].meta.replyOpenIds,undefined);
+});
+
+test('an already busy desktop turn and approval never receive queued input as steering',async()=>{
+  const f=fixture();f.snapshot={thread:{status:{type:'active'}},turns:[turn('local','local task','inProgress')]};
+  await f.accept(f.message('A'));assert.deepEqual(f.writes,[]);assert.match(f.sent[0].text,/已排队/);
+  f.snapshot.thread.status.type='needsAttention';await f.router.poll();assert.deepEqual(f.writes,[]);
+  f.snapshot=snapshot(turn('local','local task'));await f.router.poll();assert.deepEqual(f.writes,['A']);assert.equal(f.answers().length,0);
+});
+
+test('approval, read failures and unrelated new turns cannot release an active request',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));
+  f.snapshot={thread:{status:{type:'needsAttention'}},turns:[turn('a','A','inProgress')]};await f.router.poll();await f.router.poll();
+  assert.equal(f.sent.filter(s=>/审批/.test(s.text)).length,1);assert.deepEqual(f.writes,['A']);
+  f.readError=Error('offline');await f.router.poll();assert.deepEqual(f.writes,['A']);delete f.readError;
+  f.snapshot=snapshot(turn('unrelated','local input'));await f.router.poll();assert.deepEqual(f.writes,['A']);assert.equal(f.answers().length,0);
+  f.snapshot=snapshot(turn('unrelated','local input'),turn('a','A'));await f.router.poll();assert.deepEqual(f.writes,['A','B']);
+});
+
+test('failed and interrupted turns notify their requester, then advance the next request',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'),f.message('C','carol'));
+  await f.complete('a','A','failed');assert.deepEqual(f.writes,['A','B']);
+  await f.complete('b','B','interrupted');assert.deepEqual(f.writes,['A','B','C']);
+  assert.deepEqual(f.sent.filter(s=>/执行失败|已中断/.test(s.text)).map(s=>s.meta.openId),['alice','bob']);
+});
+
+test('restart preserves queued input and deduplication without repeating the already accepted write',async()=>{
+  const first=fixture();const a=first.message('A');await first.accept(a,first.message('B','bob'));
+  const state=structuredClone(first.state);first.router.stop();const f=fixture({state});
+  assert.equal(f.router.acceptMessage(a),false);await f.router.poll();assert.deepEqual(f.writes,[]);
+  await f.complete('a','A');assert.deepEqual(f.writes,['B']);assert.equal(f.answers()[0].meta.openId,'alice');
+});
+
+test('a crash during a write or unknown delivery pauses the queue until actual matching input is observed',async()=>{
+  const first=fixture();first.writeError=Error('timeout');await first.accept(first.message('A'),first.message('B','bob'));
+  assert.equal(first.state.fixedQueue.active.phase,'uncertain');await first.router.poll();assert.deepEqual(first.writes,['A']);
+  const state=structuredClone(first.state);state.fixedQueue.active.phase='sending';first.router.stop();const f=fixture({state});
+  f.snapshot=snapshot(turn('unrelated','someone else'));await f.router.poll();assert.deepEqual(f.writes,[]);
+  await f.complete('a','A');assert.deepEqual(f.writes,['B']);assert.equal(f.answers().length,1);
+});
+
+test('definitely unsent messages survive connection errors and automatically retry after recovery',async()=>{
+  const f=fixture();f.readError=Error('offline');await f.accept(f.message('A'));assert.deepEqual(f.writes,[]);
+  delete f.readError;f.writeError=Object.assign(Error('not loaded'),{notSent:true});await f.router.poll();
+  assert.equal(f.state.fixedQueue.active,null);assert.equal(f.state.fixedQueue.pending[0].text,'A');
+  delete f.writeError;await f.router.poll();assert.deepEqual(f.writes,['A','A']);await f.complete('a','A');assert.equal(f.answers().length,1);
+});
+
+test('reply delivery failure retries the saved answer without rerunning tasks or advancing early',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));f.sendError=Error('Feishu offline');await f.complete('a','A');
+  assert.deepEqual(f.writes,['A']);assert.equal(f.state.fixedQueue.active.reply.text,'答复 A');
+  const state=structuredClone(f.state);f.router.stop();const restored=fixture({state});restored.snapshot=f.snapshot;
+  await restored.router.poll();assert.deepEqual(restored.writes,['B']);assert.equal(restored.answers()[0].text,'答复 A');
+});
+
+test('revocation drops queued work but keeps the active turn barrier until the desktop finishes',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'),f.message('C','carol'));f.allowed.delete('alice');f.allowed.delete('bob');
+  await f.router.poll();assert.deepEqual(f.writes,['A']);await f.complete('a','A');assert.deepEqual(f.writes,['A','C']);assert.equal(f.answers().length,0);
+});
+
+test('stopping or rebinding during a baseline read prevents the native write',async()=>{
+  for(const stop of [f=>f.router.stop(),f=>f.live=false]) {
+    const f=fixture();let resolve;f.desktop.call=()=>new Promise(r=>resolve=r);
+    const work=f.accept(f.message('A'));await new Promise(r=>setImmediate(r));stop(f);resolve(snapshot(turn('old','old')));await work;
+    assert.equal(f.state.fixedQueue.active,null);assert.equal(f.state.fixedQueue.pending.length,1);
+  }
+});
+
+test('two fixed bots bound to the same desktop conversation cannot dispatch overlapping turns',async()=>{
+  const first=fixture(),second=fixture({desktop:first.desktop});await first.accept(first.message('A'));await second.accept(second.message('B','bob'));
+  assert.deepEqual(first.writes,['A']);await first.complete('a','A');await second.router.poll();assert.deepEqual(first.writes,['A','B']);
+});
+
+test('queue overflow is explicit and SDK redelivery never enqueues twice',async()=>{
+  const f=fixture();f.snapshot={thread:{status:{type:'active'}},turns:[turn('old','old','inProgress')]};
+  const messages=Array.from({length:100},(_,i)=>f.message('task '+i));await f.accept(...messages);
+  assert.equal(f.router.acceptMessage(messages[0]),false);assert.equal(f.router.acceptMessage(f.message('overflow')),false);
+  assert.equal(f.state.fixedQueue.pending.length,100);assert.ok(f.sent.some(s=>/队列已满/.test(s.text)));assert.deepEqual(f.writes,[]);
+});
+
+test('upgrading drains legacy reply watches before dispatching newly queued requests',async()=>{
+  const state={watches:{legacy:{thread:{id:'bound',hostId:'local'},openId:'alice',chatId:'group',chatType:'group',replyOpenIds:['alice'],baselineTurnId:'old',messageId:'reply-old'}}};
+  const f=fixture({state});f.snapshot={thread:{status:{type:'active'}},turns:[turn('legacy','legacy input','inProgress')]};
+  await f.accept(f.message('A'));assert.deepEqual(f.writes,[]);await f.complete('legacy','legacy input');assert.deepEqual(f.writes,['A']);
+  assert.equal(f.answers()[0].text,'答复 legacy input');assert.equal(f.router.watches.size,0);
+});
+
+test('upgrading clears an already answered legacy watch that steered into its baseline turn',async()=>{
+  const state={watches:{legacy:{thread:{id:'bound',hostId:'local'},openId:'alice',chatId:'group',baselineTurnId:'old',messageId:'reply-old'}}};
+  const f=fixture({state});await f.accept(f.message('A'));assert.deepEqual(f.writes,['A']);assert.equal(f.router.watches.size,0);assert.equal(f.answers().length,0);
+});
+
+test('local steering in the same native turn does not hide the queued request from completion tracking',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));
+  const a=turn('a','A');a.items.splice(1,0,{type:'userMessage',content:[{type:'text',text:'local follow-up'}]});
+  f.snapshot=snapshot(a);await f.router.poll();assert.deepEqual(f.writes,['A','B']);assert.equal(f.answers().length,1);
+});
