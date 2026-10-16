@@ -87,13 +87,18 @@ export class DesktopInput {
     if(response.resultType==='error' && response.error==='no-client-found')return null;
     throw inputError('无法确认桌面会话连接，消息尚未发送。请重新启动桥接。',true);
   }
-  async loadOwner(threadId,hostId,authorize) {
+  async loadOwner(threadId,hostId,authorize,beforeActivate) {
     if(!this.activateThread)throw inputError('目标会话尚未加载，消息尚未发送。请重新启动桥接以启用自动打开会话。',true);
     const key=JSON.stringify([hostId,threadId]);
     let loading=this.loading.get(key);
     if(!loading) {
       loading=(async()=>{
         authorize();
+        // A queued request may retry discovery without repeatedly focusing the
+        // desktop. Its router persists this decision before the first opening.
+        let activate;
+        try {activate=beforeActivate?.();}catch{throw inputError('无法确认通道状态，消息尚未发送。',true);}
+        if(activate===false)throw inputError('目标会话连接尚未恢复，消息已保留；不会再次自动切换桌面。',true);
         try {await this.activateThread({threadId,hostId});}
         catch {throw inputError('未能确认目标会话已打开，消息尚未发送。请检查桌面连接后重试。',true);}
         const deadline=Date.now()+this.loadTimeoutMs;
@@ -112,7 +117,7 @@ export class DesktopInput {
     try {return await loading;}
     finally {if(this.loading.get(key)===loading)this.loading.delete(key);}
   }
-  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend) {
+  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend,{beforeSubmit,beforeActivate}={}) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
     if(clientUserMessageId!==undefined && (typeof clientUserMessageId!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -126,7 +131,11 @@ export class DesktopInput {
     // Loaded chats stay in the background. For cold chats the user permits
     // opening the target; navigation alone is not proof that it has loaded.
     authorize();
-    if(!owner)owner=await this.loadOwner(threadId,hostId,authorize);
+    if(!owner)owner=await this.loadOwner(threadId,hostId,authorize,beforeActivate);
+    // Loading can take seconds. Recheck queue readiness after it completes,
+    // before any native write, so a newly started desktop task is not steered.
+    try {await beforeSubmit?.();}
+    catch(error) {throw Object.assign(inputError(error.message||'发送前检查失败，消息尚未发送。',true),{code:error.code});}
     authorize();
     const request={threadId,clientUserMessageId:clientUserMessageId||randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
       ...(model?{model}:{}),...(thinking?{effort:thinking}:{})};

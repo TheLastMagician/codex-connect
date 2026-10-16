@@ -175,11 +175,12 @@ test('the packaged startup hook starts once with a real desktop source and never
       {CODEX_APP_TOOLS_PIPE_PATH:host.pipe});
     children.add(readJson('bridge.lock',{}).pid);assert.equal(result.state,'started');
     assert.equal(host.calls.length,1);assert.equal(host.calls[0].params.threadId,'actual-hook-session');
-    assert.equal(host.calls[0].params.tool,'list_threads');
+    assert.equal(host.calls[0].params.tool,'read_thread');
+    assert.deepEqual(host.calls[0].params.arguments,{threadId:'actual-hook-session',turnLimit:1,maxOutputCharsPerItem:1});
     await runHook({hook_event_name:'SessionStart',source:'resume',session_id:'another-real-session'},
       {CODEX_APP_TOOLS_PIPE_PATH:host.pipe});
     assert.equal(fs.readFileSync(path.join(dataDir,'launches.txt'),'utf8'),'started\n');
-    assert.ok(host.calls.every(r=>r.params.tool==='list_threads'));
+    assert.ok(host.calls.every(r=>r.params.tool==='read_thread'));
   }finally{await host.close();}
 });
 test('a non-desktop CLI hook cannot bind its session ID to the saved desktop pipe',async()=>{

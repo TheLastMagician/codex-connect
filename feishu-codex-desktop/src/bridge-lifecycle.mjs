@@ -29,7 +29,7 @@ export function hasConfiguredChannel() {
 }
 export async function validateDesktopContext(context) {
   const desktop=new DesktopClient(context);
-  try {await desktop.call('list_threads',{limit:1});return desktop.context;}finally{desktop.close();}
+  try {await desktop.probe();return desktop.context;}finally{desktop.close();}
 }
 export function pauseAutostart() {
   const saved=readJson('desktop-context.json',{});

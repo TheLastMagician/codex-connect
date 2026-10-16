@@ -41,10 +41,10 @@ export async function main() {
     try {
       if(current.pipePath!==desktop.context.pipePath || current.threadId!==desktop.context.threadId) {
         const probe=new DesktopClient(current);
-        try{await probe.call('list_threads',{limit:1});current={...probe.context};}finally{probe.close();}
+        try{await probe.probe();current={...probe.context};}finally{probe.close();}
         desktop.updateContext(current);
       }
-      await desktop.call('list_threads',{limit:1},{timeoutMs:5000});
+      await desktop.probe();
       if(!desktop.input.socket || desktop.input.socket.destroyed)await desktop.input.connect();
       status.desktopConnected=true;
     }catch{status.desktopConnected=false;}

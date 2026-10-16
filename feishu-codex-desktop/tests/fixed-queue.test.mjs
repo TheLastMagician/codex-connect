@@ -9,7 +9,9 @@ function fixture({state={},desktop,threadId='bound'}={}) {
   const f={sent:[],writes:[],saved:[],state,time:Date.now(),allowed:new Set(['alice','bob','carol']),live:true,snapshot:snapshot(turn('old','old'))};
   f.desktop=desktop||{call:async(name,args,options)=>{
     if(name==='read_thread'){if(f.readError)throw f.readError;return f.snapshot;}
-    options?.beforeSend?.();f.writes.push(args.prompt);if(f.writeError)throw f.writeError;return f.receipt||{accepted:true};
+    options?.beforeSend?.();await f.beforeSubmit?.();
+    try {await options?.beforeSubmit?.();options?.beforeSend?.();}catch(error){throw Object.assign(error,{notSent:true});}
+    f.writes.push(args.prompt);if(f.writeError)throw f.writeError;return f.receipt||{accepted:true};
   }};
   f.router=new FixedChatRouter({thread:{id:threadId,hostId:'local'},desktop:f.desktop,state,saveState:()=>f.saved.push(structuredClone(state)),
     isActive:()=>f.live,isAuthorized:id=>f.allowed.has(id),getConfig:()=>({}),now:()=>f.time,
@@ -198,4 +200,35 @@ test('pending receipts distinguish unavailable desktop connection from executing
   assert.match(f.sent.at(-1).text,/无法连接目标会话/);assert.equal(f.state.fixedQueue.blockedReason,'connection');
   delete f.readError;f.snapshot={thread:{status:{type:'active'}},turns:[turn('local','local task','inProgress')]};await f.router.poll();
   assert.equal(f.state.fixedQueue.blockedReason,'busy');assert.match(f.sent.at(-1).text,/处理前面的任务/);assert.deepEqual(f.writes,[]);
+});
+
+test('desktop work that starts while loading holds the queue without steering and refreshes the final baseline',async()=>{
+  const f=fixture();f.beforeSubmit=()=>{f.snapshot={thread:{status:{type:'active'}},turns:[turn('local','desktop work','inProgress')]};};
+  await f.accept(f.message('A'));assert.deepEqual(f.writes,[]);assert.equal(f.state.fixedQueue.active,null);
+  assert.equal(f.state.fixedQueue.pending[0].text,'A');assert.equal(f.state.fixedQueue.blockedReason,'busy');
+  delete f.beforeSubmit;f.snapshot=snapshot(turn('local','desktop work'));await f.router.poll();assert.deepEqual(f.writes,['A']);
+  assert.deepEqual(f.state.fixedQueue.active.baselineTurnIds,['local']);
+  await f.router.poll();assert.equal(f.answers().length,0);
+});
+
+test('a read failure after loading retains the unsent queue and persists the connection reason on each retry',async()=>{
+  const f=fixture();f.beforeSubmit=()=>{f.readError=Error('offline');};
+  await f.accept(f.message('A'));assert.deepEqual(f.writes,[]);assert.equal(f.state.fixedQueue.active,null);
+  delete f.readError;await f.router.poll();assert.deepEqual(f.writes,[]);
+  assert.equal(f.saved.at(-1).fixedQueue.blockedReason,'connection');assert.equal(f.state.fixedQueue.pending.length,1);
+});
+
+test('the opening budget survives retries and restarts for the whole queued batch',async()=>{
+  let f,opens=0;
+  const desktop={call:async(name,args,options)=>{
+    if(name==='read_thread')return snapshot(turn('old','old'));
+    if(options.beforeActivate())opens++;
+    throw Object.assign(Error('not connected'),{notSent:true});
+  }};
+  f=fixture({desktop});await f.accept(f.message('A'),f.message('B','bob'));
+  await f.router.poll();assert.equal(opens,1);assert.equal(f.saved.at(-1).fixedQueue.autoOpenAttempted,true);
+  const state=structuredClone(f.state);f.router.stop();f=fixture({desktop,state});await f.router.poll();
+  await f.accept(f.message('C','carol'));assert.equal(opens,1);assert.equal(f.state.fixedQueue.pending.length,3);
+  // Only a new batch, after all old requests have left the queue, can open again.
+  f.state.fixedQueue.pending=[];await f.accept(f.message('D'));assert.equal(opens,2);
 });

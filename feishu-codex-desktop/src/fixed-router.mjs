@@ -32,6 +32,7 @@ export class FixedChatRouter extends Router {
       || !Number.isFinite(message.timestamp) || Math.abs(this.now()-message.timestamp)>600000 || !this.authorized(message.openId))return false;
     const key=fingerprint(message);if(this.state.seen[key])return false;
     const queue=this.state.fixedQueue,ahead=queue.pending.length+(queue.active?1:0)+(this.watches.size?1:0);
+    if(!ahead)delete queue.autoOpenAttempted;
     this.state.seen[key]=this.now();
     for(const [id,at] of Object.entries(this.state.seen))if(this.now()-at>86400000)delete this.state.seen[id];
     if(queue.pending.length>=100) {
@@ -64,7 +65,7 @@ export class FixedChatRouter extends Router {
   async read() {return this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:10,maxOutputCharsPerItem:20000});}
   async waitingNotice(message,text,reason='connection') {
     this.state.fixedQueue.blockedReason=reason;
-    if(message.waitReason===reason || !this.live() || !this.authorized(message.openId))return;
+    if(message.waitReason===reason || !this.live() || !this.authorized(message.openId)){this.saveState();return;}
     message.waitReason=reason;message.notified=true;this.saveState();await this.notify(message,text);
   }
   findTurn(result,active) {
@@ -162,12 +163,27 @@ export class FixedChatRouter extends Router {
     queue.pending.shift();queue.active=active;delete queue.blockedReason;this.saveState();
     try {
       const receipt=await this.desktop.call('send_message_to_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),prompt:message.text,clientUserMessageId:active.clientUserMessageId},
-        {beforeSend:()=>{if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');}});
+        {beforeSend:()=>{if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');},
+          beforeActivate:()=>{
+            if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');
+            if(queue.autoOpenAttempted)return false;
+            queue.autoOpenAttempted=true;this.saveState();return true;
+          },
+          beforeSubmit:async()=>{
+            const fresh=await this.read();
+            if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');
+            if(!idle(fresh))throw Object.assign(new Error('会话正在执行，消息尚未发送。'),{code:'THREAD_BUSY'});
+            active.baselineTurnId=fresh.turns?.[0]?.id;
+            active.baselineAssistantMessageId=threadSnapshot(fresh).latestAssistantMessage?.id;
+            active.baselineTurnIds=(fresh.turns||[]).map(turn=>turn.id);this.saveState();
+          }});
       active.phase='waiting';if(typeof receipt?.turnId==='string')active.turnId=receipt.turnId;this.saveState();
     }catch(error) {
       if(error.notSent) {
         queue.active=null;queue.pending.unshift(message);this.saveState();
-        await this.waitingNotice(message,'已排队，暂时无法连接目标会话；连接恢复后会自动处理。');
+        await this.waitingNotice(message,error.code==='THREAD_BUSY'
+          ?'已排队，会话正在处理前面的任务；结束后会自动处理你的问题。'
+          :'已排队，暂时无法连接目标会话；连接恢复后会自动处理。',error.code==='THREAD_BUSY'?'busy':'connection');
       }else {
         active.phase='uncertain';this.saveState();
         if(this.live() && this.authorized(message.openId))await this.notify(message,'消息发送结果待确认，正在核对桌面状态。原消息已保存，不会自动重发；这不表示会话仍在执行。');

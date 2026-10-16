@@ -234,3 +234,36 @@ test('a router rejection before reaching a desktop owner is definitely unsent, w
     }finally{await f.close();}
   }
 });
+
+test('queued connection retries discover the owner without repeatedly focusing the desktop',async()=>{
+  let opens=0,attempted=false;
+  const f=await fixture({ownerReady:false,loadTimeoutMs:15,activateThread:async()=>{opens++;}});
+  const options={beforeActivate:()=>{if(attempted)return false;attempted=true;return true;}};
+  try {
+    for(let i=0;i<3;i++)await assert.rejects(f.input.send({threadId:'cold',prompt:'原文'},undefined,options),e=>e.notSent);
+    assert.equal(opens,1);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+    f.setOwnerReady();await f.input.send({threadId:'cold',prompt:'原文'},undefined,options);
+    assert.equal(opens,1);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
+  }finally{await f.close();}
+});
+
+test('post-loading readiness checks and authorization happen before the only native write',async()=>{
+  for(const reason of ['busy','read-failure','revoked']) {
+    const f=await fixture({ownerReady:false,activateThread:async()=>f.setOwnerReady()});let allowed=true,checked=0;
+    const client=new DesktopClient({threadId:'genuine-caller',inputPipePath:f.pipe});
+    // Use the genuine transport fixture and permit its cold activation.
+    client.input=f.input;
+    try {
+      await assert.rejects(client.call('send_message_to_thread',{threadId:'cold',prompt:'原文'},{
+        beforeSend:()=>{if(!allowed)throw Error('Revoked');},
+        beforeSubmit:async()=>{
+          checked++;await new Promise(resolve=>setImmediate(resolve));
+          assert.equal(f.requests.some(r=>r.method==='thread-follower-start-turn'),false);
+          if(reason==='revoked'){allowed=false;return;}
+          throw Object.assign(Error(reason),{code:reason==='busy'?'THREAD_BUSY':undefined});
+        }
+      }),e=>e.notSent && (reason!=='busy' || e.code==='THREAD_BUSY'));
+      assert.equal(checked,1);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+    }finally{client.close();await f.close();}
+  }
+});

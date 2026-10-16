@@ -6,6 +6,15 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DesktopClient,encodeFrame} from '../src/desktop.mjs';
 import {recoverDesktopContext} from '../src/desktop-context.mjs';
+test('health probes read only the genuine calling chat without listing all chats or writing input',async()=>{
+  const client=new DesktopClient({threadId:'host-supplied-caller'}),calls=[];
+  client.request=async(method,params,timeoutMs)=>{calls.push({method,params,timeoutMs});return {success:true,contentItems:[]};};
+  try {
+    await client.probe();assert.equal(calls.length,1);
+    assert.equal(calls[0].params.tool,'read_thread');assert.equal(calls[0].params.threadId,'host-supplied-caller');
+    assert.deepEqual(calls[0].params.arguments,{threadId:'host-supplied-caller',turnLimit:1,maxOutputCharsPerItem:1});assert.equal(calls[0].timeoutMs,5000);
+  }finally{client.close();}
+});
 test('native transport handles split/coalesced UTF-8 frames and keeps genuine caller context',async()=>{
   const pipe=process.platform==='win32'?`\\\\.\\pipe\\feishu-test-${randomUUID()}`:path.join(os.tmpdir(),`feishu-${randomUUID()}.sock`);
   const server=net.createServer(socket=>{
@@ -61,7 +70,8 @@ test('a missing old pipe recovers before sending and uses the refreshed genuine 
     const mutations=host.calls.filter(call=>call.params?.tool==='create_thread');
     assert.equal(mutations.length,1);assert.equal(mutations[0].params.threadId,saved.threadId);
     assert.equal(mutations[0].params.arguments.prompt,'用户任务，保留原文');
-    assert.ok(host.calls.filter(call=>call.params?.tool!=='create_thread').every(call=>call.method==='tools/list' || call.params.tool==='list_threads'));
+    assert.ok(host.calls.filter(call=>call.params?.tool!=='create_thread').every(call=>call.method==='tools/list' || call.params.tool==='read_thread'));
+    assert.equal(host.calls.find(call=>call.params?.tool==='read_thread').params.arguments.threadId,saved.threadId);
   }finally{client.close();await host.close();}
 });
 

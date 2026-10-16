@@ -37,7 +37,7 @@ export class DesktopClient {
           try {
             const tools=await probe.tools({timeoutMs:1500});
             if(!tools.some(tool=>tool.name==='list_threads') || !tools.some(tool=>tool.name==='read_thread'))throw desktopUnavailable();
-            await probe.call('list_threads',{limit:1},{timeoutMs:3000});
+            await probe.probe({timeoutMs:3000});
           }finally{probe.close();}
         }});
       }catch{throw desktopUnavailable();}
@@ -111,10 +111,13 @@ export class DesktopClient {
     const result = await this.request('tools/list',{threadStartKind:'all'},timeoutMs);
     return (result.tools||[]).filter(tool => tool.namespace === 'codex_app' && ALLOWED_TOOLS.has(tool.name));
   }
+  probe({timeoutMs=5000}={}) {
+    return this.call('read_thread',{threadId:this.context.threadId,turnLimit:1,maxOutputCharsPerItem:1},{timeoutMs});
+  }
   async call(tool,args={},options={}) {
     if(!ALLOWED_TOOLS.has(tool)) throw new Error('不支持的桌面操作');
     if(!this.context.threadId) throw new Error('缺少真实调用会话，请从 Codex 桌面内启动桥接');
-    if(tool==='send_message_to_thread')return this.input.send(args,options.beforeSend);
+    if(tool==='send_message_to_thread')return this.input.send(args,options.beforeSend,options);
     const result=await this.request('tools/call',{
       namespace:'codex_app',tool,arguments:args,callerSource:'codex',
       threadId:this.context.threadId,hostId:'local',

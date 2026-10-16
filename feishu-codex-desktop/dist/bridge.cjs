@@ -130612,13 +130612,20 @@ var DesktopInput = class {
     if (response.resultType === "error" && response.error === "no-client-found") return null;
     throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
   }
-  async loadOwner(threadId, hostId, authorize) {
+  async loadOwner(threadId, hostId, authorize, beforeActivate) {
     if (!this.activateThread) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u4EE5\u542F\u7528\u81EA\u52A8\u6253\u5F00\u4F1A\u8BDD\u3002", true);
     const key = JSON.stringify([hostId, threadId]);
     let loading = this.loading.get(key);
     if (!loading) {
       loading = (async () => {
         authorize();
+        let activate;
+        try {
+          activate = beforeActivate?.();
+        } catch {
+          throw inputError("\u65E0\u6CD5\u786E\u8BA4\u901A\u9053\u72B6\u6001\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+        }
+        if (activate === false) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u8FDE\u63A5\u5C1A\u672A\u6062\u590D\uFF0C\u6D88\u606F\u5DF2\u4FDD\u7559\uFF1B\u4E0D\u4F1A\u518D\u6B21\u81EA\u52A8\u5207\u6362\u684C\u9762\u3002", true);
         try {
           await this.activateThread({ threadId, hostId });
         } catch {
@@ -130646,7 +130653,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -130668,7 +130675,12 @@ var DesktopInput = class {
       throw inputError("\u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
     }
     authorize();
-    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize);
+    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
+    try {
+      await beforeSubmit?.();
+    } catch (error) {
+      throw Object.assign(inputError(error.message || "\u53D1\u9001\u524D\u68C0\u67E5\u5931\u8D25\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: error.code });
+    }
     authorize();
     const request = {
       threadId,
@@ -130848,7 +130860,7 @@ var DesktopClient = class _DesktopClient {
           try {
             const tools = await probe.tools({ timeoutMs: 1500 });
             if (!tools.some((tool2) => tool2.name === "list_threads") || !tools.some((tool2) => tool2.name === "read_thread")) throw desktopUnavailable();
-            await probe.call("list_threads", { limit: 1 }, { timeoutMs: 3e3 });
+            await probe.probe({ timeoutMs: 3e3 });
           } finally {
             probe.close();
           }
@@ -130968,10 +130980,13 @@ var DesktopClient = class _DesktopClient {
     const result = await this.request("tools/list", { threadStartKind: "all" }, timeoutMs);
     return (result.tools || []).filter((tool2) => tool2.namespace === "codex_app" && ALLOWED_TOOLS.has(tool2.name));
   }
+  probe({ timeoutMs = 5e3 } = {}) {
+    return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs });
+  }
   async call(tool2, args = {}, options = {}) {
     if (!ALLOWED_TOOLS.has(tool2)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
-    if (tool2 === "send_message_to_thread") return this.input.send(args, options.beforeSend);
+    if (tool2 === "send_message_to_thread") return this.input.send(args, options.beforeSend, options);
     const result = await this.request("tools/call", {
       namespace: "codex_app",
       tool: tool2,
@@ -132336,6 +132351,7 @@ var FixedChatRouter = class extends Router {
     const key = fingerprint(message);
     if (this.state.seen[key]) return false;
     const queue = this.state.fixedQueue, ahead = queue.pending.length + (queue.active ? 1 : 0) + (this.watches.size ? 1 : 0);
+    if (!ahead) delete queue.autoOpenAttempted;
     this.state.seen[key] = this.now();
     for (const [id, at] of Object.entries(this.state.seen)) if (this.now() - at > 864e5) delete this.state.seen[id];
     if (queue.pending.length >= 100) {
@@ -132383,7 +132399,10 @@ var FixedChatRouter = class extends Router {
   }
   async waitingNotice(message, text, reason = "connection") {
     this.state.fixedQueue.blockedReason = reason;
-    if (message.waitReason === reason || !this.live() || !this.authorized(message.openId)) return;
+    if (message.waitReason === reason || !this.live() || !this.authorized(message.openId)) {
+      this.saveState();
+      return;
+    }
     message.waitReason = reason;
     message.notified = true;
     this.saveState();
@@ -132531,9 +132550,27 @@ var FixedChatRouter = class extends Router {
       const receipt = await this.desktop.call(
         "send_message_to_thread",
         { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, prompt: message.text, clientUserMessageId: active.clientUserMessageId },
-        { beforeSend: () => {
-          if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
-        } }
+        {
+          beforeSend: () => {
+            if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
+          },
+          beforeActivate: () => {
+            if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
+            if (queue.autoOpenAttempted) return false;
+            queue.autoOpenAttempted = true;
+            this.saveState();
+            return true;
+          },
+          beforeSubmit: async () => {
+            const fresh = await this.read();
+            if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
+            if (!idle(fresh)) throw Object.assign(new Error("\u4F1A\u8BDD\u6B63\u5728\u6267\u884C\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002"), { code: "THREAD_BUSY" });
+            active.baselineTurnId = fresh.turns?.[0]?.id;
+            active.baselineAssistantMessageId = threadSnapshot(fresh).latestAssistantMessage?.id;
+            active.baselineTurnIds = (fresh.turns || []).map((turn) => turn.id);
+            this.saveState();
+          }
+        }
       );
       active.phase = "waiting";
       if (typeof receipt?.turnId === "string") active.turnId = receipt.turnId;
@@ -132543,7 +132580,7 @@ var FixedChatRouter = class extends Router {
         queue.active = null;
         queue.pending.unshift(message);
         this.saveState();
-        await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u3002");
+        await this.waitingNotice(message, error.code === "THREAD_BUSY" ? "\u5DF2\u6392\u961F\uFF0C\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u524D\u9762\u7684\u4EFB\u52A1\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002" : "\u5DF2\u6392\u961F\uFF0C\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u3002", error.code === "THREAD_BUSY" ? "busy" : "connection");
       } else {
         active.phase = "uncertain";
         this.saveState();
@@ -133135,7 +133172,7 @@ var import_promises2 = require("node:timers/promises");
 var import_node_crypto9 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.4";
+var VERSION = "0.5.5";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -134007,14 +134044,14 @@ async function main() {
       if (current.pipePath !== desktop.context.pipePath || current.threadId !== desktop.context.threadId) {
         const probe = new DesktopClient(current);
         try {
-          await probe.call("list_threads", { limit: 1 });
+          await probe.probe();
           current = { ...probe.context };
         } finally {
           probe.close();
         }
         desktop.updateContext(current);
       }
-      await desktop.call("list_threads", { limit: 1 }, { timeoutMs: 5e3 });
+      await desktop.probe();
       if (!desktop.input.socket || desktop.input.socket.destroyed) await desktop.input.connect();
       status.desktopConnected = true;
     } catch {
