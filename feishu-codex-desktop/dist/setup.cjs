@@ -4649,7 +4649,7 @@ init_storage();
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.3";
+var VERSION = "0.5.4";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -5130,9 +5130,11 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking }, beforeSend) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+    if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
+      throw inputError("\u6D88\u606F\u6807\u8BC6\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     const authorize = () => {
       try {
         beforeSend?.();
@@ -5154,7 +5156,7 @@ var DesktopInput = class {
     authorize();
     const request = {
       threadId,
-      clientUserMessageId: (0, import_node_crypto5.randomUUID)(),
+      clientUserMessageId: clientUserMessageId || (0, import_node_crypto5.randomUUID)(),
       input: [{ type: "text", text: prompt, text_elements: [] }],
       ...model ? { model } : {},
       ...thinking ? { effort: thinking } : {}
@@ -5163,8 +5165,12 @@ var DesktopInput = class {
       conversationId: threadId,
       turnStart: { request, context: { inheritThreadSettings: true } }
     }, { hostId, targetClientId: owner });
-    if (response.resultType !== "success") throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
-    return { threadId, accepted: true };
+    if (response.resultType !== "success") {
+      if (["no-client-found", "version-mismatch", "unsupported-version"].includes(response.error)) throw inputError("\u76EE\u6807\u684C\u9762\u8FDE\u63A5\u5DF2\u5931\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+      throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+    }
+    const turnId = response.result?.result?.turn?.id;
+    return { threadId, accepted: true, ...clientUserMessageId ? { clientUserMessageId } : {}, ...typeof turnId === "string" ? { turnId } : {} };
   }
   disconnect() {
     const socket = this.socket;

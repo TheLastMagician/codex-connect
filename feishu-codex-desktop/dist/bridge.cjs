@@ -130646,9 +130646,11 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking }, beforeSend) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+    if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
+      throw inputError("\u6D88\u606F\u6807\u8BC6\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     const authorize = () => {
       try {
         beforeSend?.();
@@ -130670,7 +130672,7 @@ var DesktopInput = class {
     authorize();
     const request = {
       threadId,
-      clientUserMessageId: (0, import_node_crypto.randomUUID)(),
+      clientUserMessageId: clientUserMessageId || (0, import_node_crypto.randomUUID)(),
       input: [{ type: "text", text: prompt, text_elements: [] }],
       ...model ? { model } : {},
       ...thinking ? { effort: thinking } : {}
@@ -130679,8 +130681,12 @@ var DesktopInput = class {
       conversationId: threadId,
       turnStart: { request, context: { inheritThreadSettings: true } }
     }, { hostId, targetClientId: owner });
-    if (response.resultType !== "success") throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
-    return { threadId, accepted: true };
+    if (response.resultType !== "success") {
+      if (["no-client-found", "version-mismatch", "unsupported-version"].includes(response.error)) throw inputError("\u76EE\u6807\u684C\u9762\u8FDE\u63A5\u5DF2\u5931\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
+      throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+    }
+    const turnId = response.result?.result?.turn?.id;
+    return { threadId, accepted: true, ...clientUserMessageId ? { clientUserMessageId } : {}, ...typeof turnId === "string" ? { turnId } : {} };
   }
   disconnect() {
     const socket = this.socket;
@@ -132286,9 +132292,13 @@ function revokeWechatLogin(loginId, accountLoginId) {
 var import_node_sdk = __toESM(require_lib2(), 1);
 
 // src/fixed-router.mjs
+var import_node_crypto7 = require("node:crypto");
 var leases = /* @__PURE__ */ new WeakMap();
 var terminal = (turn) => ["completed", "failed", "interrupted"].includes(turn?.status);
 var statusOf = (thread) => typeof thread?.status === "string" ? thread.status : thread?.status?.type;
+var idle = (snapshot) => ["idle", "notLoaded"].includes(statusOf(snapshot.thread)) && (!snapshot.turns?.[0] || terminal(snapshot.turns[0]));
+var UNCONFIRMED_GRACE_MS = 12e4;
+var IDLE_CONFIRM_MS = 15e3;
 var inputsOf = (turn) => (turn?.items || []).filter((item) => item.type === "userMessage").map((item) => Array.isArray(item.content) ? item.content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : item.text || "");
 var FixedChatRouter = class extends Router {
   constructor({ thread, isActive = () => true, ...options }) {
@@ -132296,6 +132306,11 @@ var FixedChatRouter = class extends Router {
     this.thread = { ...thread };
     this.isActive = isActive;
     this.state.fixedQueue ||= { pending: [], active: null };
+    this.state.fixedQueue.review ||= [];
+    if (this.state.fixedQueue.active) {
+      delete this.state.fixedQueue.active.idleSince;
+      delete this.state.fixedQueue.active.idleSnapshot;
+    }
     this.target = JSON.stringify([thread.hostId || "local", thread.id]);
     if (!leases.has(this.desktop)) leases.set(this.desktop, /* @__PURE__ */ new Map());
     this.leases = leases.get(this.desktop);
@@ -132335,7 +132350,7 @@ var FixedChatRouter = class extends Router {
     if (ahead) {
       item.notified = true;
       this.saveState();
-      void this.notify(item, `\u5DF2\u6392\u961F\uFF0C\u524D\u9762\u8FD8\u6709 ${ahead} \u6761\u8BF7\u6C42\u3002\u8F6E\u5230\u4F60\u65F6\u4F1A\u81EA\u52A8\u5904\u7406\u5E76\u56DE\u590D\u3002`).catch(() => {
+      void this.notify(item, queue.active && ["uncertain", "sending"].includes(queue.active.phase) ? "\u524D\u4E00\u6761\u53D1\u9001\u7ED3\u679C\u6B63\u5728\u6838\u5BF9\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\u7B49\u5F85\uFF1B\u8FD9\u4E0D\u8868\u793A Codex \u4ECD\u5728\u6267\u884C\u3002\u786E\u8BA4\u4F1A\u8BDD\u7A7A\u95F2\u540E\u4F1A\u7EE7\u7EED\u5904\u7406\u3002" : queue.blockedReason === "connection" ? "\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u6309\u987A\u5E8F\u53D1\u9001\u3002" : `\u5DF2\u6392\u961F\uFF0C\u524D\u9762\u8FD8\u6709 ${ahead} \u6761\u8BF7\u6C42\u3002\u8F6E\u5230\u4F60\u65F6\u4F1A\u81EA\u52A8\u5904\u7406\u5E76\u56DE\u590D\u3002`).catch(() => {
       });
     }
     void this.poll();
@@ -132366,18 +132381,71 @@ var FixedChatRouter = class extends Router {
   async read() {
     return this.desktop.call("read_thread", { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, turnLimit: 10, maxOutputCharsPerItem: 2e4 });
   }
-  async waitingNotice(message, text) {
-    if (message.notified || !this.live() || !this.authorized(message.openId)) return;
+  async waitingNotice(message, text, reason = "connection") {
+    this.state.fixedQueue.blockedReason = reason;
+    if (message.waitReason === reason || !this.live() || !this.authorized(message.openId)) return;
+    message.waitReason = reason;
     message.notified = true;
     this.saveState();
     await this.notify(message, text);
   }
+  findTurn(result, active) {
+    const turns = result.turns || [];
+    if (active.turnId) {
+      const turn = turns.find((turn2) => turn2.id === active.turnId);
+      if (turn?.id === active.baselineTurnId && terminal(turn) && threadSnapshot({ turns: [turn] }).latestAssistantMessage?.id === active.baselineAssistantMessageId && !(turn.items || []).some((item) => item.type === "userMessage" && item.id === active.clientUserMessageId)) return;
+      return turn;
+    }
+    return turns.find((turn) => active.clientUserMessageId && (turn.items || []).some((item) => item.type === "userMessage" && item.id === active.clientUserMessageId) || turn.id !== active.baselineTurnId && !active.baselineTurnIds?.includes(turn.id) && (inputsOf(turn).includes(active.message.text) || active.phase === "waiting" && !inputsOf(turn).length));
+  }
+  async pollReviews() {
+    const queue = this.state.fixedQueue;
+    if (!queue.review.length) return;
+    const result = await this.read();
+    if (!this.live()) return;
+    for (const record of [...queue.review]) {
+      const turn = this.findTurn(result, record);
+      if (!turn || !terminal(turn)) continue;
+      const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
+      if (this.authorized(record.message.openId)) await this.send(record.message.chatId, "\u6B64\u524D\u5F85\u6838\u5BF9\u6D88\u606F\u7684\u7ED3\u679C\uFF1A\n\n" + (turn.status === "completed" ? assistant?.text || "\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728\u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002"), this.meta(record.message, turn.status === "completed" ? "assistant" : "notice"));
+      if (!this.live()) return;
+      queue.review = queue.review.filter((item) => item !== record);
+      this.saveState();
+    }
+  }
+  async reviewUnmatched(active, result) {
+    const since = active.sentAt ?? active.message.timestamp;
+    if (!idle(result) || this.now() - since < UNCONFIRMED_GRACE_MS) {
+      delete active.idleSince;
+      delete active.idleSnapshot;
+      this.saveState();
+      return false;
+    }
+    const stamp = result.turns?.[0]?.id || "empty";
+    if (active.idleSince === void 0 || active.idleSnapshot !== stamp) {
+      active.idleSince = this.now();
+      active.idleSnapshot = stamp;
+      this.saveState();
+      return false;
+    }
+    if (this.now() - active.idleSince < IDLE_CONFIRM_MS) return false;
+    const queue = this.state.fixedQueue;
+    queue.review.push({ ...active, reviewedAt: this.now() });
+    queue.active = null;
+    this.saveState();
+    if (this.authorized(active.message.openId)) await this.notify(active.message, "\u6B64\u524D\u8FD9\u6761\u6D88\u606F\u7684\u53D1\u9001\u6216\u56DE\u590D\u6682\u65F6\u65E0\u6CD5\u6838\u5BF9\uFF0C\u539F\u6587\u5DF2\u4FDD\u7559\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u91CD\u53D1\u3002\u5DF2\u8FDE\u7EED\u786E\u8BA4\u4F1A\u8BDD\u7A7A\u95F2\uFF0C\u540E\u7EED\u8BF7\u6C42\u7EE7\u7EED\u5904\u7406\u3002").catch(() => {
+    });
+    return true;
+  }
   async advance() {
     const queue = this.state.fixedQueue;
+    if (!this.live()) return;
+    await this.pollReviews().catch(() => {
+    });
     if (!this.live() || !queue.active && !queue.pending.length && !this.watches.size) return;
     const owner = this.leases.get(this.target);
     if (owner && owner !== this) {
-      if (queue.pending[0]) await this.waitingNotice(queue.pending[0], "\u5DF2\u6392\u961F\uFF0C\u8FD9\u4E2A\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u5176\u4ED6\u8BF7\u6C42\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002");
+      if (queue.pending[0]) await this.waitingNotice(queue.pending[0], "\u5DF2\u6392\u961F\uFF0C\u8FD9\u4E2A\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u5176\u4ED6\u8BF7\u6C42\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002", "busy");
       return;
     }
     this.leases.set(this.target, this);
@@ -132388,10 +132456,17 @@ var FixedChatRouter = class extends Router {
     if (queue.active) {
       const active2 = queue.active;
       if (!active2.reply) {
-        const result2 = await this.read();
+        let result2;
+        try {
+          result2 = await this.read();
+        } catch {
+          delete active2.idleSince;
+          delete active2.idleSnapshot;
+          this.saveState();
+          return;
+        }
         if (!this.live()) return;
-        const turns = result2.turns || [];
-        const turn = active2.turnId ? turns.find((t) => t.id === active2.turnId) : turns.find((t) => t.id !== active2.baselineTurnId && !active2.baselineTurnIds?.includes(t.id) && (inputsOf(t).includes(active2.message.text) || active2.phase === "waiting" && !inputsOf(t).length));
+        const turn = this.findTurn(result2, active2);
         if (turn) {
           active2.turnId = turn.id;
           this.saveState();
@@ -132401,16 +132476,24 @@ var FixedChatRouter = class extends Router {
           this.saveState();
           await this.notify(active2.message, "\u8FD9\u4E2A\u4F1A\u8BDD\u9700\u8981\u4F60\u5728 Codex \u684C\u9762\u5904\u7406\u5BA1\u6279\u6216\u8F93\u5165\uFF1B\u540E\u7EED\u95EE\u9898\u4F1A\u7EE7\u7EED\u6392\u961F\u3002");
         }
-        if (!turn || !terminal(turn)) return;
-        const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
-        active2.reply = { kind: turn.status === "completed" ? "assistant" : "notice", text: turn.status === "completed" ? assistant?.text || "\u8FD9\u6B21\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002" };
+        if (!turn) {
+          if (!await this.reviewUnmatched(active2, result2)) return;
+        } else {
+          delete active2.idleSince;
+          delete active2.idleSnapshot;
+          if (!terminal(turn)) return;
+          const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
+          active2.reply = { kind: turn.status === "completed" ? "assistant" : "notice", text: turn.status === "completed" ? assistant?.text || "\u8FD9\u6B21\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002" };
+          this.saveState();
+        }
+      }
+      if (queue.active) {
+        if (!this.live()) return;
+        if (this.authorized(active2.message.openId)) await this.send(active2.message.chatId, active2.reply.text, this.meta(active2.message, active2.reply.kind));
+        if (!this.live()) return;
+        queue.active = null;
         this.saveState();
       }
-      if (!this.live()) return;
-      if (this.authorized(active2.message.openId)) await this.send(active2.message.chatId, active2.reply.text, this.meta(active2.message, active2.reply.kind));
-      if (!this.live()) return;
-      queue.active = null;
-      this.saveState();
     }
     while (queue.pending.length && !this.authorized(queue.pending[0].openId)) {
       queue.pending.shift();
@@ -132428,22 +132511,32 @@ var FixedChatRouter = class extends Router {
     if (!this.live() || !this.authorized(message.openId)) return;
     const latest = result.turns?.[0], status = statusOf(result.thread);
     if (!["idle", "notLoaded"].includes(status) || latest && !terminal(latest)) {
-      await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u524D\u9762\u7684\u4EFB\u52A1\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002");
+      await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u524D\u9762\u7684\u4EFB\u52A1\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002", "busy");
       return;
     }
-    const active = { message, phase: "sending", baselineTurnId: latest?.id, baselineTurnIds: (result.turns || []).map((turn) => turn.id) };
+    const active = {
+      message,
+      phase: "sending",
+      sentAt: this.now(),
+      clientUserMessageId: (0, import_node_crypto7.randomUUID)(),
+      baselineTurnId: latest?.id,
+      baselineAssistantMessageId: threadSnapshot(result).latestAssistantMessage?.id,
+      baselineTurnIds: (result.turns || []).map((turn) => turn.id)
+    };
     queue.pending.shift();
     queue.active = active;
+    delete queue.blockedReason;
     this.saveState();
     try {
-      await this.desktop.call(
+      const receipt = await this.desktop.call(
         "send_message_to_thread",
-        { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, prompt: message.text },
+        { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, prompt: message.text, clientUserMessageId: active.clientUserMessageId },
         { beforeSend: () => {
           if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
         } }
       );
       active.phase = "waiting";
+      if (typeof receipt?.turnId === "string") active.turnId = receipt.turnId;
       this.saveState();
     } catch (error) {
       if (error.notSent) {
@@ -132454,7 +132547,7 @@ var FixedChatRouter = class extends Router {
       } else {
         active.phase = "uncertain";
         this.saveState();
-        if (this.live() && this.authorized(message.openId)) await this.notify(message, "\u6682\u65F6\u65E0\u6CD5\u786E\u8BA4\u6D88\u606F\u662F\u5426\u9001\u8FBE\uFF0C\u5DF2\u6682\u505C\u540E\u7EED\u961F\u5217\u4EE5\u907F\u514D\u91CD\u590D\u6267\u884C\uFF1B\u6B63\u5728\u7B49\u5F85\u684C\u9762\u786E\u8BA4\u3002");
+        if (this.live() && this.authorized(message.openId)) await this.notify(message, "\u6D88\u606F\u53D1\u9001\u7ED3\u679C\u5F85\u786E\u8BA4\uFF0C\u6B63\u5728\u6838\u5BF9\u684C\u9762\u72B6\u6001\u3002\u539F\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u91CD\u53D1\uFF1B\u8FD9\u4E0D\u8868\u793A\u4F1A\u8BDD\u4ECD\u5728\u6267\u884C\u3002");
       }
     }
   }
@@ -132502,7 +132595,7 @@ function fixedReply(text, meta = {}) {
 }
 
 // src/card-actions.mjs
-var import_node_crypto7 = require("node:crypto");
+var import_node_crypto8 = require("node:crypto");
 var TTL = 6 * 60 * 60 * 1e3;
 var CardActions = class {
   constructor({ state, saveState, getConfig, now = Date.now }) {
@@ -132511,7 +132604,7 @@ var CardActions = class {
   }
   issue(owner, action) {
     for (const [token2, record] of Object.entries(this.state.cardActions)) if (record.expiresAt < this.now()) delete this.state.cardActions[token2];
-    const token = (0, import_node_crypto7.randomBytes)(16).toString("hex");
+    const token = (0, import_node_crypto8.randomBytes)(16).toString("hex");
     this.state.cardActions[token] = { ...owner, action, expiresAt: this.now() + TTL };
     return token;
   }
@@ -133035,14 +133128,14 @@ function createFeishuChannel({
 }
 
 // src/channels/wechat.mjs
-var import_node_crypto9 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 var import_promises2 = require("node:timers/promises");
 
 // src/wechat-api.mjs
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.3";
+var VERSION = "0.5.4";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -133072,7 +133165,7 @@ var WechatApi = class {
     if (post) Object.assign(headers, {
       "Content-Type": "application/json",
       AuthorizationType: "ilink_bot_token",
-      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto8.randomBytes)(4).readUInt32BE())).toString("base64"),
+      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto9.randomBytes)(4).readUInt32BE())).toString("base64"),
       ...auth && this.token ? { Authorization: `Bearer ${this.token}` } : {}
     });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -133117,7 +133210,7 @@ var WechatApi = class {
     return this.bot("sendmessage", { msg: {
       from_user_id: "",
       to_user_id: userId,
-      client_id: `codex-${(0, import_node_crypto8.randomUUID)()}`,
+      client_id: `codex-${(0, import_node_crypto9.randomUUID)()}`,
       message_type: 2,
       message_state: 2,
       context_token: contextToken,
@@ -133152,7 +133245,7 @@ function parseWechatMessage(raw, account) {
   };
 }
 function wechatStateName(account) {
-  const key = (0, import_node_crypto9.createHash)("sha256").update(JSON.stringify([account.botId, account.ownerUserId])).digest("hex").slice(0, 24);
+  const key = (0, import_node_crypto10.createHash)("sha256").update(JSON.stringify([account.botId, account.ownerUserId])).digest("hex").slice(0, 24);
   return `wechat-state-${key}.json`;
 }
 function renderWechatReply(text, meta = {}) {
@@ -133443,7 +133536,7 @@ var import_node_http = __toESM(require("node:http"), 1);
 var import_node_fs5 = __toESM(require("node:fs"), 1);
 var import_node_path8 = __toESM(require("node:path"), 1);
 var import_node_url4 = require("node:url");
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 init_storage();
 
 // src/wechat-auth.mjs
@@ -133451,7 +133544,7 @@ var import_node_fs3 = __toESM(require("node:fs"), 1);
 var import_node_path6 = __toESM(require("node:path"), 1);
 var import_node_url3 = require("node:url");
 var import_node_child_process4 = require("node:child_process");
-var import_node_crypto10 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 var import_qrcode = __toESM(require_lib3(), 1);
 init_storage();
 var directory3 = typeof __dirname === "string" ? __dirname : import_node_path6.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
@@ -133477,7 +133570,7 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
   if (!refresh && existing.configured) return { status: "confirmed", configured: true, note: "\u5FAE\u4FE1\u5DF2\u767B\u5F55\u3002\u8981\u6362\u7ED1\u8D26\u53F7\uFF0C\u8BF7\u663E\u5F0F\u5237\u65B0\u767B\u5F55\u4E8C\u7EF4\u7801\u3002" };
   const result = await api.qrcode(account.token ? [account.token] : []);
   if (typeof result.qrcode !== "string" || !result.qrcode || typeof result.qrcode_img_content !== "string" || !result.qrcode_img_content || result.qrcode_img_content.length > 8192) throw new Error("\u5FAE\u4FE1\u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u7684\u767B\u5F55\u4E8C\u7EF4\u7801\u3002");
-  const id = (0, import_node_crypto10.randomUUID)();
+  const id = (0, import_node_crypto11.randomUUID)();
   const qrPath = import_node_path6.default.join(dataDir, `wechat-login-${id}.png`);
   await import_qrcode.default.toFile(qrPath, result.qrcode_img_content, { width: 360, margin: 4, errorCorrectionLevel: "M" });
   import_node_fs3.default.chmodSync(qrPath, 384);
@@ -133530,7 +133623,7 @@ function disconnectWechat() {
 var import_node_fs4 = __toESM(require("node:fs"), 1);
 var import_node_path7 = __toESM(require("node:path"), 1);
 var import_node_os4 = __toESM(require("node:os"), 1);
-var import_node_crypto11 = require("node:crypto");
+var import_node_crypto12 = require("node:crypto");
 init_storage();
 var runtimeDir = import_node_path7.default.join(dataDir, "runtime");
 var autostartEntry = () => import_node_path7.default.join(runtimeDir, "autostart.cjs");
@@ -133549,7 +133642,7 @@ function readHooks(file) {
 }
 function atomicWrite(file, data) {
   import_node_fs4.default.mkdirSync(import_node_path7.default.dirname(file), { recursive: true, mode: 448 });
-  const temp = file + "." + (0, import_node_crypto11.randomBytes)(8).toString("hex") + ".tmp";
+  const temp = file + "." + (0, import_node_crypto12.randomBytes)(8).toString("hex") + ".tmp";
   try {
     import_node_fs4.default.writeFileSync(temp, data, { mode: 384, flag: "wx" });
     import_node_fs4.default.renameSync(temp, file);
@@ -133656,7 +133749,7 @@ async function createDashboard({
   localThreads = readLocalThreads,
   wechat = { begin: beginWechatLogin, status: wechatLoginStatus, verify: submitWechatVerifyCode, disconnect: disconnectWechat }
 }) {
-  const saved = readJson("dashboard.json", {}), token = saved.token || (0, import_node_crypto12.randomBytes)(32).toString("hex"), csrf = saved.csrf || (0, import_node_crypto12.randomBytes)(32).toString("hex");
+  const saved = readJson("dashboard.json", {}), token = saved.token || (0, import_node_crypto13.randomBytes)(32).toString("hex"), csrf = saved.csrf || (0, import_node_crypto13.randomBytes)(32).toString("hex");
   let actualPort;
   const cookieName = () => `codex_connect_${actualPort}`;
   const authenticated = (request) => equalSecret((request.headers.cookie || "").split(";").map((p) => p.trim()).find((p) => p.startsWith(cookieName() + "="))?.slice(cookieName().length + 1), token);

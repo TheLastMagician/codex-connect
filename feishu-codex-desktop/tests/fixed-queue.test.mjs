@@ -6,15 +6,15 @@ const turn=(id,prompt,status='completed',text='答复 '+prompt)=>({id,status,ite
   {type:'userMessage',content:[{type:'text',text:prompt}]},{type:'agentMessage',id:'reply-'+id,text,phase:'final_answer'}]});
 const snapshot=(...turns)=>({thread:{status:{type:'idle'}},turns});
 function fixture({state={},desktop,threadId='bound'}={}) {
-  const f={sent:[],writes:[],saved:[],state,allowed:new Set(['alice','bob','carol']),live:true,snapshot:snapshot(turn('old','old'))};
+  const f={sent:[],writes:[],saved:[],state,time:Date.now(),allowed:new Set(['alice','bob','carol']),live:true,snapshot:snapshot(turn('old','old'))};
   f.desktop=desktop||{call:async(name,args,options)=>{
     if(name==='read_thread'){if(f.readError)throw f.readError;return f.snapshot;}
-    options?.beforeSend?.();f.writes.push(args.prompt);if(f.writeError)throw f.writeError;return {accepted:true};
+    options?.beforeSend?.();f.writes.push(args.prompt);if(f.writeError)throw f.writeError;return f.receipt||{accepted:true};
   }};
   f.router=new FixedChatRouter({thread:{id:threadId,hostId:'local'},desktop:f.desktop,state,saveState:()=>f.saved.push(structuredClone(state)),
-    isActive:()=>f.live,isAuthorized:id=>f.allowed.has(id),getConfig:()=>({}),
+    isActive:()=>f.live,isAuthorized:id=>f.allowed.has(id),getConfig:()=>({}),now:()=>f.time,
     send:async(chatId,text,meta)=>{if(f.sendError)throw f.sendError;f.sent.push({chatId,text,meta});}});
-  f.message=(text,owner='alice',chatId='group',id=Math.random().toString())=>({id,text,openId:owner,chatId,chatType:chatId==='private'?undefined:'group',timestamp:Date.now()});
+  f.message=(text,owner='alice',chatId='group',id=Math.random().toString())=>({id,text,openId:owner,chatId,chatType:chatId==='private'?undefined:'group',timestamp:f.time});
   f.accept=(...messages)=>{for(const m of messages)assert.equal(f.router.acceptMessage(m),true);return f.router.poll();};
   f.complete=async(id,prompt,status='completed')=>{f.snapshot=snapshot(turn(id,prompt,status));await f.router.poll();};
   f.answers=()=>f.sent.filter(s=>s.meta.kind==='assistant');return f;
@@ -130,4 +130,72 @@ test('local steering in the same native turn does not hide the queued request fr
   const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));
   const a=turn('a','A');a.items.splice(1,0,{type:'userMessage',content:[{type:'text',text:'local follow-up'}]});
   f.snapshot=snapshot(a);await f.router.poll();assert.deepEqual(f.writes,['A','B']);assert.equal(f.answers().length,1);
+});
+
+test('unmatched unknown delivery with a consistently idle desktop leaves the queue without replaying its original input',async()=>{
+  const f=fixture();f.writeError=Error('timeout');await f.accept(f.message('A'),f.message('B','bob'));delete f.writeError;
+  f.snapshot=snapshot(turn('local','unrelated desktop task'));f.time+=120001;await f.router.poll();assert.deepEqual(f.writes,['A']);
+  f.time+=15001;await f.router.poll();assert.deepEqual(f.writes,['A','B']);
+  assert.equal(f.state.fixedQueue.review[0].message.text,'A');assert.equal(f.state.fixedQueue.active.message.text,'B');
+  assert.equal(f.answers().length,0,'An unrelated completed task must not become A’s answer');assert.ok(f.sent.some(s=>/原文已保留/.test(s.text)));
+});
+
+test('active work, approval and failed reads never count as stable idle observations',async()=>{
+  for(const kind of ['active','needsAttention','read-failure']) {
+    const f=fixture();f.writeError=Error('timeout');await f.accept(f.message('A'),f.message('B','bob'));delete f.writeError;
+    f.time+=120001;await f.router.poll();f.time+=16000;
+    if(kind==='read-failure')f.readError=Error('offline');else f.snapshot.thread.status.type=kind;
+    await f.router.poll();assert.deepEqual(f.writes,['A']);assert.equal(f.state.fixedQueue.review.length,0);
+    delete f.readError;f.snapshot=snapshot(turn('old','old'));await f.router.poll();
+    assert.deepEqual(f.writes,['A']);
+  }
+});
+
+test('a lost completion association after a successful ACK cannot block forever or claim an unrelated answer',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));f.time+=120001;f.snapshot=snapshot(turn('other','desktop input'));
+  await f.router.poll();f.time+=15001;await f.router.poll();assert.deepEqual(f.writes,['A','B']);assert.equal(f.state.fixedQueue.review.length,1);assert.equal(f.answers().length,0);
+});
+
+test('late confirmed answers to reviewed input go only to the original requester and never replay the task',async()=>{
+  const f=fixture();f.writeError=Error('timeout');await f.accept(f.message('A'));delete f.writeError;
+  f.time+=120001;await f.router.poll();f.time+=15001;await f.router.poll();assert.equal(f.state.fixedQueue.review.length,1);
+  await f.complete('a','A');assert.deepEqual(f.writes,['A']);assert.equal(f.state.fixedQueue.review.length,0);
+  assert.equal(f.answers()[0].meta.openId,'alice');assert.match(f.answers()[0].text,/此前待核对消息/);
+});
+
+test('native receipt turn IDs and persisted user IDs associate completions even when message text is formatted',async()=>{
+  for(const by of ['receipt','message']) {
+    const f=fixture();if(by==='receipt')f.receipt={accepted:true,turnId:'a'};
+    await f.accept(f.message('A'),f.message('B','bob'));
+    const a=turn('a','wrapped native input');a.items[0].id=f.state.fixedQueue.active.clientUserMessageId;
+    assert.match(a.items[0].id,/^[0-9a-f-]{36}$/);f.snapshot=snapshot(a);await f.router.poll();
+    assert.deepEqual(f.writes,['A','B']);assert.equal(f.answers()[0].text,'答复 wrapped native input');
+  }
+});
+
+test('restarting rechecks stable idle and preserves reviewed input without resending it',async()=>{
+  const first=fixture();first.writeError=Error('timeout');await first.accept(first.message('A'),first.message('B','bob'));
+  first.time+=120001;await first.router.poll();const state=structuredClone(first.state);first.router.stop();
+  const f=fixture({state});f.time=first.time+30000;await f.router.poll();assert.deepEqual(f.writes,[]);
+  f.time+=15001;await f.router.poll();assert.deepEqual(f.writes,['B']);assert.equal(f.state.fixedQueue.review[0].message.text,'A');
+});
+
+test('different bound conversations do not block each other even while one delivery is unknown',async()=>{
+  const first=fixture();first.writeError=Error('timeout');await first.accept(first.message('A'));
+  const second=fixture({desktop:first.desktop,threadId:'other-bound'});delete first.writeError;await second.accept(second.message('B','bob'));
+  assert.deepEqual(first.writes,['A','B']);
+});
+
+test('a stale completed baseline cannot complete a newly acknowledged request for that same turn ID',async()=>{
+  const f=fixture();f.receipt={accepted:true,turnId:'old'};await f.accept(f.message('A'),f.message('B','bob'));await f.router.poll();
+  assert.deepEqual(f.writes,['A']);assert.equal(f.answers().length,0);
+  const t=turn('old','A');t.items[0].id=f.state.fixedQueue.active.clientUserMessageId;f.snapshot=snapshot(t);await f.router.poll();
+  assert.deepEqual(f.writes,['A','B']);assert.equal(f.answers()[0].text,'答复 A');
+});
+
+test('pending receipts distinguish unavailable desktop connection from executing work and update when the reason changes',async()=>{
+  const f=fixture();f.readError=Error('offline');await f.accept(f.message('A'));await f.accept(f.message('B','bob'));
+  assert.match(f.sent.at(-1).text,/无法连接目标会话/);assert.equal(f.state.fixedQueue.blockedReason,'connection');
+  delete f.readError;f.snapshot={thread:{status:{type:'active'}},turns:[turn('local','local task','inProgress')]};await f.router.poll();
+  assert.equal(f.state.fixedQueue.blockedReason,'busy');assert.match(f.sent.at(-1).text,/处理前面的任务/);assert.deepEqual(f.writes,[]);
 });

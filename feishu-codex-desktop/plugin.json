@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "feishu-codex-desktop",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "通过飞书或微信 ClawBot 私聊控制本机 Codex 桌面真实会话，选择项目、继续聊天并接收回复。支持扫码连接微信与飞书同时运行。",
   "author": {
     "name": "Local Workspace"

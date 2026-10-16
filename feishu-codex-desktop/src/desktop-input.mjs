@@ -112,9 +112,11 @@ export class DesktopInput {
     try {return await loading;}
     finally {if(this.loading.get(key)===loading)this.loading.delete(key);}
   }
-  async send({threadId,hostId='local',prompt,model,thinking},beforeSend) {
+  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
+    if(clientUserMessageId!==undefined && (typeof clientUserMessageId!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
+      throw inputError('消息标识无效，消息尚未发送。',true);
     const authorize=()=>{try{beforeSend?.();}catch{throw inputError('通道授权已撤销，消息尚未发送。',true);}};
     authorize();
     await this.connect();let owner;
@@ -126,14 +128,18 @@ export class DesktopInput {
     authorize();
     if(!owner)owner=await this.loadOwner(threadId,hostId,authorize);
     authorize();
-    const request={threadId,clientUserMessageId:randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
+    const request={threadId,clientUserMessageId:clientUserMessageId||randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
       ...(model?{model}:{}),...(thinking?{effort:thinking}:{})};
     // Let the desktop choose the input route for its actual host. Forcing
     // user-message admission selects a cloud-only extension on local/SSH hosts.
     const response=await this.request('thread-follower-start-turn',{conversationId:threadId,
       turnStart:{request,context:{inheritThreadSettings:true}}},{hostId,targetClientId:owner});
-    if(response.resultType!=='success')throw inputError('桌面未确认发送结果，请在桌面检查该会话后再决定是否重发。');
-    return {threadId,accepted:true};
+    if(response.resultType!=='success') {
+      if(['no-client-found','version-mismatch','unsupported-version'].includes(response.error))throw inputError('目标桌面连接已失效，消息尚未发送。',true);
+      throw inputError('桌面未确认发送结果，请在桌面检查该会话后再决定是否重发。');
+    }
+    const turnId=response.result?.result?.turn?.id;
+    return {threadId,accepted:true,...(clientUserMessageId?{clientUserMessageId}:{}),...(typeof turnId==='string'?{turnId}:{})};
   }
   disconnect() {
     const socket=this.socket;this.socket=null;this.clientId=null;this.buffer=Buffer.alloc(0);socket?.destroy();

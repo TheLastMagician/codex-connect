@@ -31,7 +31,7 @@ async function fixture(options={}) {
             // Local/SSH app-server hosts reject the cloud-only admission route.
             const cloudAdmission=request.params.turnStart.context?.useUserMessageAdmission===true;
             response=cloudAdmission?{...response,resultType:'error',error:'User-message admission requires a cloud app-server host'}:
-              options.rejectStart?{...response,resultType:'error',error:'request-failed'}:{...response,result:{result:'accepted'}};
+              options.rejectStart?{...response,resultType:'error',error:options.rejectCode||'request-failed'}:{...response,result:{result:options.turnId?{turn:{id:options.turnId}}:'accepted'}};
           }else if(request.method==='tools/call')response={jsonrpc:'2.0',id:request.id,result:{success:true,contentItems:[]}};
         }
         const data=encodeFrame(response);socket.write(data.subarray(0,3));socket.write(data.subarray(3));
@@ -215,4 +215,22 @@ test('desktop client dispatches send through ordinary input while retaining the 
     const missing=new DesktopClient({inputPipePath:f.pipe});
     try{await assert.rejects(missing.call('send_message_to_thread',{threadId:'target',prompt:'任务'}),/缺少真实调用会话/);}finally{missing.close();}
   }finally{client.close();await f.close();}
+});
+
+test('fixed-queue correlation IDs survive native submission and return the actual acknowledged turn ID',async()=>{
+  const f=await fixture({turnId:'real-turn'});try {
+    const id=randomUUID();const result=await f.input.send({threadId:'target',prompt:'原文',clientUserMessageId:id});
+    assert.equal(f.requests.at(-1).params.turnStart.request.clientUserMessageId,id);assert.equal(result.clientUserMessageId,id);assert.equal(result.turnId,'real-turn');
+    await assert.rejects(f.input.send({threadId:'target',prompt:'原文',clientUserMessageId:'bad-id'}),e=>e.notSent);
+    assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
+  }finally{await f.close();}
+});
+
+test('a router rejection before reaching a desktop owner is definitely unsent, while a native failure remains unknown',async()=>{
+  for(const code of ['no-client-found','version-mismatch','request-failed']) {
+    const f=await fixture({rejectStart:true,rejectCode:code});try {
+      await assert.rejects(f.input.send({threadId:'target',prompt:'原文'}),e=>e.notSent===(code!=='request-failed'));
+      assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
+    }finally{await f.close();}
+  }
 });

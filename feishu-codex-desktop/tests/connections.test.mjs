@@ -64,7 +64,7 @@ test('a fixed bot treats commands, selection numbers and natural aliases as lite
   const f=channelFixture();await f.channel.start();
   const inputs=['你好，世界','/chats','/assistant 删除项目','/pair pretend','/new 1 | task','1','选择 2','会话列表'];
   for(const text of inputs){await receive(f,f.event(text));await complete(f);}
-  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>c.args),inputs.map(prompt=>({threadId:binding.id,hostId:'local',prompt})));
+  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>{assert.match(c.args.clientUserMessageId,/^[0-9a-f-]{36}$/);const {clientUserMessageId,...args}=c.args;return args;}),inputs.map(prompt=>({threadId:binding.id,hostId:'local',prompt})));
   assert.ok(f.calls.every(c=>['read_thread','send_message_to_thread'].includes(c.name)));assert.equal(answerCards(f).length,inputs.length);
   assert.deepEqual(f.events()['card.action.trigger']({}),{});
   await receive(f,f.event('保留原始回复'));await complete(f,'原始回复 /chats 中文，标点');
@@ -86,7 +86,8 @@ test('a redelivered message cannot execute again after rebinding the same bot',a
 });
 test('group mentions reach the fixed chat as literal text and its answer returns only to the same group',async()=>{
   const f=channelFixture();await f.channel.start();await receive(f,groupEvent(f,'@_user_1 /chats 中文，标点'));
-  assert.deepEqual(f.calls.find(c=>c.name==='send_message_to_thread').args,{threadId:binding.id,hostId:'local',prompt:'/chats 中文，标点'});assert.equal(f.sent.length,0);
+  const {clientUserMessageId,...args}=f.calls.find(c=>c.name==='send_message_to_thread').args;assert.match(clientUserMessageId,/^[0-9a-f-]{36}$/);
+  assert.deepEqual(args,{threadId:binding.id,hostId:'local',prompt:'/chats 中文，标点'});assert.equal(f.sent.length,0);
   f.setSnapshot({thread:{status:{type:'idle'}},turns:[{id:'new-turn',status:'completed',items:[{type:'agentMessage',id:'new',text:'群聊回复'}]}]});
   await f.channel.poll();assert.equal(f.sent.length,1);assert.equal(f.sent[0].data.receive_id,'group-chat');assert.equal(f.sent[0].data.msg_type,'interactive');assert.equal(JSON.parse(f.sent[0].data.content).body.elements[0].content,'群聊回复');f.channel.stop();
 });
