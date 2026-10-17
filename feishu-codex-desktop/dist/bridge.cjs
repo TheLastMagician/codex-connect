@@ -130561,7 +130561,7 @@ var DesktopInput = class {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"));
+        reject(Object.assign(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"), { nativeReason: "request_timeout" }));
       }, timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       try {
@@ -130569,7 +130569,7 @@ var DesktopInput = class {
       } catch {
         clearTimeout(timer);
         this.pending.delete(requestId);
-        reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+        reject(Object.assign(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"), { nativeReason: "connection_closed" }));
       }
     });
   }
@@ -130700,8 +130700,9 @@ var DesktopInput = class {
       turnStart: { request, context: { inheritThreadSettings: true } }
     }, { hostId, targetClientId: owner });
     if (response.resultType !== "success") {
-      if (["no-client-found", "version-mismatch", "unsupported-version"].includes(response.error)) throw inputError("\u76EE\u6807\u684C\u9762\u8FDE\u63A5\u5DF2\u5931\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
-      throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+      if (["no-client-found", "version-mismatch", "unsupported-version"].includes(response.error)) throw Object.assign(inputError("\u76EE\u6807\u684C\u9762\u8FDE\u63A5\u5DF2\u5931\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { nativeReason: "router_rejected" });
+      const reason = typeof response.error === "string" && response.error.includes("thread-follower-start-turn-timeout") ? "start_timeout" : "native_error";
+      throw Object.assign(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"), { nativeReason: reason });
     }
     const turnId = response.result?.result?.turn?.id;
     return { threadId, accepted: true, ...clientUserMessageId ? { clientUserMessageId } : {}, ...typeof turnId === "string" ? { turnId } : {} };
@@ -130714,7 +130715,7 @@ var DesktopInput = class {
     socket?.destroy();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+      pending.reject(Object.assign(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"), { nativeReason: "connection_closed" }));
     }
     this.pending.clear();
   }
@@ -131394,6 +131395,7 @@ function renderThread(result, onlyStatus = false) {
 }
 var keyOf = (thread) => `${thread.hostId || "local"}:${thread.id}`;
 var threadArgs = (thread) => ({ threadId: thread.id, ...thread.hostId ? { hostId: thread.hostId } : {} });
+var nativeTurnId = (id) => typeof id === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
 function threadSnapshot(result) {
   const turn = result.turns?.[0];
   const messages = (turn?.items || []).filter((item) => item.type === "agentMessage" && item.text);
@@ -131408,6 +131410,7 @@ var Router = class {
     this.watches = new Map(Object.entries(state.watches || {}));
     this.queues = /* @__PURE__ */ new Map();
     this.pendingCounts = /* @__PURE__ */ new Map();
+    for (const watch of this.watches.values()) if (watch.receiptState === "submitting") watch.receiptState = "uncertain";
     this.cardRequests = /* @__PURE__ */ new Map();
   }
   authorized(openId) {
@@ -131597,7 +131600,8 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
   }
   noteDeliveryFailure(stage, error, session, { retrying = false } = {}) {
     const reason = error.code === "THREAD_NOT_SELECTED" ? "no_selection" : /授权/.test(error.message) ? "authorization" : /加载|打开目标/.test(error.message) ? "not_loaded" : /超时|timeout/i.test(error.message) ? "timeout" : /连接|connection|socket|pipe|ECONN|ENOENT|EPIPE|unavailable/i.test(error.message) || ["DESKTOP_DISCONNECTED", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ENOENT"].includes(error.code) ? "connection" : error.notSent ? "not_sent" : stage === "send" ? "delivery_unknown" : "read_failed";
-    const record = { at: this.now(), stage, reason, retrying, ...session.selected ? { threadId: session.selected.id, hostId: session.selected.hostId || "local" } : {} };
+    const nativeReason = ["request_timeout", "start_timeout", "connection_closed", "router_rejected", "native_error"].includes(error.nativeReason) ? error.nativeReason : void 0;
+    const record = { at: this.now(), stage, reason, retrying, ...nativeReason ? { nativeReason } : {}, ...session.selected ? { threadId: session.selected.id, hostId: session.selected.hostId || "local" } : {} };
     this.state.deliveryFailures = [...this.state.deliveryFailures || [], record].slice(-20);
     this.saveState();
     this.reportDeliveryFailure?.(record);
@@ -131769,6 +131773,7 @@ ${session.selected.archived ? "\u4F1A\u8BDD\u5DF2\u5F52\u6863\uFF0C\u5148 /unarc
     let output;
     let threadStatus;
     let conversation;
+    let receiptStatus;
     switch (command) {
       case "help":
         output = HELP + "\n\n" + currentTarget(session);
@@ -132030,15 +132035,36 @@ ${currentTarget(session)}`;
         if (selected.archived) throw new Error("\u5F53\u524D\u4F1A\u8BDD\u5DF2\u5F52\u6863\u3002\u5148\u53D1\u9001 /unarchive \u6062\u590D\uFF0C\u518D\u76F4\u63A5\u804A\u5929\uFF1B\u6216 /chats \u9009\u62E9\u5176\u4ED6\u4F1A\u8BDD\u3002");
         const baseline = await this.readBeforeSend(session, authorize);
         authorize();
+        const clientUserMessageId = (0, import_node_crypto4.randomUUID)(), receiptKey = `receipt:${clientUserMessageId}`;
+        if ([...this.watches.values()].filter((w) => w.receiptState).length >= 100) throw new Error("\u5F85\u6838\u5BF9\u6D88\u606F\u8FC7\u591A\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u5148\u67E5\u770B\u5DF2\u6709\u4F1A\u8BDD\u7ED3\u679C\u3002");
+        const receipt = { openId: session.openId, chatId: session.chatId, thread: { ...selected }, clientUserMessageId, receiptState: "submitting", createdAt: this.now() };
+        this.watches.set(receiptKey, receipt);
+        this.persistWatches();
         try {
-          await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session) }, { beforeSend: authorize });
+          await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session), clientUserMessageId }, { beforeSend: authorize });
         } catch (error) {
           this.noteDeliveryFailure("send", error, session);
-          if (error.notSent) throw error;
-          throw new Error("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\u3002\u8BF7\u5148\u7528 /read \u6216\u5728\u684C\u9762\u68C0\u67E5\u8FD9\u6761\u6D88\u606F\u662F\u5426\u5DF2\u8FDB\u5165\u4F1A\u8BDD\uFF0C\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+          if (error.notSent) {
+            this.watches.delete(receiptKey);
+            this.persistWatches();
+            throw error;
+          }
+          receipt.receiptState = "uncertain";
+          this.persistWatches();
+          try {
+            await this.checkReceipt(receipt);
+          } catch {
+          }
+          receiptStatus = receipt.receiptState;
+          output = receipt.receiptState === "confirmed" ? `\u5DF2\u6838\u5BF9\uFF1A\u8FD9\u6761\u6D88\u606F\u5DF2\u8FDB\u5165 ${selected.title || selected.id}\u3002
+\u56DE\u590D\u4F1A\u81EA\u52A8\u53D1\u56DE${this.channelLabel}\uFF0C\u65E0\u9700\u91CD\u53D1\u3002` : `\u53D1\u9001\u56DE\u6267\u6682\u672A\u786E\u8BA4\uFF0C\u6B63\u5728\u81EA\u52A8\u6838\u5BF9\u6D88\u606F\u662F\u5426\u8FDB\u5165 ${selected.title || selected.id}\u3002
+\u8BF7\u6682\u65F6\u4E0D\u8981\u91CD\u590D\u53D1\u9001\uFF1B\u786E\u8BA4\u540E\u4F1A\u81EA\u52A8\u901A\u77E5\u5E76\u7EE7\u7EED\u8FD4\u56DE\u56DE\u590D\u3002`;
+          receipt.confirmationNotified = receipt.receiptState === "confirmed";
+          this.persistWatches();
+          break;
         }
+        this.watches.delete(receiptKey);
         session.awaitingChoice = null;
-        this.saveState();
         this.watch(session, baseline);
         output = `\u5DF2\u53D1\u9001\u5230\uFF1A${selected.title || selected.id}
 \u56DE\u590D\u4F1A\u81EA\u52A8\u53D1\u56DE${this.channelLabel}\u3002
@@ -132048,7 +132074,7 @@ ${currentTarget(session)}`;
     const listCommands = ["chats", "projects", "project", "archived", "next", "prev", "page", "more"];
     const meta = {
       kind: listCommands.includes(command) ? "list" : command === "models" ? "models" : command === "read" ? "conversation" : command === "help" ? "help" : "info",
-      title: CARD_TITLES[command || "send"] || (command === "projectinfo" ? "\u9879\u76EE\u8BE6\u60C5" : "Codex"),
+      title: receiptStatus === "uncertain" ? "\u53D1\u9001\u6838\u5BF9\u4E2D" : receiptStatus === "confirmed" ? "\u53D1\u9001\u5DF2\u786E\u8BA4" : CARD_TITLES[command || "send"] || (command === "projectinfo" ? "\u9879\u76EE\u8BE6\u60C5" : "Codex"),
       session,
       openId: message.openId,
       updateMessageId: message.updateMessageId,
@@ -132081,23 +132107,82 @@ ${currentTarget(session)}`;
     for (const [key, watch] of this.watches) if (watch.openId === session.openId && watch.chatId === session.chatId && (!selected || keyOf(watch.thread) === keyOf(selected))) this.watches.delete(key);
     this.persistWatches();
   }
+  async checkReceipt(watch, reads) {
+    if (!this.authorized(watch.openId)) return;
+    const key = keyOf(watch.thread);
+    let request = reads?.get(key);
+    if (!request) {
+      request = this.desktop.call("read_thread", { ...threadArgs(watch.thread), turnLimit: 10, maxOutputCharsPerItem: 2e4 }, { timeoutMs: 5e3 });
+      reads?.set(key, request);
+    }
+    const result = await request;
+    if (!this.authorized(watch.openId)) return;
+    const turn = (result.turns || []).find((turn2) => nativeTurnId(turn2.id) && (turn2.id === watch.confirmedTurnId || (turn2.items || []).some((item) => item.type === "userMessage" && item.id === watch.clientUserMessageId)));
+    if (turn) {
+      watch.receiptState = "confirmed";
+      watch.confirmedTurnId = turn.id;
+      this.persistWatches();
+    }
+    return { result, turn };
+  }
+  async sendWatchedReply(watch, text, assistantId, kind = "assistant") {
+    const mark = fingerprint({ id: JSON.stringify([watch.openId, watch.chatId, keyOf(watch.thread), assistantId]) });
+    const marks = this.state.deliveredReplyMarks ||= {};
+    if (marks[mark]) return;
+    if (!this.authorized(watch.openId)) return;
+    await this.send(watch.chatId, text, {
+      kind,
+      title: kind === "assistant" ? "Codex \u56DE\u590D" : "\u4F1A\u8BDD\u72B6\u6001",
+      thread: watch.thread,
+      openId: watch.openId,
+      session: this.state.sessions[`${watch.openId}:${watch.chatId}`]
+    });
+    marks[mark] = this.now();
+    this.state.deliveredReplyMarks = Object.fromEntries(Object.entries(marks).slice(-200));
+    this.saveState();
+  }
+  async pollReceipt(key, watch, reads) {
+    if (watch.receiptState === "submitting") return;
+    const checked = await this.checkReceipt(watch, reads);
+    if (this.watches.get(key) !== watch || !this.authorized(watch.openId)) return;
+    const turn = checked?.turn;
+    if (!turn) return;
+    const terminal2 = ["completed", "failed", "interrupted"].includes(turn.status);
+    if (!watch.confirmationNotified && !terminal2) {
+      await this.send(
+        watch.chatId,
+        `\u5DF2\u786E\u8BA4\uFF1A\u6D88\u606F\u5DF2\u8FDB\u5165 ${watch.thread.title || watch.thread.id}\uFF0C\u65E0\u9700\u91CD\u53D1\u3002\u56DE\u590D\u4F1A\u81EA\u52A8\u8FD4\u56DE\u3002`,
+        { kind: "info", title: "\u53D1\u9001\u5DF2\u786E\u8BA4", thread: watch.thread, openId: watch.openId, session: this.state.sessions[`${watch.openId}:${watch.chatId}`] }
+      );
+      watch.confirmationNotified = true;
+      this.persistWatches();
+    }
+    if (!terminal2) return;
+    const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
+    await this.sendWatchedReply(watch, turn.status === "completed" ? assistant?.text || "\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : `\u5DF2\u786E\u8BA4\u6D88\u606F\u8FDB\u5165\u4F1A\u8BDD\uFF0C\u4F46\u8FD9\u6B21\u4EFB\u52A1${turn.status === "failed" ? "\u6267\u884C\u5931\u8D25" : "\u5DF2\u4E2D\u65AD"}\u3002\u8BF7 /read \u67E5\u770B\u8BE6\u60C5\u3002`, assistant?.id || turn.id, turn.status === "completed" ? "assistant" : "info");
+    if (this.watches.get(key) === watch) this.watches.delete(key);
+    this.persistWatches();
+  }
   async poll() {
+    const receiptReads = /* @__PURE__ */ new Map();
     for (const [key, watch] of [...this.watches]) {
       if (!this.authorized(watch.openId)) {
         this.watches.delete(key);
         continue;
       }
+      if (watch.receiptState) {
+        try {
+          await this.pollReceipt(key, watch, receiptReads);
+        } catch {
+        }
+        continue;
+      }
       try {
         const snapshot = threadSnapshot(await this.desktop.call("read_thread", { ...threadArgs(watch.thread), turnLimit: 1, maxOutputCharsPerItem: 2e4 }));
+        if (this.watches.get(key) !== watch || !this.authorized(watch.openId)) continue;
         const assistant = snapshot.latestAssistantMessage;
         if (snapshot.latestTurn?.status === "completed" && assistant?.text && assistant.id !== watch.messageId) {
-          await this.send(watch.chatId, assistant.text, {
-            kind: "assistant",
-            title: "Codex \u56DE\u590D",
-            thread: watch.thread,
-            openId: watch.openId,
-            session: this.state.sessions[`${watch.openId}:${watch.chatId}`]
-          });
+          await this.sendWatchedReply(watch, assistant.text, assistant.id);
           watch.messageId = assistant.id;
         }
         const status = snapshot.thread?.status?.type;
@@ -132110,12 +132195,13 @@ ${currentTarget(session)}`;
         if (status !== "needsAttention") watch.attentionNotified = false;
         if (["completed", "failed", "interrupted"].includes(snapshot.latestTurn?.status) && snapshot.latestTurn?.id !== watch.baselineTurnId) {
           if (snapshot.latestTurn.status !== "completed") await this.send(watch.chatId, `\u4F1A\u8BDD${snapshot.latestTurn.status === "failed" ? "\u6267\u884C\u5931\u8D25" : "\u5DF2\u4E2D\u65AD"}\u3002\u8BF7 /read \u67E5\u770B\u7ED3\u679C\u3002`);
-          this.watches.delete(key);
+          if (this.watches.get(key) === watch) this.watches.delete(key);
         }
       } catch (error) {
+        if (this.watches.get(key) !== watch) continue;
         await this.send(watch.chatId, `\u4F1A\u8BDD\u901A\u77E5\u6682\u505C\uFF1A${error.message}`).catch(() => {
         });
-        this.watches.delete(key);
+        if (this.watches.get(key) === watch) this.watches.delete(key);
       }
     }
     this.persistWatches();
@@ -133210,7 +133296,7 @@ var import_promises3 = require("node:timers/promises");
 var import_node_crypto9 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.6";
+var VERSION = "0.5.7";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

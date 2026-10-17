@@ -58,7 +58,7 @@ test('WeChat selects an actual desktop chat, uses the latest reply token, and de
   const message=raw('你好，继续',3,{context_token:'new-context'});
   await f.channel.receiveBatch({msgs:[message],get_updates_buf:'cursor3'});
   await f.channel.receiveBatch({msgs:[message],get_updates_buf:'cursor3'});
-  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>c.args),[{threadId:'actual-chat',hostId:'local',prompt:'你好，继续'}]);
+  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').map(c=>{const {clientUserMessageId,...args}=c.args;assert.match(clientUserMessageId,/^[0-9a-f-]{36}$/);return args;}),[{threadId:'actual-chat',hostId:'local',prompt:'你好，继续'}]);
   assert.equal(f.outbound.at(-1).context,'new-context');assert.equal(f.state.cursor,'cursor3');
   assert.match(f.outbound.at(-1).text,/微信/);assert.doesNotMatch(f.outbound.at(-1).text,/飞书/);
   assert.ok(!f.calls.some(c=>c.name==='wait_threads'));

@@ -235,6 +235,16 @@ test('a router rejection before reaching a desktop owner is definitely unsent, w
     }finally{await f.close();}
   }
 });
+test('ambiguous receipt diagnostics distinguish local timeout and native timeout without exposing native error text',async()=>{
+  for(const [options,reason] of [[{dropStartAck:true,timeoutMs:35},'request_timeout'],
+    [{rejectStart:true,rejectCode:'thread-follower-start-turn-timeout'},'start_timeout'],
+    [{rejectStart:true,rejectCode:'sensitive raw native error'},'native_error']]) {
+    const f=await fixture(options);try {
+      await assert.rejects(f.input.send({threadId:'target',prompt:'原文'}),e=>e.nativeReason===reason && !e.notSent && !e.message.includes('sensitive'));
+      assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
+    }finally{await f.close();}
+  }
+});
 
 test('queued connection retries discover the owner without repeatedly focusing the desktop',async()=>{
   let opens=0,attempted=false;

@@ -64,6 +64,17 @@ test('a full bot retains its selected target through a transient read and expose
     assert.equal(state.deliveryFailures.length,1);
   }finally{f.channel.stop();}
 });
+test('an unconfirmed full-bot submission uses a pending card rather than a task-sent card',async()=>{
+  const state={sessions:{'owner:private-chat':{openId:'owner',chatId:'private-chat',selected:binding,mode:'chat',routingVersion:3}}};
+  const f=channelFixture(binding,{mode:'full',state});await f.channel.start();const original=f.desktop.call;
+  f.desktop.call=async(name,args,options)=>{if(name==='send_message_to_thread')throw Object.assign(Error('unknown'),{nativeReason:'request_timeout'});return original(name,args,options);};
+  try {
+    await receive(f,f.event('任务原文'));
+    const card=JSON.parse(f.sent.at(-1).data.content);assert.equal(card.header.title.content,'发送核对中');
+    assert.match(card.body.elements[0].content,/自动核对/);assert.equal(f.channel.router.watches.size,1);
+    assert.doesNotMatch(JSON.stringify(state.watches),/任务原文/);
+  }finally{f.channel.stop();}
+});
 function groupEvent(f,text,{owner='owner',id=Math.random().toString(),chat='group-chat',bot='ou_robot',mentions}={}) {
   const event=f.event(text,owner,id);Object.assign(event.message,{chat_type:'group',chat_id:chat,
     mentions:mentions||[{key:'@_user_1',id:{open_id:bot},name:'Codex'}]});return event;

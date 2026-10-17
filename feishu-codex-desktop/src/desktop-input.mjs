@@ -55,11 +55,11 @@ export class DesktopInput {
       ...(targetClientId?{targetClientId}:{}),...(remote?{hostId}:{}),timeoutMs};
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{
-        this.pending.delete(requestId);reject(inputError('桌面未确认发送结果，请检查会话后再决定是否重发。'));
+        this.pending.delete(requestId);reject(Object.assign(inputError('桌面未确认发送结果，请检查会话后再决定是否重发。'),{nativeReason:'request_timeout'}));
       },timeoutMs);
       this.pending.set(requestId,{resolve,reject,timer});
       try {this.socket.write(frame(message));}
-      catch {clearTimeout(timer);this.pending.delete(requestId);reject(inputError('桌面连接中断，发送结果未知，请先检查会话。'));}
+      catch {clearTimeout(timer);this.pending.delete(requestId);reject(Object.assign(inputError('桌面连接中断，发送结果未知，请先检查会话。'),{nativeReason:'connection_closed'}));}
     });
   }
   onData(chunk) {
@@ -154,8 +154,9 @@ export class DesktopInput {
     const response=await this.request('thread-follower-start-turn',{conversationId:threadId,
       turnStart:{request,context:{inheritThreadSettings:true}}},{hostId,targetClientId:owner});
     if(response.resultType!=='success') {
-      if(['no-client-found','version-mismatch','unsupported-version'].includes(response.error))throw inputError('目标桌面连接已失效，消息尚未发送。',true);
-      throw inputError('桌面未确认发送结果，请在桌面检查该会话后再决定是否重发。');
+      if(['no-client-found','version-mismatch','unsupported-version'].includes(response.error))throw Object.assign(inputError('目标桌面连接已失效，消息尚未发送。',true),{nativeReason:'router_rejected'});
+      const reason=typeof response.error==='string' && response.error.includes('thread-follower-start-turn-timeout')?'start_timeout':'native_error';
+      throw Object.assign(inputError('桌面未确认发送结果，请在桌面检查该会话后再决定是否重发。'),{nativeReason:reason});
     }
     const turnId=response.result?.result?.turn?.id;
     return {threadId,accepted:true,...(clientUserMessageId?{clientUserMessageId}:{}),...(typeof turnId==='string'?{turnId}:{})};
@@ -163,7 +164,7 @@ export class DesktopInput {
   disconnect() {
     const socket=this.socket;this.socket=null;this.clientId=null;this.buffer=Buffer.alloc(0);socket?.destroy();
     for(const pending of this.pending.values()) {
-      clearTimeout(pending.timer);pending.reject(inputError('桌面连接中断，发送结果未知，请先检查会话。'));
+      clearTimeout(pending.timer);pending.reject(Object.assign(inputError('桌面连接中断，发送结果未知，请先检查会话。'),{nativeReason:'connection_closed'}));
     }
     this.pending.clear();
   }

@@ -68,6 +68,7 @@ export function renderThread(result,onlyStatus=false) {
 }
 const keyOf = thread => `${thread.hostId||'local'}:${thread.id}`;
 const threadArgs = thread => ({threadId:thread.id,...(thread.hostId?{hostId:thread.hostId}:{})});
+const nativeTurnId=id=>typeof id==='string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
 export function threadSnapshot(result) {
   const turn=result.turns?.[0];
   const messages=(turn?.items||[]).filter(item=>item.type==='agentMessage' && item.text);
@@ -79,6 +80,8 @@ export class Router {
     Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,operator,isAuthorized,reportDeliveryFailure});
     this.state.sessions ||= {}; this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches||{}));this.queues=new Map();this.pendingCounts=new Map();
+    // A crash before an ACK cannot prove delivery. Recover by ID, never by replay.
+    for(const watch of this.watches.values())if(watch.receiptState==='submitting')watch.receiptState='uncertain';
     this.cardRequests=new Map();
   }
   authorized(openId) {return this.isAuthorized?this.isAuthorized(openId):this.getConfig().allowedOpenIds.includes(openId);}
@@ -220,7 +223,8 @@ export class Router {
       /连接|connection|socket|pipe|ECONN|ENOENT|EPIPE|unavailable/i.test(error.message)||['DESKTOP_DISCONNECTED','ECONNRESET','ECONNREFUSED','EPIPE','ENOENT'].includes(error.code)?'connection':
       error.notSent?'not_sent':stage==='send'?'delivery_unknown':'read_failed';
     // Keep only bounded diagnostics, never user prompts, raw API errors or keys.
-    const record={at:this.now(),stage,reason,retrying,...(session.selected?{threadId:session.selected.id,hostId:session.selected.hostId||'local'}:{})};
+    const nativeReason=['request_timeout','start_timeout','connection_closed','router_rejected','native_error'].includes(error.nativeReason)?error.nativeReason:undefined;
+    const record={at:this.now(),stage,reason,retrying,...(nativeReason?{nativeReason}:{}),...(session.selected?{threadId:session.selected.id,hostId:session.selected.hostId||'local'}:{})};
     this.state.deliveryFailures=[...(this.state.deliveryFailures||[]),record].slice(-20);this.saveState();this.reportDeliveryFailure?.(record);
   }
   async readBeforeSend(session,authorize) {
@@ -348,7 +352,7 @@ export class Router {
     let command=match?.[1].toLowerCase();let arg=match?.[2]?.trim()||'';
     if(!command && session.view && ['下一页','上一页'].includes(message.text)) command=message.text==='下一页'?'next':'prev';
     if(!command && session.awaitingChoice && /^\d+$/.test(message.text)) {command=session.awaitingChoice==='project'?'project':'use';arg=message.text;}
-    let output;let threadStatus;let conversation;
+    let output;let threadStatus;let conversation;let receiptStatus;
     switch(command) {
       case 'help': output=HELP+'\n\n'+currentTarget(session);break;
       case 'assistant': {
@@ -485,14 +489,30 @@ export class Router {
         const baseline=await this.readBeforeSend(session,authorize);
         // This text is an authenticated user's explicit instruction to this selected chat.
         authorize();
-        try {await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session)},{beforeSend:authorize});}
-        catch(error) {this.noteDeliveryFailure('send',error,session);if(error.notSent)throw error;throw new Error('桌面未确认发送结果。请先用 /read 或在桌面检查这条消息是否已进入会话，再决定是否重发。');}
-        session.awaitingChoice=null;this.saveState();this.watch(session,baseline);output=`已发送到：${selected.title||selected.id}\n回复会自动发回${this.channelLabel}。\n/status 查看进度，/read 查看对话，/chats 切换会话。`;
+        const clientUserMessageId=randomUUID(),receiptKey=`receipt:${clientUserMessageId}`;
+        if([...this.watches.values()].filter(w=>w.receiptState).length>=100)throw new Error('待核对消息过多，这条消息尚未发送。请先查看已有会话结果。');
+        const receipt={openId:session.openId,chatId:session.chatId,thread:{...selected},clientUserMessageId,receiptState:'submitting',createdAt:this.now()};
+        this.watches.set(receiptKey,receipt);this.persistWatches();
+        try {
+          await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session),clientUserMessageId},{beforeSend:authorize});
+        }catch(error) {
+          this.noteDeliveryFailure('send',error,session);
+          if(error.notSent){this.watches.delete(receiptKey);this.persistWatches();throw error;}
+          receipt.receiptState='uncertain';this.persistWatches();
+          try {await this.checkReceipt(receipt);}catch{/* Only retry reads in background; never repeat the write. */}
+          receiptStatus=receipt.receiptState;
+          output=receipt.receiptState==='confirmed'
+            ?`已核对：这条消息已进入 ${selected.title||selected.id}。\n回复会自动发回${this.channelLabel}，无需重发。`
+            :`发送回执暂未确认，正在自动核对消息是否进入 ${selected.title||selected.id}。\n请暂时不要重复发送；确认后会自动通知并继续返回回复。`;
+          receipt.confirmationNotified=receipt.receiptState==='confirmed';this.persistWatches();
+          break;
+        }
+        this.watches.delete(receiptKey);session.awaitingChoice=null;this.watch(session,baseline);output=`已发送到：${selected.title||selected.id}\n回复会自动发回${this.channelLabel}。\n/status 查看进度，/read 查看对话，/chats 切换会话。`;
       }
     }
     const listCommands=['chats','projects','project','archived','next','prev','page','more'];
     const meta={kind:listCommands.includes(command)?'list':command==='models'?'models':command==='read'?'conversation':command==='help'?'help':'info',
-      title:CARD_TITLES[command||'send']||(command==='projectinfo'?'项目详情':'Codex'),session,openId:message.openId,updateMessageId:message.updateMessageId,
+      title:receiptStatus==='uncertain'?'发送核对中':receiptStatus==='confirmed'?'发送已确认':CARD_TITLES[command||'send']||(command==='projectinfo'?'项目详情':'Codex'),session,openId:message.openId,updateMessageId:message.updateMessageId,
       command:command||'send',threadStatus,conversation};
     if(capture)return {output,meta};
     await this.send(message.chatId,output,meta);
@@ -510,15 +530,57 @@ export class Router {
     for(const [key,watch] of this.watches) if(watch.openId===session.openId && watch.chatId===session.chatId && (!selected || keyOf(watch.thread)===keyOf(selected))) this.watches.delete(key);
     this.persistWatches();
   }
+  async checkReceipt(watch,reads) {
+    if(!this.authorized(watch.openId))return;
+    const key=keyOf(watch.thread);
+    let request=reads?.get(key);
+    if(!request){request=this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:10,maxOutputCharsPerItem:20000},{timeoutMs:5000});reads?.set(key,request);}
+    const result=await request;
+    if(!this.authorized(watch.openId))return;
+    // Require an actual server turn ID and this exact client message. Never
+    // confirm from matching prompt text, a provisional turn, or unrelated work.
+    const turn=(result.turns||[]).find(turn=>nativeTurnId(turn.id) &&
+      (turn.id===watch.confirmedTurnId || (turn.items||[]).some(item=>item.type==='userMessage' && item.id===watch.clientUserMessageId)));
+    if(turn){watch.receiptState='confirmed';watch.confirmedTurnId=turn.id;this.persistWatches();}
+    return {result,turn};
+  }
+  async sendWatchedReply(watch,text,assistantId,kind='assistant') {
+    const mark=fingerprint({id:JSON.stringify([watch.openId,watch.chatId,keyOf(watch.thread),assistantId])});
+    const marks=this.state.deliveredReplyMarks ||= {};
+    if(marks[mark])return;
+    if(!this.authorized(watch.openId))return;
+    await this.send(watch.chatId,text,{kind,title:kind==='assistant'?'Codex 回复':'会话状态',thread:watch.thread,openId:watch.openId,
+      session:this.state.sessions[`${watch.openId}:${watch.chatId}`]});
+    marks[mark]=this.now();this.state.deliveredReplyMarks=Object.fromEntries(Object.entries(marks).slice(-200));this.saveState();
+  }
+  async pollReceipt(key,watch,reads) {
+    if(watch.receiptState==='submitting')return;
+    const checked=await this.checkReceipt(watch,reads);
+    if(this.watches.get(key)!==watch || !this.authorized(watch.openId))return;
+    const turn=checked?.turn;if(!turn)return;
+    const terminal=['completed','failed','interrupted'].includes(turn.status);
+    if(!watch.confirmationNotified && !terminal) {
+      await this.send(watch.chatId,`已确认：消息已进入 ${watch.thread.title||watch.thread.id}，无需重发。回复会自动返回。`,
+        {kind:'info',title:'发送已确认',thread:watch.thread,openId:watch.openId,session:this.state.sessions[`${watch.openId}:${watch.chatId}`]});
+      watch.confirmationNotified=true;this.persistWatches();
+    }
+    if(!terminal)return;
+    const assistant=threadSnapshot({turns:[turn]}).latestAssistantMessage;
+    await this.sendWatchedReply(watch,turn.status==='completed'?(assistant?.text||'任务已完成，没有文字回复。'):
+      `已确认消息进入会话，但这次任务${turn.status==='failed'?'执行失败':'已中断'}。请 /read 查看详情。`,assistant?.id||turn.id,turn.status==='completed'?'assistant':'info');
+    if(this.watches.get(key)===watch)this.watches.delete(key);this.persistWatches();
+  }
   async poll() {
+    const receiptReads=new Map();
     for(const [key,watch] of [...this.watches]) {
       if(!this.authorized(watch.openId)) {this.watches.delete(key);continue;}
+      if(watch.receiptState) {try{await this.pollReceipt(key,watch,receiptReads);}catch{/* Retain ID-only receipt checks across read/notification failures. */}continue;}
       try {
         const snapshot=threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:1,maxOutputCharsPerItem:20000}));
+        if(this.watches.get(key)!==watch || !this.authorized(watch.openId))continue;
         const assistant=snapshot.latestAssistantMessage;
         if(snapshot.latestTurn?.status==='completed' && assistant?.text && assistant.id!==watch.messageId) {
-          await this.send(watch.chatId,assistant.text,{kind:'assistant',title:'Codex 回复',thread:watch.thread,openId:watch.openId,
-            session:this.state.sessions[`${watch.openId}:${watch.chatId}`]});
+          await this.sendWatchedReply(watch,assistant.text,assistant.id);
           watch.messageId=assistant.id;
         }
         const status=snapshot.thread?.status?.type;
@@ -526,10 +588,11 @@ export class Router {
         if(status!=='needsAttention') watch.attentionNotified=false;
         if(['completed','failed','interrupted'].includes(snapshot.latestTurn?.status) && snapshot.latestTurn?.id!==watch.baselineTurnId) {
           if(snapshot.latestTurn.status!=='completed') await this.send(watch.chatId,`会话${snapshot.latestTurn.status==='failed'?'执行失败':'已中断'}。请 /read 查看结果。`);
-          this.watches.delete(key);
+          if(this.watches.get(key)===watch)this.watches.delete(key);
         }
       } catch(error) {
-        await this.send(watch.chatId,`会话通知暂停：${error.message}`).catch(()=>{});this.watches.delete(key);
+        if(this.watches.get(key)!==watch)continue;
+        await this.send(watch.chatId,`会话通知暂停：${error.message}`).catch(()=>{});if(this.watches.get(key)===watch)this.watches.delete(key);
       }
     }
     this.persistWatches();

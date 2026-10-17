@@ -186,7 +186,7 @@ var DesktopInput = class {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"));
+        reject(Object.assign(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"), { nativeReason: "request_timeout" }));
       }, timeoutMs);
       this.pending.set(requestId, { resolve, reject, timer });
       try {
@@ -194,7 +194,7 @@ var DesktopInput = class {
       } catch {
         clearTimeout(timer);
         this.pending.delete(requestId);
-        reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+        reject(Object.assign(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"), { nativeReason: "connection_closed" }));
       }
     });
   }
@@ -325,8 +325,9 @@ var DesktopInput = class {
       turnStart: { request, context: { inheritThreadSettings: true } }
     }, { hostId, targetClientId: owner });
     if (response.resultType !== "success") {
-      if (["no-client-found", "version-mismatch", "unsupported-version"].includes(response.error)) throw inputError("\u76EE\u6807\u684C\u9762\u8FDE\u63A5\u5DF2\u5931\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
-      throw inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
+      if (["no-client-found", "version-mismatch", "unsupported-version"].includes(response.error)) throw Object.assign(inputError("\u76EE\u6807\u684C\u9762\u8FDE\u63A5\u5DF2\u5931\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { nativeReason: "router_rejected" });
+      const reason = typeof response.error === "string" && response.error.includes("thread-follower-start-turn-timeout") ? "start_timeout" : "native_error";
+      throw Object.assign(inputError("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\uFF0C\u8BF7\u5728\u684C\u9762\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002"), { nativeReason: reason });
     }
     const turnId = response.result?.result?.turn?.id;
     return { threadId, accepted: true, ...clientUserMessageId ? { clientUserMessageId } : {}, ...typeof turnId === "string" ? { turnId } : {} };
@@ -339,7 +340,7 @@ var DesktopInput = class {
     socket?.destroy();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"));
+      pending.reject(Object.assign(inputError("\u684C\u9762\u8FDE\u63A5\u4E2D\u65AD\uFF0C\u53D1\u9001\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u5148\u68C0\u67E5\u4F1A\u8BDD\u3002"), { nativeReason: "connection_closed" }));
     }
     this.pending.clear();
   }

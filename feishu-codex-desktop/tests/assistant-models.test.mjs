@@ -92,7 +92,8 @@ test('assistant selection sends the next greeting directly to Codex without an e
   assert.equal(f.requests[0].options.redirect,'error');assert.equal(f.requests[0].options.headers.Authorization,'Bearer test-provider-key');
   assert.equal(f.calls.some(c=>c.name==='send_message_to_thread'),false);
   await f.handle('你好');assert.equal(f.requests.length,4);
-  assert.deepEqual(f.calls.filter(c=>c.name==='send_message_to_thread').at(-1).args,{threadId:'a',hostId:'local',prompt:'你好'});
+  const {clientUserMessageId,...sentArgs}=f.calls.filter(c=>c.name==='send_message_to_thread').at(-1).args;
+  assert.match(clientUserMessageId,/^[0-9a-f-]{36}$/);assert.deepEqual(sentArgs,{threadId:'a',hostId:'local',prompt:'你好'});
   assert.match(f.sent[0].text,/沿用桌面/);
 });
 

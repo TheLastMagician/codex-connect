@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
 import {Router,parseMessage} from '../src/router.mjs';
 
 const now=1700000000000;
@@ -27,6 +28,23 @@ function fixture(settings={allowedOpenIds:['owner']},state={}) {
   const router=new Router({desktop,getConfig:()=>settings,saveConfig:value=>{settings=value;},state,
     saveState:()=>{},send:async(chat,text)=>sent.push({chat,text}),now:()=>now});
   return {router,calls,sent,get settings(){return settings;},state,desktop};
+}
+const acceptedTurn=(id,clientId,status='inProgress',answer='已完成')=>({id,status,items:[{id:clientId,type:'userMessage',content:[{type:'text',text:'wrapped user input'}]},
+  ...(status==='completed'?[{id:'answer-'+id,type:'agentMessage',text:answer,phase:'final_answer'}]:[])]});
+async function uncertainFixture({accepted=false}={}) {
+  const f=fixture();await deliver(f,'/chats',{id:'receipt-list'});await deliver(f,'/use 1',{id:'receipt-select'});
+  const original=f.desktop.call;f.turnId=randomUUID();f.writes=0;
+  f.desktop.call=async(name,args)=>{
+    if(name==='send_message_to_thread') {
+      f.writes++;f.clientId=args.clientUserMessageId;
+      assert.equal(Object.values(f.state.watches).find(w=>w.clientUserMessageId===f.clientId)?.receiptState,'submitting');
+      if(accepted)f.result={thread:{status:{type:'active'}},turns:[acceptedTurn(f.turnId,f.clientId)]};
+      throw Object.assign(Error('ack unavailable'),{nativeReason:'start_timeout'});
+    }
+    if(name==='read_thread' && f.result)return f.result;
+    return original(name,args);
+  };
+  await deliver(f,'原始任务',{id:'receipt-send'});return f;
 }
 async function deliver(f,text,options={}) {
   const accepted=f.router.accept(event(text,options));
@@ -88,7 +106,8 @@ test('message routes to chosen real desktop chat and does not change its model',
   await deliver(f,'/chats',{id:'list'});await deliver(f,'/use 2',{id:'use'});
   await deliver(f,'修复这个项目',{id:'send'});
   const call=f.calls.find(c=>c.name==='send_message_to_thread');
-  assert.deepEqual(call.args,{threadId:'b',hostId:'local',prompt:'修复这个项目'});
+  const {clientUserMessageId,...sentArgs}=call.args;assert.match(clientUserMessageId,/^[0-9a-f-]{36}$/);
+  assert.deepEqual(sentArgs,{threadId:'b',hostId:'local',prompt:'修复这个项目'});
   assert.equal(f.state.sessions['owner:chat-1'].threads.length,2);
   assert.equal([...f.router.watches.values()][0].messageId,'old');
   await f.router.poll();
@@ -134,12 +153,73 @@ test('reply notifications wait for completed text and survive restart without re
   await after.router.poll();assert.equal(after.sent.length,1);
 });
 
-test('unknown send outcome is never retried and explains how to check before resending',async()=>{
+test('unknown send outcome is never retried and starts automatic ID-based receipt checks',async()=>{
   const f=fixture();await deliver(f,'/chats',{id:'fail-list'});await deliver(f,'/use 1',{id:'fail-select'});
   const original=f.desktop.call;let sends=0;
   f.desktop.call=async(name,args)=>{if(name==='send_message_to_thread'){sends++;throw new Error('transport failed');}return original(name,args);};
   await deliver(f,'任务',{id:'fail-send'});await deliver(f,'任务',{id:'fail-send'});
-  assert.equal(sends,1);assert.match(f.sent.at(-1).text,/未确认发送结果/);assert.equal(f.router.watches.size,0);
+  assert.equal(sends,1);assert.match(f.sent.at(-1).text,/正在自动核对/);assert.equal(f.router.watches.size,1);
+  assert.equal([...f.router.watches.values()][0].receiptState,'uncertain');
+});
+test('an accepted turn with a lost ACK is confirmed by exact user ID and still returns its final answer',async()=>{
+  const f=await uncertainFixture({accepted:true});assert.equal(f.writes,1);assert.match(f.sent.at(-1).text,/已核对/);
+  assert.equal([...f.router.watches.values()][0].confirmedTurnId,f.turnId);
+  assert.equal(f.state.deliveryFailures.at(-1).nativeReason,'start_timeout');
+  f.result={thread:{status:{type:'idle'}},turns:[acceptedTurn(f.turnId,f.clientId,'completed','真正的答复')]};
+  await f.router.poll();assert.equal(f.sent.at(-1).text,'真正的答复');assert.equal(f.router.watches.size,0);
+  await f.router.poll();assert.equal(f.writes,1);assert.equal(f.sent.filter(s=>s.text==='真正的答复').length,1);
+});
+test('a late receipt confirms in background after restart without replaying input or changing the current selection',async()=>{
+  const first=await uncertainFixture();assert.match(first.sent.at(-1).text,/正在自动核对/);
+  const restored=fixture(first.settings,structuredClone(first.state));const watch=[...restored.router.watches.values()][0];
+  restored.router.selectThread(restored.state.sessions['owner:chat-1'],{id:'other',hostId:'local',title:'另一个会话'});
+  restored.desktop.call=async(name,args)=>{assert.equal(name,'read_thread');assert.equal(args.threadId,'a');return {thread:{status:{type:'active'}},turns:[acceptedTurn(first.turnId,first.clientId)]};};
+  await restored.router.poll();assert.match(restored.sent[0].text,/已确认/);assert.equal(watch.receiptState,'confirmed');
+  restored.desktop.call=async()=>({thread:{status:{type:'idle'}},turns:[acceptedTurn(randomUUID(),randomUUID(),'completed','别人的答复'),acceptedTurn(first.turnId,first.clientId,'completed','原会话答复')]});
+  await restored.router.poll();assert.equal(restored.sent.at(-1).text,'原会话答复');assert.equal(restored.state.sessions['owner:chat-1'].selected.id,'other');
+  assert.equal(first.writes,1);assert.equal(restored.router.watches.size,0);
+});
+test('unrelated identical text and provisional turns never confirm an uncertain write',async()=>{
+  const f=await uncertainFixture();const before=f.sent.length;
+  for(const t of [acceptedTurn(randomUUID(),randomUUID(),'completed'),acceptedTurn('provisional',f.clientId,'completed')]) {
+    t.items[0].content=[{type:'text',text:'原始任务'}];f.result={thread:{status:{type:'idle'}},turns:[t]};await f.router.poll();
+    assert.equal([...f.router.watches.values()][0].receiptState,'uncertain');assert.equal(f.sent.length,before);
+  }
+  assert.equal(f.writes,1);
+});
+test('receipt read and notification failures remain recoverable without writing the task again',async()=>{
+  const f=await uncertainFixture();const original=f.desktop.call;
+  f.desktop.call=async()=>{throw Error('read offline');};await f.router.poll();assert.equal(f.router.watches.size,1);
+  f.desktop.call=original;f.result={thread:{status:{type:'idle'}},turns:[acceptedTurn(f.turnId,f.clientId,'completed','可恢复答复')]};
+  const send=f.router.send;f.router.send=async()=>{throw Error('Feishu offline');};await f.router.poll();assert.equal(f.router.watches.size,1);
+  f.router.send=send;await f.router.poll();assert.equal(f.sent.at(-1).text,'可恢复答复');assert.equal(f.router.watches.size,0);assert.equal(f.writes,1);
+});
+test('a crash before receiving an ACK and later revoked access never trigger replay or a reply to an unauthorized user',async()=>{
+  const first=await uncertainFixture();const state=structuredClone(first.state);Object.values(state.watches)[0].receiptState='submitting';
+  const restored=fixture(first.settings,state);assert.equal([...restored.router.watches.values()][0].receiptState,'uncertain');
+  restored.settings.allowedOpenIds.length=0;restored.desktop.call=()=>assert.fail('Revoked receipts cannot read or write');
+  await restored.router.poll();assert.equal(restored.router.watches.size,0);assert.equal(restored.sent.length,0);assert.equal(first.writes,1);
+});
+test('a normal reply watch and a recovered receipt do not send the same answer twice',async()=>{
+  const f=await uncertainFixture({accepted:true});const session=f.state.sessions['owner:chat-1'];
+  f.router.watch(session,{latestTurn:{id:'old'},latestAssistantMessage:{id:'old-answer'}});
+  f.result={thread:{status:{type:'idle'}},turns:[acceptedTurn(f.turnId,f.clientId,'completed','只回复一次')]};
+  await f.router.poll();assert.equal(f.sent.filter(s=>s.text==='只回复一次').length,1);assert.equal(f.router.watches.size,0);assert.equal(f.writes,1);
+});
+test('receipt checks for the same target share one read and persist IDs without the input text',async()=>{
+  const f=await uncertainFixture();const first=[...f.router.watches.values()][0];
+  const other={...first,clientUserMessageId:randomUUID()};f.router.watches.set('receipt:other',other);f.router.persistWatches();
+  assert.doesNotMatch(JSON.stringify(f.state.watches),/原始任务/);
+  let reads=0;f.desktop.call=async name=>{assert.equal(name,'read_thread');reads++;return {turns:[]};};
+  await f.router.poll();assert.equal(reads,1);assert.equal(f.router.watches.size,2);assert.equal(f.writes,1);
+});
+test('a notification read that finishes after a newer watch is installed cannot remove the new watch',async()=>{
+  const f=fixture();await deliver(f,'/chats',{id:'race-list'});await deliver(f,'/use 1',{id:'race-select'});
+  const session=f.state.sessions['owner:chat-1'];f.router.watch(session,{latestTurn:{id:'before'}});
+  let finish;f.desktop.call=()=>new Promise(resolve=>finish=resolve);const poll=f.router.poll();
+  f.router.watch(session,{latestTurn:{id:'new-baseline'}});const current=[...f.router.watches.values()][0];
+  finish({thread:{status:{type:'idle'}},turns:[acceptedTurn(randomUUID(),randomUUID(),'completed','较早回复')]});await poll;
+  assert.equal(f.router.watches.size,1);assert.equal([...f.router.watches.values()][0],current);assert.equal(f.sent.some(s=>s.text==='较早回复'),false);
 });
 
 test('a target loading timeout preserves selection and reports no send without starting reply watches',async()=>{
