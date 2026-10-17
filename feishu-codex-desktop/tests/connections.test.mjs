@@ -40,15 +40,30 @@ test('local approval can only approve a real application and never stores or rep
   assert.deepEqual(authorizeFeishuUser(bot.id,'owner',false).allowedOpenIds,[]);
 });
 function channelFixture(thread=binding,{identity=async()=>({code:0,bot:{open_id:'ou_robot'}}),accessMode='approved',mode='fixed',state={}}={}) {
-  const settings={...botInput,thread,id:'default',enabled:true,allowedOpenIds:['owner'],accessMode,mode};const calls=[],sent=[],requests=[];let events;
+  const settings={...botInput,thread,id:'default',enabled:true,allowedOpenIds:['owner'],accessMode,mode};const calls=[],sent=[],requests=[],statuses=[];let events;
   const sdk={Client:class {constructor(){this.im={v1:{message:{create:async args=>{sent.push(args);return {code:0};}}}};}request(){return identity();}},
     WSClient:class {async start({eventDispatcher}){events=eventDispatcher;}close(){}},EventDispatcher:class {register(value){return value;}}};
   let snapshot={thread:{status:{type:'idle'}},turns:[{id:'old-turn',status:'completed',items:[{type:'agentMessage',id:'old',text:'旧回复'}]}]};
   const desktop={call:async(name,args,options)=>{calls.push({name,args});options?.beforeSend?.();if(name==='read_thread')return snapshot;return {};}};
-  const channel=createFeishuChannel({desktop,settings:structuredClone(settings),getSettings:()=>settings,sdk,operator:{run:()=>assert.fail('Fixed bot cannot invoke operator')},loadState:()=>state,save:()=>{},rememberRequest:m=>requests.push(m)});
+  const channel=createFeishuChannel({desktop,settings:structuredClone(settings),getSettings:()=>settings,sdk,operator:{run:()=>assert.fail('Fixed bot cannot invoke operator')},loadState:()=>state,save:()=>{},rememberRequest:m=>requests.push(m),onStatus:update=>statuses.push(update)});
   const event=(text,owner='owner',id=Math.random().toString())=>({sender:{sender_type:'user',sender_id:{open_id:owner}},message:{message_id:id,chat_id:'private-chat',chat_type:'p2p',message_type:'text',create_time:String(Date.now()),content:JSON.stringify({text})}});
-  return {channel,calls,sent,settings,requests,event,events:()=>events,setSnapshot:value=>snapshot=value};
+  return {channel,calls,sent,settings,requests,statuses,desktop,event,events:()=>events,setSnapshot:value=>snapshot=value};
 }
+test('a full bot retains its selected target through a transient read and exposes only redacted failure metadata',async()=>{
+  const state={sessions:{'owner:private-chat':{openId:'owner',chatId:'private-chat',selected:binding,mode:'chat',routingVersion:3}}};
+  const f=channelFixture(binding,{mode:'full',state});await f.channel.start();const original=f.desktop.call;let reads=0;
+  f.desktop.call=async(name,args,options)=>{if(name==='read_thread' && ++reads===1)throw Error('connection lost with sensitive-data');return original(name,args,options);};
+  try {
+    await receive(f,f.event('private task body'));
+    assert.equal(reads,2);assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);
+    assert.equal(state.sessions['owner:private-chat'].selected.id,binding.id);
+    const failure=f.statuses.find(s=>s.lastDeliveryFailure).lastDeliveryFailure;
+    assert.deepEqual(Object.keys(failure).sort(),['at','stage','reason','retrying','threadId','hostId'].sort());
+    assert.equal(failure.reason,'connection');assert.equal(failure.retrying,true);
+    assert.doesNotMatch(JSON.stringify(failure),/sensitive-data|private task body/);
+    assert.equal(state.deliveryFailures.length,1);
+  }finally{f.channel.stop();}
+});
 function groupEvent(f,text,{owner='owner',id=Math.random().toString(),chat='group-chat',bot='ou_robot',mentions}={}) {
   const event=f.event(text,owner,id);Object.assign(event.message,{chat_type:'group',chat_id:chat,
     mentions:mentions||[{key:'@_user_1',id:{open_id:bot},name:'Codex'}]});return event;

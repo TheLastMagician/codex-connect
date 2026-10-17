@@ -21724,6 +21724,19 @@ var DesktopInput = class {
     if (response.resultType === "error" && response.error === "no-client-found") return null;
     throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
   }
+  async discoverOwner(threadId, hostId, authorize) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      authorize();
+      try {
+        await this.connect();
+        return await this.findOwner(threadId, hostId);
+      } catch {
+        authorize();
+        if (attempt) throw inputError("\u5DF2\u4FDD\u7559\u6240\u9009\u4F1A\u8BDD\uFF0C\u4F46\u684C\u9762\u6D88\u606F\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u7A0D\u540E\u53EF\u76F4\u63A5\u91CD\u53D1\uFF0C\u65E0\u9700\u91CD\u65B0\u9009\u62E9\u3002", true);
+        await (0, import_promises.setTimeout)(150);
+      }
+    }
+  }
   async loadOwner(threadId, hostId, authorize, beforeActivate) {
     if (!this.activateThread) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u4EE5\u542F\u7528\u81EA\u52A8\u6253\u5F00\u4F1A\u8BDD\u3002", true);
     const key = JSON.stringify([hostId, threadId]);
@@ -21778,14 +21791,7 @@ var DesktopInput = class {
       }
     };
     authorize();
-    await this.connect();
-    let owner;
-    try {
-      owner = await this.findOwner(threadId, hostId);
-    } catch (error2) {
-      if (error2.notSent) throw error2;
-      throw inputError("\u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
-    }
+    let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
     if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
     try {
@@ -22155,7 +22161,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.5";
+var VERSION = "0.5.6";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);

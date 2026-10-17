@@ -1,4 +1,5 @@
 import {createHash,timingSafeEqual,randomUUID} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
 import {PAGE_SIZE,HELP_HINT,CHAT_NEXT,statusLabel,currentTarget,renderList} from './navigation.mjs';
 import {CARD_TITLES} from './cards.mjs';
 import {EFFORTS,threadKey,modelSettings,modelSummary,taskModelArgs,loadModels} from './models.mjs';
@@ -74,8 +75,8 @@ export function threadSnapshot(result) {
   return {thread:result.thread,latestTurn:turn,latestAssistantMessage:assistant};
 }
 export class Router {
-  constructor({desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now=Date.now,channelLabel='飞书',operator,isAuthorized}) {
-    Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,operator,isAuthorized});
+  constructor({desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now=Date.now,channelLabel='飞书',operator,isAuthorized,reportDeliveryFailure}) {
+    Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,operator,isAuthorized,reportDeliveryFailure});
     this.state.sessions ||= {}; this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches||{}));this.queues=new Map();this.pendingCounts=new Map();
     this.cardRequests=new Map();
@@ -113,6 +114,7 @@ export class Router {
       }
       if(message.cardAction) await this.handleAction(message,message.cardAction);else await this.handle(message);
     }).catch(async error=>{
+      if(error.code==='THREAD_NOT_SELECTED')this.noteDeliveryFailure('selection',error,this.session(message));
       try {await this.send(message.chatId,`${error.message}\n\n${currentTarget(this.session(message))}\n${HELP_HINT}`,
         {kind:'error',error,title:'操作未完成',session:this.session(message),openId:message.openId,updateMessageId:message.updateMessageId});}catch{/* Avoid unhandled retries and duplicate mutations. */}
     }).finally(()=>{
@@ -211,7 +213,33 @@ export class Router {
     if(exact.length>1) throw new Error('标题重复，请使用会话编号');
     throw new Error('这个会话不在当前列表。发送 /chats 刷新，再用 /use 1 选择；也可以发送 /chats 标题关键词 查找。');
   }
-  selected(session) {if(!session.selected) throw new Error('还没选择会话。直接让助手找会话，或 /chats 后用 /use 1 选择；选中后直接发消息即可。');return session.selected;}
+  selected(session) {if(!session.selected) throw Object.assign(new Error('还没选择会话。直接让助手找会话，或 /chats 后用 /use 1 选择；选中后直接发消息即可。'),{code:'THREAD_NOT_SELECTED'});return session.selected;}
+  noteDeliveryFailure(stage,error,session,{retrying=false}={}) {
+    const reason=error.code==='THREAD_NOT_SELECTED'?'no_selection':/授权/.test(error.message)?'authorization':
+      /加载|打开目标/.test(error.message)?'not_loaded':/超时|timeout/i.test(error.message)?'timeout':
+      /连接|connection|socket|pipe|ECONN|ENOENT|EPIPE|unavailable/i.test(error.message)||['DESKTOP_DISCONNECTED','ECONNRESET','ECONNREFUSED','EPIPE','ENOENT'].includes(error.code)?'connection':
+      error.notSent?'not_sent':stage==='send'?'delivery_unknown':'read_failed';
+    // Keep only bounded diagnostics, never user prompts, raw API errors or keys.
+    const record={at:this.now(),stage,reason,retrying,...(session.selected?{threadId:session.selected.id,hostId:session.selected.hostId||'local'}:{})};
+    this.state.deliveryFailures=[...(this.state.deliveryFailures||[]),record].slice(-20);this.saveState();this.reportDeliveryFailure?.(record);
+  }
+  async readBeforeSend(session,authorize) {
+    const selected=this.selected(session);
+    for(let attempt=0;attempt<2;attempt++) {
+      authorize();
+      try {return threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:1,maxOutputCharsPerItem:20000},{beforeSend:authorize}));}
+      catch(error) {
+        authorize();
+        const transient=['DESKTOP_DISCONNECTED','ECONNRESET','ECONNREFUSED','EPIPE','ENOENT','ETIMEDOUT'].includes(error.code) ||
+          /连接|超时|connection|socket|ECONN|ENOENT|EPIPE|timeout|unavailable|Codex app tool request failed/i.test(error.message);
+        const retrying=attempt===0 && transient;this.noteDeliveryFailure('read',error,session,{retrying});
+        if(!retrying)throw Object.assign(new Error('已保留所选会话，但发送前连接检查失败，这条消息尚未发送。稍后可直接重发，无需重新选择会话。'),{notSent:true});
+        // Retrying this read can reconnect an idle transport. The task has not
+        // been submitted; never retry an actual send with an unknown outcome.
+        await delay(250);
+      }
+    }
+  }
   async archived(session,reset=false) {
     const cursor=reset?undefined:session.archiveCursor;
     const result=await this.desktop.call('list_archived_threads',{source:'codex',hostId:'local',limit:PAGE_SIZE,...(cursor?{cursor}:{})});
@@ -454,13 +482,11 @@ export class Router {
         if(!prompt) throw new Error('请写上任务内容。例如：/send 帮我检查构建错误');
         const selected=this.selected(session);
         if(selected.archived) throw new Error('当前会话已归档。先发送 /unarchive 恢复，再直接聊天；或 /chats 选择其他会话。');
-        let baseline;
-        try {baseline=threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:1,maxOutputCharsPerItem:20000}));}
-        catch {throw new Error('发送前无法读取这个会话，消息尚未发送。请用 /read 检查连接，再重新发送。');}
+        const baseline=await this.readBeforeSend(session,authorize);
         // This text is an authenticated user's explicit instruction to this selected chat.
         authorize();
         try {await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session)},{beforeSend:authorize});}
-        catch(error) {if(error.notSent)throw error;throw new Error('桌面未确认发送结果。请先用 /read 或在桌面检查这条消息是否已进入会话，再决定是否重发。');}
+        catch(error) {this.noteDeliveryFailure('send',error,session);if(error.notSent)throw error;throw new Error('桌面未确认发送结果。请先用 /read 或在桌面检查这条消息是否已进入会话，再决定是否重发。');}
         session.awaitingChoice=null;this.saveState();this.watch(session,baseline);output=`已发送到：${selected.title||selected.id}\n回复会自动发回${this.channelLabel}。\n/status 查看进度，/read 查看对话，/chats 切换会话。`;
       }
     }

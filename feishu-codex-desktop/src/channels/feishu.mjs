@@ -60,7 +60,8 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
       if(result.code!==0)throw new Error('飞书卡片发送失败，请检查机器人权限');
     }
   };
-  const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,operator,isAuthorized:authorized};
+  const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,operator,isAuthorized:authorized,
+    reportDeliveryFailure:record=>onStatus({lastDeliveryFailure:record})};
   const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new Router(options);
   const receive=event=>{
     const message=parseMessage(event,{botOpenId,appId:settings.appId});

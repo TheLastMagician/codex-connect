@@ -87,6 +87,19 @@ export class DesktopInput {
     if(response.resultType==='error' && response.error==='no-client-found')return null;
     throw inputError('无法确认桌面会话连接，消息尚未发送。请重新启动桥接。',true);
   }
+  async discoverOwner(threadId,hostId,authorize) {
+    for(let attempt=0;attempt<2;attempt++) {
+      authorize();
+      try {await this.connect();return await this.findOwner(threadId,hostId);}
+      catch {
+        authorize();
+        if(attempt)throw inputError('已保留所选会话，但桌面消息连接暂不可用，这条消息尚未发送。稍后可直接重发，无需重新选择。',true);
+        // Owner discovery is read-only. A stale idle socket may reconnect on
+        // its next request; do not replay thread-follower-start-turn here.
+        await delay(150);
+      }
+    }
+  }
   async loadOwner(threadId,hostId,authorize,beforeActivate) {
     if(!this.activateThread)throw inputError('目标会话尚未加载，消息尚未发送。请重新启动桥接以启用自动打开会话。',true);
     const key=JSON.stringify([hostId,threadId]);
@@ -124,10 +137,7 @@ export class DesktopInput {
       throw inputError('消息标识无效，消息尚未发送。',true);
     const authorize=()=>{try{beforeSend?.();}catch{throw inputError('通道授权已撤销，消息尚未发送。',true);}};
     authorize();
-    await this.connect();let owner;
-    try {
-      owner=await this.findOwner(threadId,hostId);
-    }catch(error){if(error.notSent)throw error;throw inputError('无法确认目标桌面会话连接，消息尚未发送，也未切换桌面。请稍后重试。',true);}
+    let owner=await this.discoverOwner(threadId,hostId,authorize);
     // Loaded chats stay in the background. For cold chats the user permits
     // opening the target; navigation alone is not proof that it has loaded.
     authorize();

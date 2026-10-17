@@ -10,7 +10,7 @@ import {DesktopClient,encodeFrame} from '../src/desktop.mjs';
 async function fixture(options={}) {
   const pipe=process.platform==='win32'?`\\\\.\\pipe\\desktop-input-test-${randomUUID()}`:
     path.join(os.tmpdir(),`desktop-input-${randomUUID()}.sock`);
-  const requests=[];const sockets=new Set();let ownerReady=options.ownerReady!==false;
+  const requests=[];const sockets=new Set();let ownerReady=options.ownerReady!==false,discoveryDrops=options.discoveryDrops||0;
   const server=net.createServer(socket=>{
     sockets.add(socket);socket.once('close',()=>sockets.delete(socket));let buffer=Buffer.alloc(0);
     socket.on('data',chunk=>{
@@ -23,6 +23,7 @@ async function fixture(options={}) {
         else {
           assert.equal(request.sourceClientId,'server-assigned-client');
           if(request.method==='thread-owner-discovery') {
+            if(discoveryDrops-->0){socket.destroy();return;}
             options.onDiscovery?.();
             response=ownerReady?{...response,handledByClientId:'desktop-owner',result:{supportsUntrustedAppInput:true}}:
               {...response,resultType:'error',error:'no-client-found'};
@@ -266,4 +267,34 @@ test('post-loading readiness checks and authorization happen before the only nat
       assert.equal(checked,1);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
     }finally{client.close();await f.close();}
   }
+});
+
+test('an idle input socket reconnects during read-only discovery and submits only once without navigation',async()=>{
+  const f=await fixture({discoveryDrops:1,activateThread:()=>assert.fail('A loaded owner needs no desktop navigation')});
+  try {
+    await f.input.send({threadId:'selected',prompt:'原文，保留模型。'});
+    assert.equal(f.requests.filter(r=>r.method==='initialize').length,2);
+    assert.equal(f.requests.filter(r=>r.method==='thread-owner-discovery').length,2);
+    const starts=f.requests.filter(r=>r.method==='thread-follower-start-turn');assert.equal(starts.length,1);
+    assert.equal(starts[0].params.turnStart.request.input[0].text,'原文，保留模型。');
+  }finally{await f.close();}
+});
+
+test('discovery recovery stays bounded and does not submit while the connection remains unavailable',async()=>{
+  const f=await fixture({discoveryDrops:2});
+  try {
+    await assert.rejects(f.input.send({threadId:'selected',prompt:'原文'}),e=>e.notSent && /已保留所选会话/.test(e.message));
+    assert.equal(f.requests.filter(r=>r.method==='thread-owner-discovery').length,2);
+    assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+  }finally{await f.close();}
+});
+
+test('authorization revoked during discovery recovery prevents the native submission',async()=>{
+  let allowed=true;const f=await fixture({discoveryDrops:1});
+  const work=f.input.send({threadId:'selected',prompt:'原文'},()=>{if(!allowed)throw Error('revoked');});
+  const rejected=assert.rejects(work,e=>e.notSent && /授权已撤销/.test(e.message));
+  try {
+    while(!f.requests.some(r=>r.method==='thread-owner-discovery'))await new Promise(resolve=>setTimeout(resolve,2));
+    allowed=false;await rejected;assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+  }finally{await f.close();}
 });

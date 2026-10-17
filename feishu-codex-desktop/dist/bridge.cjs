@@ -122686,13 +122686,13 @@ var require_lib2 = __commonJS({
           this.fireSoon(wait);
         }
       }
-      fireSoon(delay3) {
+      fireSoon(delay4) {
         if (this.timer)
           clearTimeout(this.timer);
         this.timer = setTimeout(() => {
           this.timer = void 0;
           void this.doFire();
-        }, delay3);
+        }, delay4);
       }
       /**
        * Force-flush everything accumulated so far, including any content that
@@ -123696,8 +123696,8 @@ ${block}
             if (attempt >= max || !isRetryable(err)) {
               throw err;
             }
-            const delay3 = base * Math.pow(3, attempt - 1);
-            yield sleep(delay3);
+            const delay4 = base * Math.pow(3, attempt - 1);
+            yield sleep(delay4);
           }
         }
         throw lastErr;
@@ -124137,11 +124137,11 @@ ${block}
           return;
         }
         this.clearTimer();
-        const delay3 = this.bufferChars >= this.config.longThresholdChars ? this.config.longDelayMs : this.config.delayMs;
+        const delay4 = this.bufferChars >= this.config.longThresholdChars ? this.config.longDelayMs : this.config.delayMs;
         this.timer = setTimeout(() => {
           this.timer = void 0;
           this.enqueueFlush();
-        }, delay3);
+        }, delay4);
       }
       run(task) {
         if (this.buffer.length > 0) {
@@ -130612,6 +130612,19 @@ var DesktopInput = class {
     if (response.resultType === "error" && response.error === "no-client-found") return null;
     throw inputError("\u65E0\u6CD5\u786E\u8BA4\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u3002", true);
   }
+  async discoverOwner(threadId, hostId, authorize) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      authorize();
+      try {
+        await this.connect();
+        return await this.findOwner(threadId, hostId);
+      } catch {
+        authorize();
+        if (attempt) throw inputError("\u5DF2\u4FDD\u7559\u6240\u9009\u4F1A\u8BDD\uFF0C\u4F46\u684C\u9762\u6D88\u606F\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u7A0D\u540E\u53EF\u76F4\u63A5\u91CD\u53D1\uFF0C\u65E0\u9700\u91CD\u65B0\u9009\u62E9\u3002", true);
+        await (0, import_promises.setTimeout)(150);
+      }
+    }
+  }
   async loadOwner(threadId, hostId, authorize, beforeActivate) {
     if (!this.activateThread) throw inputError("\u76EE\u6807\u4F1A\u8BDD\u5C1A\u672A\u52A0\u8F7D\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u91CD\u65B0\u542F\u52A8\u6865\u63A5\u4EE5\u542F\u7528\u81EA\u52A8\u6253\u5F00\u4F1A\u8BDD\u3002", true);
     const key = JSON.stringify([hostId, threadId]);
@@ -130666,14 +130679,7 @@ var DesktopInput = class {
       }
     };
     authorize();
-    await this.connect();
-    let owner;
-    try {
-      owner = await this.findOwner(threadId, hostId);
-    } catch (error) {
-      if (error.notSent) throw error;
-      throw inputError("\u65E0\u6CD5\u786E\u8BA4\u76EE\u6807\u684C\u9762\u4F1A\u8BDD\u8FDE\u63A5\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF0C\u4E5F\u672A\u5207\u6362\u684C\u9762\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
-    }
+    let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
     if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
     try {
@@ -131018,6 +131024,7 @@ init_storage();
 
 // src/router.mjs
 var import_node_crypto4 = require("node:crypto");
+var import_promises2 = require("node:timers/promises");
 
 // src/navigation.mjs
 var PAGE_SIZE = 10;
@@ -131394,8 +131401,8 @@ function threadSnapshot(result) {
   return { thread: result.thread, latestTurn: turn, latestAssistantMessage: assistant };
 }
 var Router = class {
-  constructor({ desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now = Date.now, channelLabel = "\u98DE\u4E66", operator, isAuthorized }) {
-    Object.assign(this, { desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now, channelLabel, operator, isAuthorized });
+  constructor({ desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now = Date.now, channelLabel = "\u98DE\u4E66", operator, isAuthorized, reportDeliveryFailure }) {
+    Object.assign(this, { desktop, getLocalThreads, getConfig, saveConfig, state, saveState, send, now, channelLabel, operator, isAuthorized, reportDeliveryFailure });
     this.state.sessions ||= {};
     this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches || {}));
@@ -131442,6 +131449,7 @@ var Router = class {
       if (message.cardAction) await this.handleAction(message, message.cardAction);
       else await this.handle(message);
     }).catch(async (error) => {
+      if (error.code === "THREAD_NOT_SELECTED") this.noteDeliveryFailure("selection", error, this.session(message));
       try {
         await this.send(
           message.chatId,
@@ -131584,8 +131592,31 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
     throw new Error("\u8FD9\u4E2A\u4F1A\u8BDD\u4E0D\u5728\u5F53\u524D\u5217\u8868\u3002\u53D1\u9001 /chats \u5237\u65B0\uFF0C\u518D\u7528 /use 1 \u9009\u62E9\uFF1B\u4E5F\u53EF\u4EE5\u53D1\u9001 /chats \u6807\u9898\u5173\u952E\u8BCD \u67E5\u627E\u3002");
   }
   selected(session) {
-    if (!session.selected) throw new Error("\u8FD8\u6CA1\u9009\u62E9\u4F1A\u8BDD\u3002\u76F4\u63A5\u8BA9\u52A9\u624B\u627E\u4F1A\u8BDD\uFF0C\u6216 /chats \u540E\u7528 /use 1 \u9009\u62E9\uFF1B\u9009\u4E2D\u540E\u76F4\u63A5\u53D1\u6D88\u606F\u5373\u53EF\u3002");
+    if (!session.selected) throw Object.assign(new Error("\u8FD8\u6CA1\u9009\u62E9\u4F1A\u8BDD\u3002\u76F4\u63A5\u8BA9\u52A9\u624B\u627E\u4F1A\u8BDD\uFF0C\u6216 /chats \u540E\u7528 /use 1 \u9009\u62E9\uFF1B\u9009\u4E2D\u540E\u76F4\u63A5\u53D1\u6D88\u606F\u5373\u53EF\u3002"), { code: "THREAD_NOT_SELECTED" });
     return session.selected;
+  }
+  noteDeliveryFailure(stage, error, session, { retrying = false } = {}) {
+    const reason = error.code === "THREAD_NOT_SELECTED" ? "no_selection" : /授权/.test(error.message) ? "authorization" : /加载|打开目标/.test(error.message) ? "not_loaded" : /超时|timeout/i.test(error.message) ? "timeout" : /连接|connection|socket|pipe|ECONN|ENOENT|EPIPE|unavailable/i.test(error.message) || ["DESKTOP_DISCONNECTED", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ENOENT"].includes(error.code) ? "connection" : error.notSent ? "not_sent" : stage === "send" ? "delivery_unknown" : "read_failed";
+    const record = { at: this.now(), stage, reason, retrying, ...session.selected ? { threadId: session.selected.id, hostId: session.selected.hostId || "local" } : {} };
+    this.state.deliveryFailures = [...this.state.deliveryFailures || [], record].slice(-20);
+    this.saveState();
+    this.reportDeliveryFailure?.(record);
+  }
+  async readBeforeSend(session, authorize) {
+    const selected = this.selected(session);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      authorize();
+      try {
+        return threadSnapshot(await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: 1, maxOutputCharsPerItem: 2e4 }, { beforeSend: authorize }));
+      } catch (error) {
+        authorize();
+        const transient = ["DESKTOP_DISCONNECTED", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ENOENT", "ETIMEDOUT"].includes(error.code) || /连接|超时|connection|socket|ECONN|ENOENT|EPIPE|timeout|unavailable|Codex app tool request failed/i.test(error.message);
+        const retrying = attempt === 0 && transient;
+        this.noteDeliveryFailure("read", error, session, { retrying });
+        if (!retrying) throw Object.assign(new Error("\u5DF2\u4FDD\u7559\u6240\u9009\u4F1A\u8BDD\uFF0C\u4F46\u53D1\u9001\u524D\u8FDE\u63A5\u68C0\u67E5\u5931\u8D25\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u7A0D\u540E\u53EF\u76F4\u63A5\u91CD\u53D1\uFF0C\u65E0\u9700\u91CD\u65B0\u9009\u62E9\u4F1A\u8BDD\u3002"), { notSent: true });
+        await (0, import_promises2.setTimeout)(250);
+      }
+    }
   }
   async archived(session, reset = false) {
     const cursor = reset ? void 0 : session.archiveCursor;
@@ -131997,16 +132028,12 @@ ${currentTarget(session)}`;
         if (!prompt) throw new Error("\u8BF7\u5199\u4E0A\u4EFB\u52A1\u5185\u5BB9\u3002\u4F8B\u5982\uFF1A/send \u5E2E\u6211\u68C0\u67E5\u6784\u5EFA\u9519\u8BEF");
         const selected = this.selected(session);
         if (selected.archived) throw new Error("\u5F53\u524D\u4F1A\u8BDD\u5DF2\u5F52\u6863\u3002\u5148\u53D1\u9001 /unarchive \u6062\u590D\uFF0C\u518D\u76F4\u63A5\u804A\u5929\uFF1B\u6216 /chats \u9009\u62E9\u5176\u4ED6\u4F1A\u8BDD\u3002");
-        let baseline;
-        try {
-          baseline = threadSnapshot(await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: 1, maxOutputCharsPerItem: 2e4 }));
-        } catch {
-          throw new Error("\u53D1\u9001\u524D\u65E0\u6CD5\u8BFB\u53D6\u8FD9\u4E2A\u4F1A\u8BDD\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u7528 /read \u68C0\u67E5\u8FDE\u63A5\uFF0C\u518D\u91CD\u65B0\u53D1\u9001\u3002");
-        }
+        const baseline = await this.readBeforeSend(session, authorize);
         authorize();
         try {
           await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session) }, { beforeSend: authorize });
         } catch (error) {
+          this.noteDeliveryFailure("send", error, session);
           if (error.notSent) throw error;
           throw new Error("\u684C\u9762\u672A\u786E\u8BA4\u53D1\u9001\u7ED3\u679C\u3002\u8BF7\u5148\u7528 /read \u6216\u5728\u684C\u9762\u68C0\u67E5\u8FD9\u6761\u6D88\u606F\u662F\u5426\u5DF2\u8FDB\u5165\u4F1A\u8BDD\uFF0C\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1\u3002");
         }
@@ -133073,7 +133100,18 @@ function createFeishuChannel({
       if (result.code !== 0) throw new Error("\u98DE\u4E66\u5361\u7247\u53D1\u9001\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u673A\u5668\u4EBA\u6743\u9650");
     }
   };
-  const options = { desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: saveSettings, state, saveState, send, operator, isAuthorized: authorized };
+  const options = {
+    desktop,
+    getLocalThreads: readLocalThreads,
+    getConfig,
+    saveConfig: saveSettings,
+    state,
+    saveState,
+    send,
+    operator,
+    isAuthorized: authorized,
+    reportDeliveryFailure: (record) => onStatus({ lastDeliveryFailure: record })
+  };
   const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread, isActive: active }) : new Router(options);
   const receive = (event) => {
     const message = parseMessage(event, { botOpenId, appId: settings.appId });
@@ -133166,13 +133204,13 @@ function createFeishuChannel({
 
 // src/channels/wechat.mjs
 var import_node_crypto10 = require("node:crypto");
-var import_promises2 = require("node:timers/promises");
+var import_promises3 = require("node:timers/promises");
 
 // src/wechat-api.mjs
 var import_node_crypto9 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.5.5";
+var VERSION = "0.5.6";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -133371,7 +133409,7 @@ function createWechatChannel({
   loadState = () => readJson(wechatStateName(account), { sessions: {}, seen: {} }),
   save = (state) => writeJson(wechatStateName(account), state),
   currentAccount = readWechatAccount,
-  wait = import_promises2.setTimeout,
+  wait = import_promises3.setTimeout,
   operator = new OperationAssistant()
 }) {
   const state = loadState();

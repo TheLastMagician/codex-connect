@@ -156,6 +156,50 @@ test('a target loading timeout preserves selection and reports no send without s
   assert.equal(f.calls.some(c=>c.name==='navigate_to_codex_page'),false);
   assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');
 });
+test('an idle selected chat recovers a transient preflight read without a button click or duplicate submission',async()=>{
+  const first=fixture();await deliver(first,'/chats',{id:'idle-list'});await deliver(first,'/use 1',{id:'idle-select'});
+  const f=fixture(first.settings,structuredClone(first.state)),original=f.desktop.call;let reads=0;
+  f.router.now=()=>now+3600000;
+  f.desktop.call=async(name,args,options)=>{
+    if(name==='read_thread' && ++reads===1)throw Object.assign(Error('connection reset'),{code:'ECONNRESET'});
+    options?.beforeSend?.();return original(name,args);
+  };
+  await deliver(f,'继续任务，保留原文。',{id:'idle-task',at:now+3600000});
+  assert.equal(reads,2);assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);
+  assert.equal(f.calls.find(c=>c.name==='send_message_to_thread').args.prompt,'继续任务，保留原文。');
+  assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');assert.equal(f.state.sessions['owner:chat-1'].mode,'chat');
+  assert.equal(f.state.deliveryFailures[0].retrying,true);assert.equal(f.state.deliveryFailures[0].reason,'connection');
+});
+test('persistent read failures preserve selection, never send, and keep diagnostics after a later refresh',async()=>{
+  const f=fixture();await deliver(f,'/chats',{id:'offline-list'});await deliver(f,'/use 1',{id:'offline-select'});
+  const original=f.desktop.call;let reads=0;
+  f.desktop.call=async(name,args)=>{if(name==='read_thread'){reads++;throw Error('Codex app tool request failed');}return original(name,args);};
+  await deliver(f,'private original prompt',{id:'offline-task'});assert.equal(reads,2);
+  assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,0);assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');
+  assert.match(f.sent.at(-1).text,/已保留所选会话/);assert.match(f.sent.at(-1).text,/无需重新选择/);
+  assert.equal(f.state.deliveryFailures.length,2);assert.equal(f.state.deliveryFailures[1].retrying,false);
+  f.desktop.call=original;await deliver(f,'/status',{id:'offline-refresh'});assert.equal(f.state.deliveryFailures.length,2);
+  await deliver(f,'再次发送',{id:'online-task'});assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);
+});
+test('permanent read errors and revoked access during retry never cause a task write',async()=>{
+  for(const reason of ['not-found','revoked']) {
+    const f=fixture();await deliver(f,'/chats',{id:reason+'-list'});await deliver(f,'/use 1',{id:reason+'-select'});
+    let reads=0;f.desktop.call=async name=>{assert.equal(name,'read_thread');reads++;throw Error(reason==='not-found'?'thread not found':'connection unavailable');};
+    const work=deliver(f,'任务',{id:reason+'-task'});
+    if(reason==='revoked'){await new Promise(resolve=>setImmediate(resolve));f.settings.allowedOpenIds.length=0;}
+    await work;assert.equal(reads,1);assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,0);
+  }
+});
+test('delivery diagnostics are bounded, contain no raw prompt or raw API error and survive restart',async()=>{
+  const f=fixture();await deliver(f,'/chats',{id:'diagnostic-list'});await deliver(f,'/use 1',{id:'diagnostic-select'});
+  const original=f.desktop.call;let writes=0;
+  f.desktop.call=async(name,args)=>{if(name==='send_message_to_thread'){writes++;throw Error('api secret-value raw-original-prompt');}return original(name,args);};
+  await deliver(f,'raw-original-prompt',{id:'diagnostic-task'});assert.equal(writes,1);
+  assert.equal(f.state.deliveryFailures.at(-1).reason,'delivery_unknown');
+  for(let i=0;i<25;i++)f.router.noteDeliveryFailure('read',Error('secret-value'),f.state.sessions['owner:chat-1']);
+  const restored=fixture(f.settings,structuredClone(f.state));assert.equal(restored.state.deliveryFailures.length,20);
+  assert.doesNotMatch(JSON.stringify(restored.state.deliveryFailures),/secret-value|raw-original-prompt/);
+});
 test('different paired people cannot change each others selected chats',async()=>{
   const f=fixture({allowedOpenIds:['owner','other']});
   await deliver(f,'/chats',{id:'one'});await deliver(f,'/use 1',{id:'two'});
