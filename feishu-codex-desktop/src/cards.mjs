@@ -75,8 +75,7 @@ export function modelsCard(session,issue) {
     else elements.push(md(content));
     elements.push({tag:'hr'});
   }
-  if(selected && issue)elements.push(buttons([{label:'沿用桌面设置',action:{kind:'model',model:'default',threadKey:`${selected.hostId||'local'}:${selected.id}`}},
-    {label:'操作助手',action:{kind:'command',command:'assistant'}}],issue));
+  if(selected && issue)elements.push(buttons([{label:'沿用桌面设置',action:{kind:'model',model:'default',threadKey:`${selected.hostId||'local'}:${selected.id}`}}],issue));
   elements.push(md('`/model 模型ID` 设置 · `/effort high` 推理强度\n设置按通道、账号、会话保存，仅影响后续手机任务。远程主机以实际支持为准。'));
   return shell('模型管理','Codex · 本机可用模型',elements);
 }
@@ -84,7 +83,7 @@ export function replyCard(text,meta={},issue) {
   if(meta.kind==='list' && meta.session?.view) return listCard(meta.session,issue);
   if(meta.kind==='models' && meta.session)return modelsCard(meta.session,issue);
   const title=meta.title||({assistant:'Codex 回复',conversation:'最近对话',error:'操作未完成',help:'使用帮助'})[meta.kind]||'Codex';
-  const color=meta.kind==='error'?'orange':['assistant','operator','conversation'].includes(meta.kind)?'turquoise':'blue';
+  const color=meta.kind==='error'?'orange':['assistant','conversation'].includes(meta.kind)?'turquoise':'blue';
   let content=String(text);
   if(meta.kind!=='assistant') content=formatCommands(content).replace(/\n发送 `\/help` 查看所有操作。\s*$/,'');
   const elements=[];
@@ -104,13 +103,12 @@ export function replyCard(text,meta={},issue) {
     if(meta.kind==='assistant') elements.push(md(`**回复来自**  ${escapeLabel(selected.title||'桌面会话')}`));
     if(meta.kind==='conversation')elements.push(md(`**会话**  ${escapeLabel(selected.title||'桌面会话')}`));
     const isCurrent=!!session?.selected && session.selected.id===selected.id && (session.selected.hostId||'local')===(selected.hostId||'local');
-    if(!isCurrent || session.mode!=='chat')options.push({label:isCurrent?'返回当前会话':'切换到此会话',type:'primary',action:{kind:'select',thread:selected}});
+    if(!isCurrent)options.push({label:'切换到此会话',type:'primary',action:{kind:'select',thread:selected}});
     if(isCurrent) options.push({label:'查看对话',action:{kind:'command',command:'read',threadKey:`${selected.hostId||'local'}:${selected.id}`}},
       {label:'状态',action:{kind:'command',command:'status',threadKey:`${selected.hostId||'local'}:${selected.id}`}});
   }
   options.push({label:'会话列表',action:{kind:'command',command:'chats'}},{label:'项目',action:{kind:'command',command:'projects'}});
   if(selected)options.push({label:'模型',action:{kind:'command',command:'models',threadKey:`${selected.hostId||'local'}:${selected.id}`}});
-  if(session?.mode==='chat')options.push({label:'返回操作助手',action:{kind:'command',command:'assistant'}});
   if(issue)for(let start=0;start<options.length;start+=4)elements.push(buttons(options.slice(start,start+4),issue));
   const subtitle=meta.kind==='conversation'?`${selected?.title||'当前会话'} · 最近 ${meta.conversation?.turnCount||0} 轮 · 从旧到新`:undefined;
   return shell(title,meta.subtitle||subtitle||'Codex · 本机桌面',elements,color);
@@ -118,4 +116,4 @@ export function replyCard(text,meta={},issue) {
 export const CARD_TITLES={use:'已选中会话',new:'新会话已创建',send:'任务已发送',read:'最近对话',status:'当前会话',
   rename:'会话已重命名',pin:'已置顶',unpin:'已取消置顶',archive:'已归档',unarchive:'已恢复',fork:'已复制会话',
   open:'已在桌面打开',watch:'回复通知已开启',unwatch:'回复通知已关闭',help:'使用帮助',pair:'已配对',
-  models:'模型管理',model:'模型设置',effort:'推理强度',assistant:'操作助手',resume:'已返回会话'};
+  models:'模型管理',model:'模型设置',effort:'推理强度'};

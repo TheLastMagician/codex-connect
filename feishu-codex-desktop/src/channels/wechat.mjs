@@ -7,7 +7,6 @@ import {WechatApi} from '../wechat-api.mjs';
 import {readJson,writeJson} from '../storage.mjs';
 import {readWechatAccount} from '../wechat-storage.mjs';
 import {chunkMarkdown} from '../outbound.mjs';
-import {OperationAssistant} from '../assistant.mjs';
 import {modelSummary} from '../models.mjs';
 
 // CommonMark soft line breaks are collapsed by some ClawBot clients. Use explicit
@@ -59,14 +58,12 @@ export function renderWechatReply(text,meta={}) {
     return sections(blocks);
   }
   if(meta.kind==='assistant' || meta.kind==='conversation')return sections([meta.kind==='conversation'?'💬 最近对话':'💬 Codex 回复',selected?'来自「'+name+'」':null,
-    String(text),s?.mode==='chat'?'直接回复即可继续 · /assistant 操作助手':'/chats 选择会话后直接聊天']);
-  if(meta.kind==='operator')return sections(['🧭 操作助手',meta.operatorModel,String(text),'/projects 项目 · /chats 选择会话后直接聊天']);
+    String(text),s?.selected?'直接回复即可继续 · /chats 切换会话':'/chats 选择会话后直接聊天']);
   if(meta.kind==='help')return sections(['🧭 使用指南',
-    `开始${lineBreak}未选会话时，直接说话可让操作助手帮你查找。${lineBreak}也可 /projects 后回复项目和会话编号。${lineBreak}选中后直接发消息，就是与该会话聊天。`,
+    `开始${lineBreak}先发送 /projects 或 /chats，回复项目和会话编号。${lineBreak}选中后直接发消息，就是与该会话聊天。`,
     `选择与翻页${lineBreak}/chats 关键词 → 找会话${lineBreak}/use 12 → 选会话 12${lineBreak}/next 下一页 · /prev 上一页 · /page 2 跳页`,
     `查看任务${lineBreak}/read 最近回复 · /status 当前状态${lineBreak}/watch 开启通知 · /unwatch 关闭通知`,
     `模型${lineBreak}/models 可用模型 · /model 查看设置${lineBreak}/model 模型ID → 设置 · /model default → 沿用桌面${lineBreak}/effort high → 推理强度`,
-    `操作助手${lineBreak}/assistant → 打开助手，帮你查找、切换或管理会话。${lineBreak}选择会话后，后续消息直接发给该 Codex 会话。`,
     `管理会话${lineBreak}/rename 标题 → 重命名${lineBreak}/pin 置顶 · /unpin 取消置顶${lineBreak}/archive 归档 · /archived 归档列表${lineBreak}/unarchive 恢复 · /fork 复制 · /open 本机打开`,
     `新建${lineBreak}/new 1 | 任务内容 → 在项目 1 中新建${lineBreak}/new - | 任务内容 → 新建独立会话`,
     '沿用原会话模型与上下文。停止任务、处理审批请在 Codex 桌面操作。',
@@ -75,12 +72,13 @@ export function renderWechatReply(text,meta={}) {
   if(['use','fork'].includes(meta.command))return sections([meta.command==='fork'?'✅ 已复制并选中':'✅ 已选中会话',name,
     modelSummary(s).split('\n').join(lineBreak),
     selected?.archived?'会话已归档。发送 /unarchive 恢复。':'直接发消息即可继续这个会话。',
-    quick('/models 模型','/read 查看回复','/assistant 操作助手')]);
+    quick('/models 模型','/read 查看回复','/chats 切换会话')]);
+  if(['发送核对中','发送已确认'].includes(meta.title))return sections(['📨 '+meta.title,tidyInfo(text),quick('/status 当前状态','/read 查看回复')]);
   if(['send','new'].includes(meta.command))return sections([meta.command==='new'?'✨ 新会话已开始':'📨 任务已发送',name,
     '完成后会自动在微信回复。',quick('/status 查看进度','/read 查看回复')]);
   if(meta.command==='status')return sections(['📍 当前会话',name,
     '状态｜'+statusLabel(meta.threadStatus),modelSummary(s).split('\n').join(lineBreak),selected?.archived?'已归档，使用 /unarchive 恢复。':null,
-    quick('/read 查看回复','/models 模型','/assistant 操作助手')]);
+    quick('/read 查看回复','/models 模型','/chats 切换会话')]);
   return sections([meta.title||'Codex',tidyInfo(text)]);
 }
 export function splitWechatText(text,limit=1500) {
@@ -88,7 +86,7 @@ export function splitWechatText(text,limit=1500) {
 }
 export function createWechatChannel({desktop,account,onStatus,api=new WechatApi({baseUrl:account.baseUrl,token:account.token}),
   loadState=()=>readJson(wechatStateName(account),{sessions:{},seen:{}}),save=state=>writeJson(wechatStateName(account),state),
-  currentAccount=readWechatAccount,wait=delay,operator=new OperationAssistant()}) {
+  currentAccount=readWechatAccount,wait=delay}) {
   const state=loadState();state.contexts ||= {};
   const saveState=()=>save(state);const stopController=new AbortController();let loop;let stopped=false;
   const active=()=>{const current=currentAccount();return !stopped && current.enabled && current.token===account.token && current.ownerUserId===account.ownerUserId && current.botId===account.botId;};
@@ -103,7 +101,7 @@ export function createWechatChannel({desktop,account,onStatus,api=new WechatApi(
     }
     onStatus({lastReplyAt:Date.now()});
   };
-  const router=new Router({desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:()=>{},state,saveState,send,channelLabel:'微信',operator});
+  const router=new Router({desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:()=>{},state,saveState,send,channelLabel:'微信'});
   async function receiveBatch(result) {
     if(!Array.isArray(result.msgs))throw new Error('微信消息响应无效');
     for(const raw of result.msgs) {

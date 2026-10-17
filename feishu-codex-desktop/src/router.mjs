@@ -1,4 +1,5 @@
 import {createHash,timingSafeEqual,randomUUID} from 'node:crypto';
+import {clearLegacySessionData} from './legacy-cleanup.mjs';
 import {setTimeout as delay} from 'node:timers/promises';
 import {PAGE_SIZE,HELP_HINT,CHAT_NEXT,statusLabel,currentTarget,renderList} from './navigation.mjs';
 import {CARD_TITLES} from './cards.mjs';
@@ -10,7 +11,6 @@ export const HELP = `Codex 桌面会话
 1. /chats 查看列表
 2. /use 1 选择会话，也可在列表后直接回复编号
 3. 选中后直接发消息，就是与这个 Codex 会话聊天
-4. /assistant 打开操作助手，帮你查找、切换或管理会话
 
 列表每页 10 条：/next 下一页；/prev 上一页；/page 2 跳到第 2 页；/more 也可下一页。
 /chats 关键词 — 按会话标题查找
@@ -27,7 +27,6 @@ export const HELP = `Codex 桌面会话
 /models — 查看桌面可用模型；/model — 查看当前覆盖设置
 /model 模型ID（或编号）— 设置该会话的手机侧模型；/model default 恢复沿用桌面设置
 /effort high — 设置推理强度；/effort default 恢复沿用桌面设置
-/assistant — 打开操作助手；未选择会话时，普通消息也会交给助手
 
 默认沿用会话的模型、项目和上下文；模型覆盖按通道、账号和会话保存。桌面切换窗口不改变通道发送目标。
 当前只支持文字。停止任务和执行审批需要在桌面处理。`;
@@ -76,13 +75,14 @@ export function threadSnapshot(result) {
   return {thread:result.thread,latestTurn:turn,latestAssistantMessage:assistant};
 }
 export class Router {
-  constructor({desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now=Date.now,channelLabel='飞书',operator,isAuthorized,reportDeliveryFailure}) {
-    Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,operator,isAuthorized,reportDeliveryFailure});
+  constructor({desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now=Date.now,channelLabel='飞书',isAuthorized,reportDeliveryFailure}) {
+    Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,isAuthorized,reportDeliveryFailure});
     this.state.sessions ||= {}; this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches||{}));this.queues=new Map();this.pendingCounts=new Map();
     // A crash before an ACK cannot prove delivery. Recover by ID, never by replay.
     for(const watch of this.watches.values())if(watch.receiptState==='submitting')watch.receiptState='uncertain';
     this.cardRequests=new Map();
+    if(clearLegacySessionData(this.state))this.saveState();
   }
   authorized(openId) {return this.isAuthorized?this.isAuthorized(openId):this.getConfig().allowedOpenIds.includes(openId);}
   // Return immediately to the Feishu SDK: its event ACK deadline is three seconds.
@@ -113,7 +113,7 @@ export class Router {
         if(!canPair || latest.pairing?.expiresAt<=this.now() || !equalSecret(pairing[1],latest.pairing?.code)) return;
         latest.allowedOpenIds=[...new Set([...latest.allowedOpenIds,message.openId])];
         delete latest.pairing; this.saveConfig(latest);
-        return this.send(message.chatId,'配对成功。\n\n可让操作助手查找会话，或 /chats 查看列表。选中后直接发消息，就是与该 Codex 会话聊天。\n/assistant 打开操作助手。',{title:'已配对',openId:message.openId});
+        return this.send(message.chatId,'配对成功。\n\n发送 /projects 或 /chats 查看列表。选中后直接发消息，就是与该 Codex 会话聊天。',{title:'已配对',openId:message.openId});
       }
       if(message.cardAction) await this.handleAction(message,message.cardAction);else await this.handle(message);
     }).catch(async error=>{
@@ -158,7 +158,7 @@ export class Router {
       if(!session.selected || keyOf(session.selected)!==action.threadKey)throw new Error('当前会话已切换，请重新打开 /models。');
       return this.handle({...message,text:`/model ${action.model}`});
     }
-    const allowed=['chats','projects','archived','help','read','status','open','watch','unwatch','unarchive','models','model','assistant','resume'];
+    const allowed=['chats','projects','archived','help','read','status','open','watch','unwatch','unarchive','models','model'];
     if(action.kind!=='command' || !allowed.includes(action.command)) throw new Error('按钮操作不受支持，请发送 /help。');
     if(action.threadKey && (!session.selected || keyOf(session.selected)!==action.threadKey)) throw new Error('当前会话已经切换。请先重新选择这个会话。');
     return this.handle({...message,text:`/${action.command}`});
@@ -167,18 +167,13 @@ export class Router {
     const key=`${message.openId}:${message.chatId}`;
     const session=this.state.sessions[key] ||= {openId:message.openId,chatId:message.chatId,threads:[],projects:[]};
     if(message.chatType==='group')session.chatType='group';
-    // Existing selections now receive ordinary messages immediately. Explicit
-    // assistant choices made after this migration still survive restarts.
-    if(session.routingVersion!==3) {
-      session.mode=session.selected?'chat':this.operator?'assistant':'chat';session.routingVersion=3;this.saveState();
-    }
     return session;
   }
   selectThread(session,thread) {
     (session.knownThreads ||= {})[keyOf(thread)]=thread;
-    session.selected=thread;session.mode='chat';session.awaitingChoice=null;this.saveState();
+    session.selected=thread;session.awaitingChoice=null;this.saveState();
   }
-  selectionHint(session) {return session.mode==='chat'?CHAT_NEXT:'当前是操作助手。/chats 选择会话后直接聊天。/read 查看对话，/status 查看状态。';}
+  selectionHint() {return CHAT_NEXT;}
   async chats(session,query='',project) {
     const [result,projects]=await Promise.all([this.desktop.call('list_threads',{limit:50}),this.desktop.call('list_projects')]);
     session.projects=(projects.projects||[]).filter(p=>p.projectKind!=='chatgpt');
@@ -216,7 +211,7 @@ export class Router {
     if(exact.length>1) throw new Error('标题重复，请使用会话编号');
     throw new Error('这个会话不在当前列表。发送 /chats 刷新，再用 /use 1 选择；也可以发送 /chats 标题关键词 查找。');
   }
-  selected(session) {if(!session.selected) throw Object.assign(new Error('还没选择会话。直接让助手找会话，或 /chats 后用 /use 1 选择；选中后直接发消息即可。'),{code:'THREAD_NOT_SELECTED'});return session.selected;}
+  selected(session) {if(!session.selected) throw Object.assign(new Error('还没选择会话。发送 /projects 或 /chats 查看列表，用按钮或 /use 编号选择后直接聊天。'),{code:'THREAD_NOT_SELECTED'});return session.selected;}
   noteDeliveryFailure(stage,error,session,{retrying=false}={}) {
     const reason=error.code==='THREAD_NOT_SELECTED'?'no_selection':/授权/.test(error.message)?'authorization':
       /加载|打开目标/.test(error.message)?'not_loaded':/超时|timeout/i.test(error.message)?'timeout':
@@ -277,77 +272,13 @@ export class Router {
     session.awaitingChoice=view.kind==='projects'?'project':'chat';this.saveState();
     return (note?note+'\n\n':'')+renderList(session);
   }
-  async askAssistant(message) {
-    const session=this.session(message);
-    if(!this.operator)throw new Error('操作助手未配置。先用 /projects 或 /chats 选择会话。');
-    const context={mode:session.mode,selected:session.selected?{id:session.selected.id,title:session.selected.title,hostId:session.selected.hostId}:null,
-      projects:session.projects.slice(0,60).map(p=>({projectId:p.projectId,label:p.label})),
-      chats:session.threads.slice(0,40).map(t=>({id:t.id,title:t.title,hostId:t.hostId})),model: modelSettings(session)};
-    const capture=text=>this.handle({...message,text},{capture:true});
-    const result=await this.operator.respond({text:message.text,session,context,
-      authorize:()=>this.authorized(message.openId),
-      execute:async(name,args)=>{
-        if(name==='list_projects') {
-          const reply=await capture('/projects');
-          return {reply,result:{projects:session.projects.map(p=>({projectId:p.projectId,label:p.label}))}};
-        }
-        if(name==='find_chats') {
-          // Refresh project identities before accepting an AI-provided project ID.
-          const projects=await this.desktop.call('list_projects');
-          session.projects=(projects.projects||[]).filter(p=>p.projectKind!=='chatgpt');
-          const project=args.projectId?session.projects.find(p=>p.projectId===args.projectId):undefined;
-          if(args.projectId && !project)throw new Error('项目 ID 不在真实项目目录中');
-          const output=await this.chats(session,args.query||'',project);
-          return {reply:{output,meta:{kind:'list',session,openId:message.openId}},result:{total:session.threads.length,
-            chats:session.threads.slice(0,60).map(t=>({threadId:t.id,title:t.title,hostId:t.hostId||'local'})),truncated:session.threads.length>60}};
-        }
-        if(name==='select_chat') {
-          const matches=[...new Map([...session.threads,...Object.values(session.knownThreads||{})].map(t=>[keyOf(t),t])).values()].filter(t=>t.id===args.threadId && (!args.hostId || (t.hostId||'local')===args.hostId));
-          if(matches.length!==1)throw new Error('会话 ID 未查询到或目标不唯一，请重新查找');
-          this.selectThread(session,matches[0]);
-          return {result:{selected:args.threadId},reply:{output:`已选择：${session.selected.title||session.selected.id}\n\n${modelSummary(session)}\n\n${session.selected.archived?'会话已归档，先 /unarchive 恢复。':this.selectionHint(session)}\n/models 查看模型。`,meta:{title:'已选中会话',command:'use',session,openId:message.openId}}};
-        }
-        if(name==='list_models') {
-          const reply=await capture('/models');return {reply,result:{models:session.models}};
-        }
-        if(name==='run_command') {
-          if(!this.authorized(message.openId))throw new Error('通道授权已撤销，未执行该操作');
-          if(args.command==='assistant' && args.argument)throw new Error('切换助手模式无需参数，请继续发送你的请求');
-          const reply=await capture(`/${args.command}${args.argument?' '+args.argument:''}`);
-          return {terminal:['read','status','resume','assistant','help','fork'].includes(args.command) || !args.argument && ['model','effort'].includes(args.command),
-            reply,result:{ok:true,command:args.command,settings:modelSettings(session)}};
-        }
-        if(name==='new_task') {
-          if(!args.task.trim() || !message.text.includes(args.task))throw new Error('新建任务必须使用本次用户消息中的原文，不能自行添加内容');
-          if(args.projectId) {
-            await capture('/projects');
-            const index=session.projects.findIndex(p=>p.projectId===args.projectId);
-            if(index<0)throw new Error('新建目标不是可用项目');
-            const reply=await capture(`/new ${index+1} | ${args.task}`);return {terminal:true,reply,result:{created:true}};
-          }
-          const reply=await capture(`/new - | ${args.task}`);return {terminal:true,reply,result:{created:true}};
-        }
-        if(name==='send_task') {
-          if(!args.task.trim() || !message.text.includes(args.task))throw new Error('转交任务必须使用本次用户消息中的原文，不能自行添加内容');
-          this.selected(session);
-          const reply=await capture(`/send ${args.task}`);
-          return {terminal:true,reply,result:{sent:true,threadId:session.selected.id}};
-        }
-        throw new Error('操作助手工具不受支持');
-      }});
-    this.saveState();
-    if(result.reply)await this.send(message.chatId,result.reply.output,{...result.reply.meta,operatorModel:result.model});
-    else await this.send(message.chatId,result.text,{kind:'operator',title:'操作助手',subtitle:result.model,session,openId:message.openId,operatorModel:result.model});
-  }
-  async handle(message,{capture=false}={}) {
+  async handle(message) {
     const session=this.session(message);
     const authorize=()=>{if(!this.authorized(message.openId))throw new Error('通道授权已撤销，未执行该操作');};
     const choice=message.text.match(/^选择\s*(\d+)$/);const page=message.text.match(/^第?\s*(\d+)\s*页$/);
     if(choice)message={...message,text:`/use ${choice[1]}`};
     else if(page)message={...message,text:`/page ${page[1]}`};
-    else if(['项目列表','会话列表','帮助'].includes(message.text))message={...message,text:({'项目列表':'/projects','会话列表':'/chats','帮助':'/help'})[message.text]};
-    else if(['操作助手','返回助手','切换会话'].includes(message.text))message={...message,text:'/assistant'};
-    else if(['继续会话','进入直聊','进入这个会话聊天','进入会话聊天','和这个会话直接聊'].includes(message.text))message={...message,text:'/resume'};
+    else if(['项目列表','会话列表','切换会话','帮助'].includes(message.text))message={...message,text:({'项目列表':'/projects','会话列表':'/chats','切换会话':'/chats','帮助':'/help'})[message.text]};
     const match=message.text.match(/^\/(\S+)(?:\s+([\s\S]*))?$/);
     let command=match?.[1].toLowerCase();let arg=match?.[2]?.trim()||'';
     if(!command && session.view && ['下一页','上一页'].includes(message.text)) command=message.text==='下一页'?'next':'prev';
@@ -355,16 +286,6 @@ export class Router {
     let output;let threadStatus;let conversation;let receiptStatus;
     switch(command) {
       case 'help': output=HELP+'\n\n'+currentTarget(session);break;
-      case 'assistant': {
-        session.mode='assistant';session.awaitingChoice=null;this.saveState();
-        if(arg)return this.askAssistant({...message,text:arg});
-        const status=this.operator?.status();
-        output=`已打开操作助手。\n模型｜${status?.configured?status.model:'尚未配置'}\n\n可以直接说“帮我找到某项目里排查订单的会话”。\n选择会话后，后续消息会直接发给该会话。\n/projects、/chats、/models 仍由程序执行。`;break;
-      }
-      case 'resume': {
-        const selected=this.selected(session);session.mode='chat';session.awaitingChoice=null;this.saveState();
-        output=`已返回会话：${selected.title||selected.id}\n\n${modelSummary(session)}\n\n${CHAT_NEXT}`;break;
-      }
       case 'models': {
         const models=await loadModels(this.desktop,session);this.saveState();
         output='本机 Codex 可用模型\n\n'+models.map((m,i)=>`${i+1}｜${m.id}\n推理强度：${m.efforts.join('、')}`).join('\n\n')+
@@ -394,7 +315,7 @@ export class Router {
         output=`已更新：${selected.title||selected.id}\n\n${modelSummary(session)}\n\n只对当前通道发给此会话的后续任务生效，不启动任务。/model default 恢复沿用桌面设置。`;
         break;
       }
-      case 'pair':output='已配对，无需重复配对。/chats 查看列表，选中后直接发消息；/assistant 打开操作助手。\n'+HELP_HINT;break;
+      case 'pair':output='已配对，无需重复配对。/chats 查看列表，选中后直接发消息。\n'+HELP_HINT;break;
       case 'chats':output=await this.chats(session,arg);break;
       case 'next':case 'more':output=await this.page(session,'next');break;
       case 'prev':output=await this.page(session,'prev');break;
@@ -459,7 +380,7 @@ export class Router {
         const selected=this.selected(session);
         await this.desktop.call('set_thread_archived',{...threadArgs(selected),archived:command==='archive',source:'codex'});
         selected.archived=command==='archive';this.saveState();this.unwatch(session);
-        output=`${selected.title||selected.id}\n${command==='archive'?'已归档。/unarchive 可以恢复；/chats 可以选择其他会话。':'已恢复。'+(session.mode==='assistant'?'重新选择这个会话后即可聊天。':'直接发消息即可继续聊天。')}`;break;
+        output=`${selected.title||selected.id}\n${command==='archive'?'已归档。/unarchive 可以恢复；/chats 可以选择其他会话。':'已恢复。直接发消息即可继续聊天。'}`;break;
       }
       case 'archived': {
         await this.archived(session,true);output=renderList(session);break;
@@ -481,7 +402,6 @@ export class Router {
         output=`这个版本不能在${this.channelLabel}停止任务或批准执行。请在 Codex 桌面处理。\n/status 查看当前会话；/open 在本机打开它。`;break;
       case 'send':default: {
         if(command && command!=='send') throw new Error('没有这个指令。发送 /help 查看操作；如果这是一条以 / 开头的任务，请发送 /send 加原任务内容。');
-        if(!command && this.operator && (session.mode==='assistant' || !session.selected))return this.askAssistant(message);
         const prompt=command==='send'?arg:message.text;
         if(!prompt) throw new Error('请写上任务内容。例如：/send 帮我检查构建错误');
         const selected=this.selected(session);
@@ -514,7 +434,6 @@ export class Router {
     const meta={kind:listCommands.includes(command)?'list':command==='models'?'models':command==='read'?'conversation':command==='help'?'help':'info',
       title:receiptStatus==='uncertain'?'发送核对中':receiptStatus==='confirmed'?'发送已确认':CARD_TITLES[command||'send']||(command==='projectinfo'?'项目详情':'Codex'),session,openId:message.openId,updateMessageId:message.updateMessageId,
       command:command||'send',threadStatus,conversation};
-    if(capture)return {output,meta};
     await this.send(message.chatId,output,meta);
   }
   watch(session,baseline) {

@@ -3,7 +3,6 @@ import {Writable} from 'node:stream';
 import {randomBytes} from 'node:crypto';
 import {secureDirectory,readJson,writeJson,dataDir} from './storage.mjs';
 import {beginWechatLogin} from './wechat-auth.mjs';
-import {configureAssistant,assistantSettings} from './assistant.mjs';
 import {configureAutostart} from './autostart-settings.mjs';
 import {providerCatalogStatus,responsesCompatStatus,configureResponsesCompat} from './responses-compat-settings.mjs';
 import {ensureBridge,desktopContext} from './bridge-lifecycle.mjs';
@@ -38,22 +37,12 @@ async function main() {
     if(!['on','off'].includes(process.argv[3]))throw new Error('使用 node dist/setup.cjs autostart on 或 off');
     console.log(JSON.stringify(configureAutostart(process.argv[3]==='on',{bundleDir:__dirname}),null,2));return;
   }
-  if(process.argv[2]==='assistant') {
-    const previous=assistantSettings();const rl=readline.createInterface({input:process.stdin,output:process.stdout});
-    let baseUrl,model,reasoningEffort;
-    try {
-      baseUrl=(await rl.question('助手接口地址（回车保留）: ')).trim()||previous.baseUrl;
-      model=(await rl.question('助手模型 ID（回车保留）: ')).trim()||previous.model;
-      reasoningEffort=(await rl.question('助手推理强度（回车保留，可留空）: ')).trim()||previous.reasoningEffort;
-    }finally{rl.close();}
-    const apiKey=await hiddenQuestion('助手 API Key（隐藏输入，回车保留）: ')||previous.apiKey;
-    console.log(JSON.stringify(configureAssistant({baseUrl,model,reasoningEffort,apiKey,enabled:true}),null,2));return;
-  }
   if(process.argv[2]==='wechat') {
     const login=await beginWechatLogin({refresh:process.argv.includes('--refresh')});
     console.log(JSON.stringify(login,null,2));
     console.log('用微信扫一扫二维码图片并确认，然后回到 Codex 启动桌面聊天桥接。');return;
   }
+  if(process.argv[2] && process.argv[2]!=='feishu')throw new Error('使用 setup.cjs 配置飞书，或使用 dashboard、wechat、autostart on/off。');
   secureDirectory();
   const previous=readJson('config.json',{});
   const rl=readline.createInterface({input:process.stdin,output:process.stdout});

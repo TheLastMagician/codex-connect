@@ -6,6 +6,7 @@ import {createControl} from './control.mjs';
 import {ChannelManager} from './channel-manager.mjs';
 import {createDashboard} from './dashboard.mjs';
 import {VERSION} from './version.mjs';
+import {removeLegacyAssistantData} from './legacy-cleanup.mjs';
 
 export async function main() {
   secureDirectory();
@@ -51,6 +52,7 @@ export async function main() {
     saveStatus();
   };
   try {
+    removeLegacyAssistantData(dataDir,writeJson);
     control=await createControl(stop,async(id='feishu')=>{
       const channel=manager?.channels.get(id);if(!channel)throw new Error('这个通道尚未连接。');
       await channel.preview();

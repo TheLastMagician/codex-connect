@@ -247,7 +247,7 @@ test('an idle selected chat recovers a transient preflight read without a button
   await deliver(f,'继续任务，保留原文。',{id:'idle-task',at:now+3600000});
   assert.equal(reads,2);assert.equal(f.calls.filter(c=>c.name==='send_message_to_thread').length,1);
   assert.equal(f.calls.find(c=>c.name==='send_message_to_thread').args.prompt,'继续任务，保留原文。');
-  assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');assert.equal(f.state.sessions['owner:chat-1'].mode,'chat');
+  assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');assert.equal(f.state.sessions['owner:chat-1'].mode,undefined);
   assert.equal(f.state.deliveryFailures[0].retrying,true);assert.equal(f.state.deliveryFailures[0].reason,'connection');
 });
 test('persistent read failures preserve selection, never send, and keep diagnostics after a later refresh',async()=>{

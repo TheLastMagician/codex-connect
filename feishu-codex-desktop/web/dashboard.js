@@ -21,7 +21,7 @@ function render(){
     const channelState=state.channels[bot.id==='default'?'feishu':'feishu:'+bot.id]?.state||(bot.enabled?'not_configured':'disabled');
     top.append(element('div','飞','channel-icon'));title.append(element('h3',bot.name),element('div',bot.mode==='fixed'?'固定会话聊天':'完整管理','bot-mode'));top.append(title,badge(channelState));card.append(top);
     const target=element('div',undefined,'target');target.append(element('small',bot.mode==='fixed'?'绑定会话':'工作方式'),element('strong',bot.mode==='fixed'?bot.thread?.title||'尚未选择会话':bot.configured?'管理项目与所有会话':'连接你的第一个飞书机器人'));
-    target.append(element('p',bot.mode==='fixed'?'所有输入都作为任务发送，沿用会话模型。':bot.configured?'项目、会话、操作助手与卡片交互。':'填写 App ID 和 App Secret 后启用。'));card.append(target);
+    target.append(element('p',bot.mode==='fixed'?'所有输入都作为任务发送，沿用会话模型。':bot.configured?'项目、会话、模型设置与卡片交互。':'填写 App ID 和 App Secret 后启用。'));card.append(target);
     const platform=bot.mode==='fixed' && bot.accessMode==='feishu',pending=platform?[]:state.requests[bot.id]||[],users=bot.allowedOpenIds||[];
     if(platform)card.append(element('p','跟随飞书范围 · 无需逐个授权','access'));
     if(pending.length){const block=element('div',undefined,'access pending');block.append(element('strong',pending.length+' 个使用申请'));for(const request of pending){const row=element('div',undefined,'access-row');row.append(element('code',request.openId),button('允许',async()=>{await api('bots/'+bot.id+'/users','POST',{openId:request.openId,allowed:true});toast('已允许，请重新给机器人发消息');await refresh();}));block.append(row);}card.append(block);}

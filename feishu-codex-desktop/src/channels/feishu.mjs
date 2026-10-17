@@ -6,10 +6,9 @@ import {createSender} from '../outbound.mjs';
 import {fixedReplyCards} from '../fixed-cards.mjs';
 import {readJson,writeJson} from '../storage.mjs';
 import {readLocalThreads} from '../catalog.mjs';
-import {OperationAssistant} from '../assistant.mjs';
 import {feishuBot,feishuIdentity,botStateName,saveBotRuntime,rememberFeishuRequest,requireBotId,allowsFeishuUser} from '../connections.mjs';
 
-export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=new OperationAssistant(),
+export function createFeishuChannel({desktop,settings,onStatus=()=>{},
   getSettings=()=>feishuBot(settings.id),sdk={Client,WSClient,EventDispatcher},
   loadState=()=>readJson(botStateName(settings),{sessions:{},seen:{}}),save,
   saveSettings=value=>saveBotRuntime(settings.id,value),rememberRequest=message=>rememberFeishuRequest(settings.id,message)}) {
@@ -60,7 +59,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},operator=n
       if(result.code!==0)throw new Error('飞书卡片发送失败，请检查机器人权限');
     }
   };
-  const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,operator,isAuthorized:authorized,
+  const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,isAuthorized:authorized,
     reportDeliveryFailure:record=>onStatus({lastDeliveryFailure:record})};
   const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new Router(options);
   const receive=event=>{

@@ -11,7 +11,7 @@ const inputsOf=turn=>(turn?.items||[]).filter(item=>item.type==='userMessage').m
 
 export class FixedChatRouter extends Router {
   constructor({thread,isActive=()=>true,...options}) {
-    super({...options,operator:undefined});this.thread={...thread};this.isActive=isActive;
+    super(options);this.thread={...thread};this.isActive=isActive;
     this.state.fixedQueue ||= {pending:[],active:null};
     this.state.fixedQueue.review ||= [];
     if(this.state.fixedQueue.active) {delete this.state.fixedQueue.active.idleSince;delete this.state.fixedQueue.active.idleSnapshot;}
@@ -21,7 +21,7 @@ export class FixedChatRouter extends Router {
   }
   session(message) {
     const session=super.session(message);
-    session.selected={...this.thread};session.mode='chat';session.awaitingChoice=null;
+    session.selected={...this.thread};session.awaitingChoice=null;
     return session;
   }
   live() {return !this.stopped && this.isActive();}

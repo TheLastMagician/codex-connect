@@ -8,7 +8,7 @@ import {VERSION} from '../src/version.mjs';
 
 const account={enabled:true,token:'private-token',botId:'test-bot',ownerUserId:'owner',baseUrl:'https://ilinkai.weixin.qq.com'};
 const raw=(text,id=1,extra={})=>({message_id:id,message_type:1,message_state:2,from_user_id:'owner',to_user_id:'test-bot',create_time_ms:Date.now(),context_token:'reply-context',item_list:[{type:1,text_item:{text}}],...extra});
-function fixture(operator={status:()=>({configured:true,model:'test-assistant'}),respond:async()=>{throw new Error('Unexpected assistant request in transport test');}}) {
+function fixture() {
   const state={};const calls=[];const outbound=[];const status=[];let active=account;
   const desktop={call:async(name,args)=>{calls.push({name,args});
     if(name==='list_threads')return {threads:[{id:'actual-chat',title:'真实会话',kind:'codex',hostId:'local'}]};
@@ -16,7 +16,7 @@ function fixture(operator={status:()=>({configured:true,model:'test-assistant'})
     if(name==='read_thread')return {thread:{status:{type:'idle'}},turns:[{id:'baseline',status:'completed',items:[]}]};return {};
   }};
   const api={sendText:async(user,text,context)=>outbound.push({user,text,context})};
-  const channel=createWechatChannel({desktop,account,api,loadState:()=>state,save:()=>{},currentAccount:()=>active,onStatus:s=>status.push(s),operator});
+  const channel=createWechatChannel({desktop,account,api,loadState:()=>state,save:()=>{},currentAccount:()=>active,onStatus:s=>status.push(s)});
   // Tests use an explicit local snapshot, never the user's actual chat database.
   channel.router.getLocalThreads=async()=>[];
   return {channel,state,calls,outbound,status,disconnect:()=>{active={};}};
@@ -63,16 +63,18 @@ test('WeChat selects an actual desktop chat, uses the latest reply token, and de
   assert.match(f.outbound.at(-1).text,/微信/);assert.doesNotMatch(f.outbound.at(-1).text,/飞书/);
   assert.ok(!f.calls.some(c=>c.name==='wait_threads'));
 });
-test('WeChat uses the assistant before selection and sends directly after choosing a chat',async()=>{
-  let requests=0;
-  const f=fixture({status:()=>({configured:true,model:'test-assistant'}),respond:async()=>{requests++;return {text:'你好，我可以帮你代操作。',model:'test-assistant'};}});
+test('WeChat asks for a target before selection and sends directly after choosing a chat',async()=>{
+  const f=fixture();
   await f.channel.receiveBatch({msgs:[raw('你好',1)]});
-  assert.match(f.outbound.at(-1).text,/操作助手/);assert.match(f.outbound.at(-1).text,/你好/);
+  assert.match(f.outbound.at(-1).text,/还没选择会话/);assert.doesNotMatch(f.outbound.at(-1).text,/操作助手/);assert.equal(f.calls.length,0);
   await f.channel.receiveBatch({msgs:[raw('/chats',2),raw('1',3)]});
   assert.match(f.outbound.at(-1).text,/直接发消息/);assert.doesNotMatch(f.outbound.at(-1).text,/进入直聊|\/resume/);
   await f.channel.receiveBatch({msgs:[raw('你好，继续',4)]});
-  assert.equal(requests,1);
   assert.equal(f.calls.findLast(c=>c.name==='send_message_to_thread').args.prompt,'你好，继续');
+});
+test('WeChat retains the pending receipt title while exposing only conversation controls',()=>{
+  const reply=renderWechatReply('正在核对，请勿重复发送。',{title:'发送核对中',command:'send'});
+  assert.match(reply,/发送核对中/);assert.doesNotMatch(reply,/任务已发送|操作助手|\/assistant/);
 });
 test('revoking WeChat access prevents queued desktop commands and leaves channel states independent',async()=>{
   const f=fixture();f.disconnect();await f.channel.receiveBatch({msgs:[raw('/chats',1)]});assert.equal(f.calls.length,0);

@@ -211,12 +211,15 @@ test('the packaged MCP exposes autostart configuration and reports registration 
   try {
     await client.connect(transport);
     const tools=(await client.listTools()).tools;assert.ok(tools.some(tool=>tool.name==='configure_autostart'));assert.ok(tools.some(tool=>tool.name==='open_settings'));
+    assert.equal(tools.some(tool=>['assistant_status','configure_assistant'].includes(tool.name)),false);
+    const removed=await client.callTool({name:'configure_assistant',arguments:{}});assert.equal(removed.isError,true);
     const result=await client.callTool({name:'configure_autostart',arguments:{enabled:true}});
     assert.ok(!result.isError);const configured=JSON.parse(result.content[0].text);
     assert.equal(configured.enabled,true);assert.equal(configured.hookRegistered,true);
     assert.equal(configured.requiresHookTrust,true);
     const status=await client.callTool({name:'bridge_status',arguments:{}});
     assert.equal(JSON.parse(status.content[0].text).autostart.enabled,true);
+    assert.equal(Object.hasOwn(JSON.parse(status.content[0].text),'assistant'),false);
     assert.ok(!JSON.stringify(status).includes('fixture-secret'));
     await client.callTool({name:'configure_autostart',arguments:{enabled:false}});
     assert.equal(autostartStatus({codexHome:home}).enabled,false);

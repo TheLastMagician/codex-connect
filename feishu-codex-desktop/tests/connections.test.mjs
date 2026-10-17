@@ -45,7 +45,7 @@ function channelFixture(thread=binding,{identity=async()=>({code:0,bot:{open_id:
     WSClient:class {async start({eventDispatcher}){events=eventDispatcher;}close(){}},EventDispatcher:class {register(value){return value;}}};
   let snapshot={thread:{status:{type:'idle'}},turns:[{id:'old-turn',status:'completed',items:[{type:'agentMessage',id:'old',text:'旧回复'}]}]};
   const desktop={call:async(name,args,options)=>{calls.push({name,args});options?.beforeSend?.();if(name==='read_thread')return snapshot;return {};}};
-  const channel=createFeishuChannel({desktop,settings:structuredClone(settings),getSettings:()=>settings,sdk,operator:{run:()=>assert.fail('Fixed bot cannot invoke operator')},loadState:()=>state,save:()=>{},rememberRequest:m=>requests.push(m),onStatus:update=>statuses.push(update)});
+  const channel=createFeishuChannel({desktop,settings:structuredClone(settings),getSettings:()=>settings,sdk,loadState:()=>state,save:()=>{},rememberRequest:m=>requests.push(m),onStatus:update=>statuses.push(update)});
   const event=(text,owner='owner',id=Math.random().toString())=>({sender:{sender_type:'user',sender_id:{open_id:owner}},message:{message_id:id,chat_id:'private-chat',chat_type:'p2p',message_type:'text',create_time:String(Date.now()),content:JSON.stringify({text})}});
   return {channel,calls,sent,settings,requests,statuses,desktop,event,events:()=>events,setSnapshot:value=>snapshot=value};
 }
