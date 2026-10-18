@@ -65,8 +65,35 @@ test('groups and people sharing a target use one FIFO while unrelated targets st
 });
 test('a lost native ACK matches canonical message IDs and never replays the input',async()=>{
   const f=fixture();f.select('a');f.loseAck=true;await f.deliver('A');delete f.loseAck;await f.deliver('B');
+  assert.equal(Object.values(f.state.taskQueues)[0].fixedQueue.active.phase,'waiting');
+  assert.equal(f.sent.filter(s=>s.meta.title==='任务已发送').length,1);
+  assert.ok(!f.sent.some(s=>s.meta.title==='发送核对中'));
   await f.poll();assert.equal(f.writes.length,1);f.complete();await f.poll();assert.deepEqual(f.writes.map(w=>w.prompt),['A','B']);
   assert.equal(f.answers()[0].text,'答复 A');
+});
+
+test('delayed receipt visibility is reconciled quietly and later polls do not repeat acceptance',async()=>{
+  const f=fixture();f.select('a');f.loseAck=true;f.dropInput=true;await f.deliver('A');
+  delete f.loseAck;delete f.dropInput;const queue=Object.values(f.state.taskQueues)[0].fixedQueue;
+  assert.equal(queue.active.phase,'uncertain');assert.equal(f.sent.length,0);
+  await f.deliver('B');assert.match(f.sent.at(-1).text,/已排队/);
+  f.time+=5000;f.snapshots.set('a',snapshot(turn('A',f.time,'inProgress')));await f.poll();
+  assert.equal(queue.active.phase,'waiting');assert.equal(f.writes.length,1);
+  f.time+=40000;await f.poll();assert.ok(!f.sent.some(s=>s.meta.title==='发送核对中'));
+  assert.equal(f.sent.filter(s=>s.meta.title==='任务已发送').length,1);
+  f.complete();await f.poll();assert.deepEqual(f.writes.map(w=>w.prompt),['A','B']);assert.equal(f.answers()[0].text,'答复 A');
+});
+
+test('persistent unknown delivery warns once after the grace period, survives restart and never replays',async()=>{
+  const first=fixture();first.select('a');first.loseAck=true;first.dropInput=true;await first.deliver('A');
+  first.time+=29999;await first.poll();assert.equal(first.sent.length,0);
+  const saved=structuredClone(first.state);first.router.stop();const f=fixture({state:saved});
+  f.time=first.time+2;f.snapshots=first.snapshots;f.readError=Error('offline');
+  await f.poll();await f.poll();assert.equal(f.sent.filter(s=>s.meta.title==='发送核对中').length,1);
+  assert.equal(Object.values(f.state.taskQueues)[0].fixedQueue.active.phase,'uncertain');assert.equal(f.writes.length,0);
+  delete f.readError;f.snapshots.set('a',snapshot(turn('A',f.time,'inProgress')));await f.poll();
+  assert.equal(Object.values(f.state.taskQueues)[0].fixedQueue.active.phase,'waiting');
+  f.complete();await f.poll();assert.equal(f.answers()[0].text,'答复 A');assert.equal(f.writes.length,0);
 });
 test('desktop work starting before submission keeps input queued instead of steering it',async()=>{
   const f=fixture();f.select('a');f.beforeNative=()=>{f.snapshots.set('a',snapshot(turn('桌面任务',f.time,'inProgress')));};

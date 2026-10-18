@@ -132440,6 +132440,7 @@ var statusOf = (thread) => typeof thread?.status === "string" ? thread.status : 
 var idle = (snapshot) => ["idle", "notLoaded"].includes(statusOf(snapshot.thread)) && (!snapshot.turns?.[0] || terminal(snapshot.turns[0]));
 var UNCONFIRMED_GRACE_MS = 12e4;
 var IDLE_CONFIRM_MS = 15e3;
+var RECEIPT_NOTICE_MS = 3e4;
 var inputsOf = (turn) => (turn?.items || []).filter((item) => item.type === "userMessage").map((item) => Array.isArray(item.content) ? item.content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : item.text || "");
 var FixedChatRouter = class extends Router {
   constructor({ thread, isActive = () => true, matchTurn, beforeDispatch, onAccepted, onSendError, deliverReply, readSnapshot, ...options }) {
@@ -132500,7 +132501,7 @@ var FixedChatRouter = class extends Router {
     if (ahead) {
       item.notified = true;
       this.saveState();
-      void this.notify(item, queue.active && ["uncertain", "sending"].includes(queue.active.phase) ? "\u524D\u4E00\u6761\u53D1\u9001\u7ED3\u679C\u6B63\u5728\u6838\u5BF9\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\u7B49\u5F85\uFF1B\u8FD9\u4E0D\u8868\u793A Codex \u4ECD\u5728\u6267\u884C\u3002\u786E\u8BA4\u4F1A\u8BDD\u7A7A\u95F2\u540E\u4F1A\u7EE7\u7EED\u5904\u7406\u3002" : queue.blockedReason === "connection" ? "\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u6309\u987A\u5E8F\u53D1\u9001\u3002" : `\u5DF2\u6392\u961F\uFF0C\u524D\u9762\u8FD8\u6709 ${ahead} \u6761\u8BF7\u6C42\u3002\u8F6E\u5230\u4F60\u65F6\u4F1A\u81EA\u52A8\u5904\u7406\u5E76\u56DE\u590D\u3002`).catch(() => {
+      void this.notify(item, queue.active?.uncertainNotified && ["uncertain", "sending"].includes(queue.active.phase) ? "\u524D\u4E00\u6761\u53D1\u9001\u7ED3\u679C\u6B63\u5728\u6838\u5BF9\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\u7B49\u5F85\uFF1B\u8FD9\u4E0D\u8868\u793A Codex \u4ECD\u5728\u6267\u884C\u3002\u786E\u8BA4\u4F1A\u8BDD\u7A7A\u95F2\u540E\u4F1A\u7EE7\u7EED\u5904\u7406\u3002" : queue.blockedReason === "connection" ? "\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u6309\u987A\u5E8F\u53D1\u9001\u3002" : `\u5DF2\u6392\u961F\uFF0C\u524D\u9762\u8FD8\u6709 ${ahead} \u6761\u8BF7\u6C42\u3002\u8F6E\u5230\u4F60\u65F6\u4F1A\u81EA\u52A8\u5904\u7406\u5E76\u56DE\u590D\u3002`).catch(() => {
       });
     }
     void this.poll();
@@ -132530,6 +132531,35 @@ var FixedChatRouter = class extends Router {
   }
   async read() {
     return this.readSnapshot ? this.readSnapshot() : this.desktop.call("read_thread", { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, turnLimit: 10, maxOutputCharsPerItem: 2e4 });
+  }
+  async accepted(active, turnId, finished = false) {
+    active.phase = "waiting";
+    if (typeof turnId === "string") active.turnId = turnId;
+    this.saveState();
+    if (active.acceptedNotified) return;
+    active.acceptedNotified = true;
+    this.saveState();
+    if (!finished && this.live() && this.authorized(active.message.openId)) {
+      try {
+        await this.onAccepted?.(active.message, { accepted: true, turnId: active.turnId });
+      } catch {
+      }
+    }
+  }
+  async receiptNotice(active) {
+    if (!["uncertain", "sending"].includes(active.phase) || active.uncertainNotified || !this.live() || !this.authorized(active.message.openId) || this.now() - (active.uncertainSince ?? active.submittedAt ?? active.sentAt) < RECEIPT_NOTICE_MS) return;
+    await this.notify(active.message, "\u6682\u65F6\u8FD8\u65E0\u6CD5\u786E\u8BA4\u6D88\u606F\u53D1\u9001\u7ED3\u679C\uFF0C\u6B63\u5728\u540E\u53F0\u6838\u5BF9\u3002\u8BF7\u4E0D\u8981\u91CD\u590D\u53D1\u9001\uFF1B\u6838\u5BF9\u5230\u7ED3\u679C\u540E\u4F1A\u81EA\u52A8\u56DE\u590D\u3002");
+    active.uncertainNotified = true;
+    this.saveState();
+  }
+  async reconcileAfterTimeout(active) {
+    try {
+      const result = await this.read();
+      if (!this.live() || this.state.fixedQueue.active !== active) return;
+      const turn = await this.matchingTurn(result, active);
+      if (turn && this.live() && this.state.fixedQueue.active === active) await this.accepted(active, turn.id, terminal(turn));
+    } catch {
+    }
   }
   async waitingNotice(message, text, reason = "connection") {
     this.state.fixedQueue.blockedReason = reason;
@@ -132616,13 +132646,17 @@ var FixedChatRouter = class extends Router {
           delete active2.idleSince;
           delete active2.idleSnapshot;
           this.saveState();
+          await this.receiptNotice(active2);
           return;
         }
         if (!this.live()) return;
         const turn = await this.matchingTurn(result2, active2);
         if (turn) {
-          active2.turnId = turn.id;
-          this.saveState();
+          if (["uncertain", "sending"].includes(active2.phase)) await this.accepted(active2, turn.id, terminal(turn));
+          else {
+            active2.turnId = turn.id;
+            this.saveState();
+          }
         }
         if (statusOf(result2.thread) === "needsAttention" && !active2.attentionNotified && this.authorized(active2.message.openId)) {
           active2.attentionNotified = true;
@@ -132630,7 +132664,10 @@ var FixedChatRouter = class extends Router {
           await this.notify(active2.message, "\u8FD9\u4E2A\u4F1A\u8BDD\u9700\u8981\u4F60\u5728 Codex \u684C\u9762\u5904\u7406\u5BA1\u6279\u6216\u8F93\u5165\uFF1B\u540E\u7EED\u95EE\u9898\u4F1A\u7EE7\u7EED\u6392\u961F\u3002");
         }
         if (!turn) {
-          if (!await this.reviewUnmatched(active2, result2)) return;
+          if (!await this.reviewUnmatched(active2, result2)) {
+            await this.receiptNotice(active2);
+            return;
+          }
         } else {
           delete active2.idleSince;
           delete active2.idleSnapshot;
@@ -132716,13 +132753,7 @@ var FixedChatRouter = class extends Router {
           }
         }
       );
-      active.phase = "waiting";
-      if (typeof receipt?.turnId === "string") active.turnId = receipt.turnId;
-      this.saveState();
-      try {
-        await this.onAccepted?.(message, receipt);
-      } catch {
-      }
+      await this.accepted(active, receipt?.turnId);
     } catch (error) {
       this.onSendError?.(error, message);
       if (error.notSent) {
@@ -132732,8 +132763,9 @@ var FixedChatRouter = class extends Router {
         await this.waitingNotice(message, error.code === "THREAD_BUSY" ? "\u5DF2\u6392\u961F\uFF0C\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u524D\u9762\u7684\u4EFB\u52A1\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002" : "\u5DF2\u6392\u961F\uFF0C\u6682\u65F6\u65E0\u6CD5\u8FDE\u63A5\u76EE\u6807\u4F1A\u8BDD\uFF1B\u8FDE\u63A5\u6062\u590D\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u3002", error.code === "THREAD_BUSY" ? "busy" : "connection");
       } else {
         active.phase = "uncertain";
+        active.uncertainSince = this.now();
         this.saveState();
-        if (this.live() && this.authorized(message.openId)) await this.notify(message, "\u6D88\u606F\u53D1\u9001\u7ED3\u679C\u5F85\u786E\u8BA4\uFF0C\u6B63\u5728\u81EA\u52A8\u6838\u5BF9\u684C\u9762\u72B6\u6001\u3002\u539F\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u91CD\u53D1\uFF1B\u8FD9\u4E0D\u8868\u793A\u4F1A\u8BDD\u4ECD\u5728\u6267\u884C\u3002");
+        await this.reconcileAfterTimeout(active);
       }
     }
   }
@@ -133275,7 +133307,7 @@ var import_promises3 = require("node:timers/promises");
 var import_node_crypto10 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.7.0";
+var VERSION = "0.7.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

@@ -64,14 +64,16 @@ test('a full bot retains its selected target through a transient read and expose
     assert.equal(state.deliveryFailures.length,1);
   }finally{f.channel.stop();}
 });
-test('an unconfirmed full-bot submission uses a pending card rather than a task-sent card',async()=>{
+test('an unconfirmed full-bot submission is silent initially and only persistent uncertainty shows a pending card',async()=>{
   const state={sessions:{'owner:private-chat':{openId:'owner',chatId:'private-chat',selected:binding,mode:'chat',routingVersion:3}}};
   const f=channelFixture(binding,{mode:'full',state});await f.channel.start();const original=f.desktop.call;
   f.desktop.call=async(name,args,options)=>{if(name==='send_message_to_thread')throw Object.assign(Error('unknown'),{nativeReason:'request_timeout'});return original(name,args,options);};
   try {
     await receive(f,f.event('任务原文'));
+    assert.equal(f.sent.length,0);
+    const worker=[...f.channel.router.workers.values()][0];worker.now=()=>Date.now()+30001;await worker.poll();
     const card=JSON.parse(f.sent.at(-1).data.content);assert.equal(card.header.title.content,'发送核对中');
-    assert.match(card.body.elements[0].content,/自动核对/);assert.equal(Object.values(state.taskQueues)[0].fixedQueue.active.phase,'uncertain');
+    assert.match(card.body.elements[0].content,/后台核对/);assert.equal(Object.values(state.taskQueues)[0].fixedQueue.active.phase,'uncertain');
     assert.doesNotMatch(JSON.stringify(state.watches||{}),/任务原文/);
     assert.equal(Object.values(state.taskQueues)[0].fixedQueue.active.message.text,'任务原文');
   }finally{f.channel.stop();}

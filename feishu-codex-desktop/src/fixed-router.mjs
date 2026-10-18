@@ -6,7 +6,7 @@ import {receiptEvidence} from './receipt-evidence.mjs';
 const terminal=turn=>['completed','failed','interrupted'].includes(turn?.status);
 const statusOf=thread=>typeof thread?.status==='string'?thread.status:thread?.status?.type;
 const idle=snapshot=>['idle','notLoaded'].includes(statusOf(snapshot.thread)) && (!snapshot.turns?.[0] || terminal(snapshot.turns[0]));
-const UNCONFIRMED_GRACE_MS=120000,IDLE_CONFIRM_MS=15000;
+const UNCONFIRMED_GRACE_MS=120000,IDLE_CONFIRM_MS=15000,RECEIPT_NOTICE_MS=30000;
 const inputsOf=turn=>(turn?.items||[]).filter(item=>item.type==='userMessage').map(item=>
   Array.isArray(item.content)?item.content.filter(part=>part.type==='text').map(part=>part.text).join('\n'):item.text||'');
 
@@ -48,7 +48,7 @@ export class FixedChatRouter extends Router {
     // Persist the input and its origin together with deduplication, before any
     // desktop write. A restart must neither lose queued input nor replay a write.
     const item={...message};queue.pending.push(item);this.saveState();
-    if(ahead) {item.notified=true;this.saveState();void this.notify(item,queue.active && ['uncertain','sending'].includes(queue.active.phase)
+    if(ahead) {item.notified=true;this.saveState();void this.notify(item,queue.active?.uncertainNotified && ['uncertain','sending'].includes(queue.active.phase)
       ?'前一条发送结果正在核对，你的消息已保存等待；这不表示 Codex 仍在执行。确认会话空闲后会继续处理。'
       :queue.blockedReason==='connection'?'暂时无法连接目标会话，你的消息已保存；连接恢复后会按顺序发送。'
       :`已排队，前面还有 ${ahead} 条请求。轮到你时会自动处理并回复。`).catch(()=>{});}
@@ -70,6 +70,28 @@ export class FixedChatRouter extends Router {
     this.queues.set(this.target,work);return work;
   }
   async read() {return this.readSnapshot?this.readSnapshot():this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:10,maxOutputCharsPerItem:20000});}
+  async accepted(active,turnId,finished=false) {
+    active.phase='waiting';if(typeof turnId==='string')active.turnId=turnId;this.saveState();
+    if(active.acceptedNotified)return;
+    active.acceptedNotified=true;this.saveState();
+    if(!finished && this.live() && this.authorized(active.message.openId)) {
+      try {await this.onAccepted?.(active.message,{accepted:true,turnId:active.turnId});}
+      catch{/* Notification failure must never replay a native write. */}
+    }
+  }
+  async receiptNotice(active) {
+    if(!['uncertain','sending'].includes(active.phase) || active.uncertainNotified || !this.live() || !this.authorized(active.message.openId) ||
+      this.now()-(active.uncertainSince??active.submittedAt??active.sentAt)<RECEIPT_NOTICE_MS)return;
+    await this.notify(active.message,'暂时还无法确认消息发送结果，正在后台核对。请不要重复发送；核对到结果后会自动回复。');
+    active.uncertainNotified=true;this.saveState();
+  }
+  async reconcileAfterTimeout(active) {
+    try {
+      const result=await this.read();if(!this.live() || this.state.fixedQueue.active!==active)return;
+      const turn=await this.matchingTurn(result,active);
+      if(turn && this.live() && this.state.fixedQueue.active===active)await this.accepted(active,turn.id,terminal(turn));
+    }catch{/* Only inspect history; a missing receipt must never trigger another write. */}
+  }
   async waitingNotice(message,text,reason='connection') {
     this.state.fixedQueue.blockedReason=reason;
     if(message.waitReason===reason || !this.live() || !this.authorized(message.openId)){this.saveState();return;}
@@ -130,15 +152,18 @@ export class FixedChatRouter extends Router {
       if(!active.reply) {
         let result;
         try {result=await this.read();}
-        catch {delete active.idleSince;delete active.idleSnapshot;this.saveState();return;}
+        catch {delete active.idleSince;delete active.idleSnapshot;this.saveState();await this.receiptNotice(active);return;}
         if(!this.live())return;
         const turn=await this.matchingTurn(result,active);
-        if(turn) {active.turnId=turn.id;this.saveState();}
+        if(turn) {
+          if(['uncertain','sending'].includes(active.phase))await this.accepted(active,turn.id,terminal(turn));
+          else {active.turnId=turn.id;this.saveState();}
+        }
         if(statusOf(result.thread)==='needsAttention' && !active.attentionNotified && this.authorized(active.message.openId)) {
           active.attentionNotified=true;this.saveState();await this.notify(active.message,'这个会话需要你在 Codex 桌面处理审批或输入；后续问题会继续排队。');
         }
         if(!turn) {
-          if(!await this.reviewUnmatched(active,result))return;
+          if(!await this.reviewUnmatched(active,result)){await this.receiptNotice(active);return;}
         }else {
           delete active.idleSince;delete active.idleSnapshot;
           if(!terminal(turn))return;
@@ -190,8 +215,7 @@ export class FixedChatRouter extends Router {
             active.baselineTurnIds=(fresh.turns||[]).map(turn=>turn.id);this.saveState();
             active.phase='sending';active.submittedAt=this.now();active.evidence=receiptEvidence(message.text,fresh.turns||[]);this.saveState();
           }});
-      active.phase='waiting';if(typeof receipt?.turnId==='string')active.turnId=receipt.turnId;this.saveState();
-      try {await this.onAccepted?.(message,receipt);}catch{/* Notification failure must never replay a native write. */}
+      await this.accepted(active,receipt?.turnId);
     }catch(error) {
       this.onSendError?.(error,message);
       if(error.notSent) {
@@ -200,8 +224,10 @@ export class FixedChatRouter extends Router {
           ?'已排队，会话正在处理前面的任务；结束后会自动处理你的问题。'
           :'已排队，暂时无法连接目标会话；连接恢复后会自动处理。',error.code==='THREAD_BUSY'?'busy':'connection');
       }else {
-        active.phase='uncertain';this.saveState();
-        if(this.live() && this.authorized(message.openId))await this.notify(message,'消息发送结果待确认，正在自动核对桌面状态。原消息已保存，不会自动重发；这不表示会话仍在执行。');
+        active.phase='uncertain';active.uncertainSince=this.now();this.saveState();
+        // The desktop's start-turn ACK can time out while the actual turn is
+        // already running. Inspect its history before alarming the sender.
+        await this.reconcileAfterTimeout(active);
       }
     }
   }
