@@ -19,7 +19,7 @@ function inputError(message,notSent=false) {return Object.assign(new Error(messa
 
 // Use the running desktop's coordination bus; never launch another Codex process.
 export class DesktopInput {
-  constructor({pipePath=desktopInputPath(),timeoutMs=10000,activateThread,loadTimeoutMs=20000,pollIntervalMs=300}={}) {
+  constructor({pipePath=desktopInputPath(),timeoutMs=10000,activateThread,loadTimeoutMs=120000,pollIntervalMs=300}={}) {
     Object.assign(this,{pipePath,timeoutMs,activateThread,loadTimeoutMs,pollIntervalMs});
     this.pending=new Map();this.buffer=Buffer.alloc(0);this.loading=new Map();
   }
@@ -123,14 +123,14 @@ export class DesktopInput {
           if(owner)return owner;
           await delay(Math.min(this.pollIntervalMs,Math.max(1,deadline-Date.now())));
         }
-        throw inputError('已尝试打开目标会话，但加载尚未完成，消息尚未发送。请稍后重试。',true);
+        throw inputError('目标会话加载超时，本条消息尚未发送。请检查桌面该会话是否有加载错误，再重新发送。',true);
       })();
       this.loading.set(key,loading);
     }
     try {return await loading;}
     finally {if(this.loading.get(key)===loading)this.loading.delete(key);}
   }
-  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend,{beforeSubmit,beforeActivate}={}) {
+  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend,{beforeSubmit,beforeActivate,onLoading}={}) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
     if(clientUserMessageId!==undefined && (typeof clientUserMessageId!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -141,7 +141,12 @@ export class DesktopInput {
     // Loaded chats stay in the background. For cold chats the user permits
     // opening the target; navigation alone is not proof that it has loaded.
     authorize();
-    if(!owner)owner=await this.loadOwner(threadId,hostId,authorize,beforeActivate);
+    if(!owner) {
+      // Long histories can finish hydrating after the former 20-second limit.
+      // A progress notice is best effort; it does not acknowledge submission.
+      try {await onLoading?.();}catch{}
+      authorize();owner=await this.loadOwner(threadId,hostId,authorize,beforeActivate);
+    }
     // Loading can take seconds. Recheck queue readiness after it completes,
     // before any native write, so a newly started desktop task is not steered.
     try {await beforeSubmit?.();}

@@ -121,6 +121,42 @@ test('an already loaded chat never activates the desktop',async()=>{
   finally{await f.close();}
 });
 
+test('cold loading allows two minutes and sends only after a delayed owner becomes ready',async()=>{
+  assert.equal(new DesktopInput().loadTimeoutMs,120000);
+  let start=0,opens=0,notices=0;
+  const f=await fixture({ownerReady:false,loadTimeoutMs:300,activateThread:()=>{opens++;start=Date.now();},
+    onDiscovery:()=>{if(start && Date.now()-start>=90)f.setOwnerReady();}});
+  try {
+    await f.input.send({threadId:'long-history',prompt:'原消息，保持不变。'},undefined,{onLoading:()=>{
+      notices++;assert.equal(f.requests.some(r=>r.method==='thread-follower-start-turn'),false);
+    }});
+    assert.ok(Date.now()-start>=90);assert.equal(opens,1);assert.equal(notices,1);
+    const writes=f.requests.filter(r=>r.method==='thread-follower-start-turn');assert.equal(writes.length,1);
+    assert.equal(writes[0].params.turnStart.request.input[0].text,'原消息，保持不变。');
+  }finally{await f.close();}
+});
+
+test('a loading notice failure cannot prevent a valid send and loaded chats never emit a loading notice',async()=>{
+  const cold=await fixture({ownerReady:false,activateThread:()=>cold.setOwnerReady()});
+  try {
+    await cold.input.send({threadId:'cold',prompt:'任务'},undefined,{onLoading:()=>{throw Error('notification offline');}});
+    assert.equal(cold.requests.filter(r=>r.method==='thread-follower-start-turn').length,1);
+  }finally{await cold.close();}
+  const warm=await fixture();
+  try {await warm.input.send({threadId:'warm',prompt:'任务'},undefined,{onLoading:()=>assert.fail('No cold load is needed')});}
+  finally{await warm.close();}
+});
+
+test('revocation while the loading notice is sent prevents both navigation and submission',async()=>{
+  let authorized=true,opens=0;
+  const f=await fixture({ownerReady:false,activateThread:()=>{opens++;}});
+  try {
+    await assert.rejects(f.input.send({threadId:'cold',prompt:'任务'},()=>{if(!authorized)throw Error('revoked');},
+      {onLoading:()=>{authorized=false;}}),error=>error.notSent && /授权已撤销/.test(error.message));
+    assert.equal(opens,0);assert.equal(f.requests.filter(r=>r.method==='thread-follower-start-turn').length,0);
+  }finally{await f.close();}
+});
+
 test('navigation failure or a loading timeout never submits a message or retries navigation',async()=>{
   for(const failNavigation of [true,false]) {
     let opens=0;

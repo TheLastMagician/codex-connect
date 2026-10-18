@@ -420,6 +420,11 @@ export class Router {
         this.watches.set(receiptKey,receipt);this.persistWatches();
         try {
           const ack=await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session),clientUserMessageId},{beforeSend:authorize,
+            onLoading:async()=>{
+              authorize();
+              await this.send(message.chatId,`正在打开并加载 ${selected.title||selected.id}，最多等待 2 分钟。\n本条消息尚未发送；加载就绪后会自动发送，无需重复提交。`,
+                {kind:'info',title:'会话加载中',thread:{...selected},session,openId:message.openId});
+            },
             beforeSubmit:()=>{authorize();receipt.submittedAt=this.now();this.persistWatches();}});
           if(ack?.turnId)this.claimReceiptTurn(receipt,ack.turnId);
         }catch(error) {

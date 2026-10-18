@@ -130500,7 +130500,7 @@ function inputError(message, notSent = false) {
   return Object.assign(new Error(message), { notSent });
 }
 var DesktopInput = class {
-  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4, activateThread, loadTimeoutMs = 2e4, pollIntervalMs = 300 } = {}) {
+  constructor({ pipePath = desktopInputPath(), timeoutMs = 1e4, activateThread, loadTimeoutMs = 12e4, pollIntervalMs = 300 } = {}) {
     Object.assign(this, { pipePath, timeoutMs, activateThread, loadTimeoutMs, pollIntervalMs });
     this.pending = /* @__PURE__ */ new Map();
     this.buffer = Buffer.alloc(0);
@@ -130656,7 +130656,7 @@ var DesktopInput = class {
           if (owner) return owner;
           await (0, import_promises.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
         }
-        throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u52A0\u8F7D\u5C1A\u672A\u5B8C\u6210\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002", true);
+        throw inputError("\u76EE\u6807\u4F1A\u8BDD\u52A0\u8F7D\u8D85\u65F6\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8BE5\u4F1A\u8BDD\u662F\u5426\u6709\u52A0\u8F7D\u9519\u8BEF\uFF0C\u518D\u91CD\u65B0\u53D1\u9001\u3002", true);
       })();
       this.loading.set(key, loading);
     }
@@ -130666,7 +130666,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate, onLoading } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -130681,7 +130681,14 @@ var DesktopInput = class {
     authorize();
     let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
-    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
+    if (!owner) {
+      try {
+        await onLoading?.();
+      } catch {
+      }
+      authorize();
+      owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
+    }
     try {
       await beforeSubmit?.();
     } catch (error) {
@@ -132001,6 +132008,15 @@ ${currentTarget(session)}`;
         try {
           const ack = await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session), clientUserMessageId }, {
             beforeSend: authorize,
+            onLoading: async () => {
+              authorize();
+              await this.send(
+                message.chatId,
+                `\u6B63\u5728\u6253\u5F00\u5E76\u52A0\u8F7D ${selected.title || selected.id}\uFF0C\u6700\u591A\u7B49\u5F85 2 \u5206\u949F\u3002
+\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF1B\u52A0\u8F7D\u5C31\u7EEA\u540E\u4F1A\u81EA\u52A8\u53D1\u9001\uFF0C\u65E0\u9700\u91CD\u590D\u63D0\u4EA4\u3002`,
+                { kind: "info", title: "\u4F1A\u8BDD\u52A0\u8F7D\u4E2D", thread: { ...selected }, session, openId: message.openId }
+              );
+            },
             beforeSubmit: () => {
               authorize();
               receipt.submittedAt = this.now();
@@ -133132,7 +133148,7 @@ var import_promises3 = require("node:timers/promises");
 var import_node_crypto10 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.6.1";
+var VERSION = "0.6.2";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

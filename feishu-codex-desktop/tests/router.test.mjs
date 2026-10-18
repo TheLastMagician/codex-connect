@@ -270,6 +270,23 @@ test('a target loading timeout preserves selection and reports no send without s
   assert.equal(f.calls.some(c=>c.name==='navigate_to_codex_page'),false);
   assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');
 });
+
+test('cold-load progress tells the original chat to wait without claiming delivery or changing its provider',async()=>{
+  const f=fixture();await deliver(f,'/chats',{id:'loading-list'});await deliver(f,'/use 1',{id:'loading-select'});
+  const original=f.desktop.call,send=f.router.send,notices=[];let writes=0;
+  f.router.send=async(chat,text,meta)=>{notices.push({chat,text,meta});await send(chat,text,meta);};
+  f.desktop.call=async(name,args,options)=>{
+    if(name!=='send_message_to_thread')return original(name,args);
+    await options.onLoading();assert.equal(writes,0);assert.equal(notices.at(-1).meta.title,'会话加载中');
+    assert.match(notices.at(-1).text,/尚未发送/);assert.match(notices.at(-1).text,/加载就绪后会自动发送/);
+    options.beforeSubmit();writes++;assert.equal(args.prompt,'原消息，继续');
+    assert.equal(args.model,undefined);assert.equal(args.thinking,undefined);return {};
+  };
+  await deliver(f,'原消息，继续',{id:'loading-send'});
+  assert.equal(writes,1);assert.equal(notices.length,2);assert.equal(notices[0].chat,'chat-1');
+  assert.equal(notices[0].meta.thread.id,'a');assert.match(notices[1].text,/已发送到/);
+  assert.equal(f.state.sessions['owner:chat-1'].selected.id,'a');
+});
 test('an idle selected chat recovers a transient preflight read without a button click or duplicate submission',async()=>{
   const first=fixture();await deliver(first,'/chats',{id:'idle-list'});await deliver(first,'/use 1',{id:'idle-select'});
   const f=fixture(first.settings,structuredClone(first.state)),original=f.desktop.call;let reads=0;
