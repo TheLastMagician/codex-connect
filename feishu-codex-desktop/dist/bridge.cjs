@@ -22807,7 +22807,7 @@ var require_websocket = __commonJS({
     var http2 = require("http");
     var net4 = require("net");
     var tls = require("tls");
-    var { randomBytes: randomBytes7, createHash: createHash4 } = require("crypto");
+    var { randomBytes: randomBytes8, createHash: createHash4 } = require("crypto");
     var { Duplex, Readable } = require("stream");
     var { URL: URL2 } = require("url");
     var PerMessageDeflate = require_permessage_deflate();
@@ -23358,7 +23358,7 @@ var require_websocket = __commonJS({
         }
       }
       const defaultPort = isSecure ? 443 : 80;
-      const key = randomBytes7(16).toString("base64");
+      const key = randomBytes8(16).toString("base64");
       const request = isSecure ? https.request : http2.request;
       const protocolSet = /* @__PURE__ */ new Set();
       let perMessageDeflate;
@@ -23488,8 +23488,8 @@ var require_websocket = __commonJS({
           abortHandshake(websocket, socket, "Invalid Upgrade header");
           return;
         }
-        const digest = createHash4("sha1").update(key + GUID).digest("base64");
-        if (res.headers["sec-websocket-accept"] !== digest) {
+        const digest2 = createHash4("sha1").update(key + GUID).digest("base64");
+        if (res.headers["sec-websocket-accept"] !== digest2) {
           abortHandshake(websocket, socket, "Invalid Sec-WebSocket-Accept header");
           return;
         }
@@ -24164,12 +24164,12 @@ var require_websocket_server = __commonJS({
           );
         }
         if (this._state > RUNNING) return abortHandshake(socket, 503);
-        const digest = createHash4("sha1").update(key + GUID).digest("base64");
+        const digest2 = createHash4("sha1").update(key + GUID).digest("base64");
         const headers = [
           "HTTP/1.1 101 Switching Protocols",
           "Upgrade: websocket",
           "Connection: Upgrade",
-          `Sec-WebSocket-Accept: ${digest}`
+          `Sec-WebSocket-Accept: ${digest2}`
         ];
         const ws = new this.options.WebSocket(null, void 0, this.options);
         if (protocols.size) {
@@ -131020,11 +131020,11 @@ init_storage();
 // src/control.mjs
 var import_node_net3 = __toESM(require("node:net"), 1);
 var import_node_path5 = __toESM(require("node:path"), 1);
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 init_storage();
 
 // src/router.mjs
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 
 // src/legacy-cleanup.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -131351,6 +131351,39 @@ var CARD_TITLES = {
   effort: "\u63A8\u7406\u5F3A\u5EA6"
 };
 
+// src/receipt-evidence.mjs
+var import_node_crypto4 = require("node:crypto");
+var WINDOW_MS = 12e4;
+var nativeTurnId = (id) => typeof id === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
+var digest = (text, key) => (0, import_node_crypto4.createHmac)("sha256", key).update(text).digest("hex");
+var milliseconds = (value) => typeof value === "number" && Number.isFinite(value) ? value < 1e12 ? value * 1e3 : value : null;
+function receiptEvidence(prompt, turns) {
+  const salt = (0, import_node_crypto4.randomBytes)(32).toString("hex");
+  return { salt, promptDigest: digest(prompt, salt), baselineTurnIds: turns.map((t) => t.id).filter(Boolean) };
+}
+function matchesInput(turn, watch) {
+  const evidence = watch.evidence;
+  if (!evidence?.salt || !evidence.promptDigest || !Array.isArray(evidence.baselineTurnIds)) return false;
+  if (evidence.baselineTurnIds.includes(turn.id)) return false;
+  const startedAt = milliseconds(turn.startedAt), submittedAt = watch.submittedAt ?? watch.createdAt;
+  if (startedAt === null || !Number.isFinite(submittedAt) || startedAt < submittedAt - 1e3 || startedAt > submittedAt + WINDOW_MS) return false;
+  return (turn.items || []).some((item) => item.type === "userMessage" && (!item.clientId || item.clientId === watch.clientUserMessageId) && Array.isArray(item.content) && item.content.length > 0 && item.content.every((part) => part.type === "text" && typeof part.text === "string") && digest(item.content.map((part) => part.text).join("\n"), evidence.salt) === evidence.promptDigest);
+}
+function receiptCandidates(turns, watch) {
+  const native = turns.filter((t) => nativeTurnId(t.id));
+  if (watch.confirmedTurnId) return { method: "turn", turns: native.filter((t) => t.id === watch.confirmedTurnId) };
+  const exact = native.filter((t) => typeof watch.clientUserMessageId === "string" && (t.items || []).some((i) => i.type === "userMessage" && (i.id === watch.clientUserMessageId || i.clientId === watch.clientUserMessageId)));
+  const anchor = turns.findIndex((t) => watch.evidence?.baselineTurnIds?.includes(t.id));
+  const newer = anchor < 0 ? native : turns.slice(0, anchor).filter((t) => nativeTurnId(t.id));
+  return exact.length ? { method: "client", turns: exact } : { method: "evidence", turns: newer.filter((t) => matchesInput(t, watch)) };
+}
+function receiptHistoryComplete(result, watch) {
+  if (!result.page?.hasMore || !result.page.nextCursor) return true;
+  if (watch.confirmedTurnId) return (result.turns || []).some((t) => t.id === watch.confirmedTurnId);
+  const submittedAt = watch.submittedAt ?? watch.createdAt;
+  return (result.turns || []).some((t) => watch.evidence?.baselineTurnIds?.includes(t.id) || milliseconds(t.startedAt) !== null && milliseconds(t.startedAt) < submittedAt - 1e3);
+}
+
 // src/router.mjs
 var HELP = `Codex \u684C\u9762\u4F1A\u8BDD
 \u7EE7\u7EED\u5DF2\u6709\u4F1A\u8BDD\uFF1A
@@ -131413,12 +131446,12 @@ function parseMessage(event, { botOpenId, appId } = {}) {
   };
 }
 function fingerprint(message) {
-  return (0, import_node_crypto4.createHash)("sha256").update(message.id).digest("hex");
+  return (0, import_node_crypto5.createHash)("sha256").update(message.id).digest("hex");
 }
 function equalSecret(left, right) {
   const a = Buffer.from(String(left || ""));
   const b = Buffer.from(String(right || ""));
-  return a.length === b.length && a.length > 0 && (0, import_node_crypto4.timingSafeEqual)(a, b);
+  return a.length === b.length && a.length > 0 && (0, import_node_crypto5.timingSafeEqual)(a, b);
 }
 function renderThread(result, onlyStatus = false) {
   const thread = result.thread || {};
@@ -131429,7 +131462,6 @@ function renderThread(result, onlyStatus = false) {
 }
 var keyOf = (thread) => `${thread.hostId || "local"}:${thread.id}`;
 var threadArgs = (thread) => ({ threadId: thread.id, ...thread.hostId ? { hostId: thread.hostId } : {} });
-var nativeTurnId = (id) => typeof id === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
 function threadSnapshot(result) {
   const turn = result.turns?.[0];
   const messages = (turn?.items || []).filter((item) => item.type === "agentMessage" && item.text);
@@ -131607,7 +131639,7 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
     for (const thread of threads) if (thread.kind === "codex") session.knownThreads[keyOf(thread)] = thread;
     session.threads = [...new Map(threads.filter((t) => t.kind === "codex" && (!project || t.projectId === project.projectId) && (!query || (t.title || "").toLowerCase().includes(query.toLowerCase()))).map((t) => [keyOf(t), t])).values()];
     const partialNotice = !catalogComplete ? "\u5386\u53F2\u5217\u8868\u6682\u65F6\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u76EE\u524D\u4EC5\u663E\u793A\u6700\u8FD1 50 \u4E2A\u52A0\u7F6E\u9876\u4F1A\u8BDD\u3002" : project && project.hostId && project.hostId !== "local" ? "\u8FDC\u7A0B\u4E3B\u673A\u76EE\u524D\u4EC5\u80FD\u8BFB\u53D6\u6700\u8FD1\u4F1A\u8BDD\u3002" : !project && session.projects.some((p) => p.hostId && p.hostId !== "local") ? "\u672C\u673A\u4F1A\u8BDD\u5DF2\u5B8C\u6574\u52A0\u8F7D\uFF1B\u8FDC\u7A0B\u4E3B\u673A\u76EE\u524D\u4EC5\u663E\u793A\u6700\u8FD1\u4F1A\u8BDD\u3002" : void 0;
-    session.view = { id: (0, import_node_crypto4.randomUUID)(), kind: "chats", page: 1, title: project ? `${project.label} \xB7 \u4F1A\u8BDD` : query ? `\u4F1A\u8BDD\u6807\u9898\u5305\u542B\u201C${query}\u201D` : "\u684C\u9762\u4F1A\u8BDD", projectId: project?.projectId, unavailable: !!result.unavailableHosts?.length, catalogComplete, partialNotice };
+    session.view = { id: (0, import_node_crypto5.randomUUID)(), kind: "chats", page: 1, title: project ? `${project.label} \xB7 \u4F1A\u8BDD` : query ? `\u4F1A\u8BDD\u6807\u9898\u5305\u542B\u201C${query}\u201D` : "\u684C\u9762\u4F1A\u8BDD", projectId: project?.projectId, unavailable: !!result.unavailableHosts?.length, catalogComplete, partialNotice };
     session.awaitingChoice = "chat";
     this.saveState();
     return renderList(session);
@@ -131640,7 +131672,8 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
     for (let attempt = 0; attempt < 2; attempt++) {
       authorize();
       try {
-        return threadSnapshot(await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: 1, maxOutputCharsPerItem: 2e4 }, { beforeSend: authorize }));
+        const result = await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: 1, maxOutputCharsPerItem: 2e4 }, { beforeSend: authorize });
+        return { ...threadSnapshot(result), turns: result.turns || [] };
       } catch (error) {
         authorize();
         const transient = ["DESKTOP_DISCONNECTED", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ENOENT", "ETIMEDOUT"].includes(error.code) || /连接|超时|connection|socket|ECONN|ENOENT|EPIPE|timeout|unavailable|Codex app tool request failed/i.test(error.message);
@@ -131657,7 +131690,7 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
     const entries = (result.threads || []).filter((t) => t.kind === "codex").map((t) => ({ ...t, hostId: t.hostId || "local", archived: true }));
     if (reset) {
       session.threads = [];
-      session.view = { id: (0, import_node_crypto4.randomUUID)(), kind: "archived", page: 1 };
+      session.view = { id: (0, import_node_crypto5.randomUUID)(), kind: "archived", page: 1 };
       session.archiveCursors = [];
     }
     if (cursor) {
@@ -131808,7 +131841,7 @@ ${HELP_HINT}`;
       case "projects": {
         const result = await this.desktop.call("list_projects");
         session.projects = (result.projects || []).filter((p) => p.projectKind !== "chatgpt");
-        session.view = { id: (0, import_node_crypto4.randomUUID)(), kind: "projects", page: 1 };
+        session.view = { id: (0, import_node_crypto5.randomUUID)(), kind: "projects", page: 1 };
         session.awaitingChoice = "project";
         this.saveState();
         output = renderList(session);
@@ -131952,13 +131985,29 @@ ${currentTarget(session)}`;
         if (selected.archived) throw new Error("\u5F53\u524D\u4F1A\u8BDD\u5DF2\u5F52\u6863\u3002\u5148\u53D1\u9001 /unarchive \u6062\u590D\uFF0C\u518D\u76F4\u63A5\u804A\u5929\uFF1B\u6216 /chats \u9009\u62E9\u5176\u4ED6\u4F1A\u8BDD\u3002");
         const baseline = await this.readBeforeSend(session, authorize);
         authorize();
-        const clientUserMessageId = (0, import_node_crypto4.randomUUID)(), receiptKey = `receipt:${clientUserMessageId}`;
+        const clientUserMessageId = (0, import_node_crypto5.randomUUID)(), receiptKey = `receipt:${clientUserMessageId}`;
         if ([...this.watches.values()].filter((w) => w.receiptState).length >= 100) throw new Error("\u5F85\u6838\u5BF9\u6D88\u606F\u8FC7\u591A\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u5148\u67E5\u770B\u5DF2\u6709\u4F1A\u8BDD\u7ED3\u679C\u3002");
-        const receipt = { openId: session.openId, chatId: session.chatId, thread: { ...selected }, clientUserMessageId, receiptState: "submitting", createdAt: this.now() };
+        const receipt = {
+          openId: session.openId,
+          chatId: session.chatId,
+          thread: { ...selected },
+          clientUserMessageId,
+          receiptState: "submitting",
+          createdAt: this.now(),
+          evidence: receiptEvidence(prompt, baseline.turns)
+        };
         this.watches.set(receiptKey, receipt);
         this.persistWatches();
         try {
-          await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session), clientUserMessageId }, { beforeSend: authorize });
+          const ack = await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session), clientUserMessageId }, {
+            beforeSend: authorize,
+            beforeSubmit: () => {
+              authorize();
+              receipt.submittedAt = this.now();
+              this.persistWatches();
+            }
+          });
+          if (ack?.turnId) this.claimReceiptTurn(receipt, ack.turnId);
         } catch (error) {
           this.noteDeliveryFailure("send", error, session);
           if (error.notSent) {
@@ -132025,21 +132074,52 @@ ${currentTarget(session)}`;
   }
   async checkReceipt(watch, reads) {
     if (!this.authorized(watch.openId)) return;
-    const key = keyOf(watch.thread);
-    let request = reads?.get(key);
-    if (!request) {
-      request = this.desktop.call("read_thread", { ...threadArgs(watch.thread), turnLimit: 10, maxOutputCharsPerItem: 2e4 }, { timeoutMs: 5e3 });
-      reads?.set(key, request);
+    const turns = [];
+    let cursor;
+    const cursors = /* @__PURE__ */ new Set();
+    let complete = false;
+    for (let page = 0; page < 10; page++) {
+      const key = JSON.stringify([keyOf(watch.thread), cursor || null]);
+      let request = reads?.get(key);
+      if (!request) {
+        request = this.desktop.call("read_thread", { ...threadArgs(watch.thread), turnLimit: 10, maxOutputCharsPerItem: 2e4, ...cursor ? { cursor } : {} }, { timeoutMs: 2e4 });
+        reads?.set(key, request);
+      }
+      const result = await request;
+      if (!this.authorized(watch.openId)) return;
+      for (const turn2 of result.turns || []) if (!turns.some((t) => t.id === turn2.id)) turns.push(turn2);
+      const matched2 = receiptCandidates(turns, watch);
+      complete = receiptHistoryComplete(result, watch);
+      if (matched2.method !== "evidence" && matched2.turns.length === 1 || complete) break;
+      cursor = result.page?.nextCursor;
+      if (!cursor || cursors.has(cursor)) break;
+      cursors.add(cursor);
     }
-    const result = await request;
-    if (!this.authorized(watch.openId)) return;
-    const turn = (result.turns || []).find((turn2) => nativeTurnId(turn2.id) && (turn2.id === watch.confirmedTurnId || (turn2.items || []).some((item) => item.type === "userMessage" && item.id === watch.clientUserMessageId)));
+    const matched = receiptCandidates(turns, watch);
+    let turn;
+    if (matched.turns.length === 1 && (matched.method !== "evidence" || complete)) {
+      const candidate = matched.turns[0];
+      const claimed = this.state.receiptTurnClaims?.[this.receiptTurnKey(watch, candidate.id)];
+      const competing = matched.method === "evidence" && [...this.watches.values()].some((other) => other !== watch && other.receiptState && keyOf(other.thread) === keyOf(watch.thread) && other.clientUserMessageId !== watch.clientUserMessageId && receiptCandidates([candidate], other).turns.length);
+      if (!competing && (!claimed || claimed === watch.clientUserMessageId)) turn = candidate;
+    }
     if (turn) {
       watch.receiptState = "confirmed";
       watch.confirmedTurnId = turn.id;
+      this.claimReceiptTurn(watch, turn.id);
       this.persistWatches();
     }
-    return { result, turn };
+    return { turn };
+  }
+  receiptTurnKey(watch, turnId) {
+    return fingerprint({ id: JSON.stringify([keyOf(watch.thread), turnId]) });
+  }
+  claimReceiptTurn(watch, turnId) {
+    if (!nativeTurnId(turnId)) return;
+    const claims = this.state.receiptTurnClaims ||= {};
+    claims[this.receiptTurnKey(watch, turnId)] = watch.clientUserMessageId;
+    this.state.receiptTurnClaims = Object.fromEntries(Object.entries(claims).slice(-1e3));
+    this.saveState();
   }
   async sendWatchedReply(watch, text, assistantId, kind = "assistant") {
     const mark = fingerprint({ id: JSON.stringify([watch.openId, watch.chatId, keyOf(watch.thread), assistantId]) });
@@ -132126,7 +132206,7 @@ ${currentTarget(session)}`;
 
 // src/control.mjs
 async function createControl(onStop, onPreview) {
-  const token = (0, import_node_crypto5.randomBytes)(32).toString("hex");
+  const token = (0, import_node_crypto6.randomBytes)(32).toString("hex");
   const pipe = process.platform === "win32" ? `\\\\.\\pipe\\codex-feishu-${token.slice(0, 16)}` : import_node_path5.default.join(dataDir, "control.sock");
   const server = import_node_net3.default.createServer((socket) => {
     socket.setTimeout(5e3, () => socket.destroy());
@@ -132174,7 +132254,7 @@ async function createControl(onStop, onPreview) {
 }
 
 // src/connections.mjs
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto7 = require("node:crypto");
 init_storage();
 var validId = (id) => id === "default" || /^[0-9a-f-]{36}$/i.test(id);
 function requireBotId(id) {
@@ -132213,7 +132293,7 @@ function publicBot(bot) {
   };
 }
 function saveFeishuBot(input) {
-  const id = input.id ? requireBotId(input.id) : (0, import_node_crypto6.randomUUID)(), previous = feishuBot(id);
+  const id = input.id ? requireBotId(input.id) : (0, import_node_crypto7.randomUUID)(), previous = feishuBot(id);
   if (input.id && !previous) throw new Error("\u673A\u5668\u4EBA\u4E0D\u5B58\u5728\uFF0C\u8BF7\u5237\u65B0\u9875\u9762");
   if (previous?.id === "default" && (process.env.FEISHU_APP_ID || process.env.FEISHU_APP_SECRET) && (input.appSecret || input.appId !== void 0 && input.appId !== previous.appId)) throw new Error("\u4E3B\u673A\u5668\u4EBA\u51ED\u636E\u7531\u73AF\u5883\u53D8\u91CF\u63D0\u4F9B\uFF0C\u8BF7\u5148\u5728\u539F\u914D\u7F6E\u6765\u6E90\u4FEE\u6539");
   const bot = {
@@ -132310,10 +132390,10 @@ function allowsFeishuUser(bot, openId) {
   return typeof openId === "string" && !!openId && !!bot && (bot.mode === "fixed" && bot.accessMode === "feishu" || (bot.allowedOpenIds || []).includes(openId));
 }
 function feishuIdentity(bot) {
-  return (0, import_node_crypto6.createHash)("sha256").update(JSON.stringify([bot.appId, bot.appSecret, bot.enabled, bot.mode, bot.accessMode, bot.thread?.id, bot.thread?.hostId])).digest("hex");
+  return (0, import_node_crypto7.createHash)("sha256").update(JSON.stringify([bot.appId, bot.appSecret, bot.enabled, bot.mode, bot.accessMode, bot.thread?.id, bot.thread?.hostId])).digest("hex");
 }
 function botStateName(bot) {
-  if (bot.mode === "fixed") return `feishu-fixed-${bot.id}-${(0, import_node_crypto6.createHash)("sha256").update(JSON.stringify([bot.thread?.id, bot.thread?.hostId])).digest("hex").slice(0, 16)}.json`;
+  if (bot.mode === "fixed") return `feishu-fixed-${bot.id}-${(0, import_node_crypto7.createHash)("sha256").update(JSON.stringify([bot.thread?.id, bot.thread?.hostId])).digest("hex").slice(0, 16)}.json`;
   return bot.id === "default" ? "state.json" : `feishu-state-${requireBotId(bot.id)}.json`;
 }
 
@@ -132336,7 +132416,7 @@ function revokeWechatLogin(loginId, accountLoginId) {
 var import_node_sdk = __toESM(require_lib2(), 1);
 
 // src/fixed-router.mjs
-var import_node_crypto7 = require("node:crypto");
+var import_node_crypto8 = require("node:crypto");
 var leases = /* @__PURE__ */ new WeakMap();
 var terminal = (turn) => ["completed", "failed", "interrupted"].includes(turn?.status);
 var statusOf = (thread) => typeof thread?.status === "string" ? thread.status : thread?.status?.type;
@@ -132565,7 +132645,7 @@ var FixedChatRouter = class extends Router {
       message,
       phase: "sending",
       sentAt: this.now(),
-      clientUserMessageId: (0, import_node_crypto7.randomUUID)(),
+      clientUserMessageId: (0, import_node_crypto8.randomUUID)(),
       baselineTurnId: latest?.id,
       baselineAssistantMessageId: threadSnapshot(result).latestAssistantMessage?.id,
       baselineTurnIds: (result.turns || []).map((turn) => turn.id)
@@ -132660,7 +132740,7 @@ function fixedReply(text, meta = {}) {
 }
 
 // src/card-actions.mjs
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 var TTL = 6 * 60 * 60 * 1e3;
 var CardActions = class {
   constructor({ state, saveState, getConfig, now = Date.now }) {
@@ -132669,7 +132749,7 @@ var CardActions = class {
   }
   issue(owner, action) {
     for (const [token2, record] of Object.entries(this.state.cardActions)) if (record.expiresAt < this.now()) delete this.state.cardActions[token2];
-    const token = (0, import_node_crypto8.randomBytes)(16).toString("hex");
+    const token = (0, import_node_crypto9.randomBytes)(16).toString("hex");
     this.state.cardActions[token] = { ...owner, action, expiresAt: this.now() + TTL };
     return token;
   }
@@ -133045,14 +133125,14 @@ function createFeishuChannel({
 }
 
 // src/channels/wechat.mjs
-var import_node_crypto10 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 var import_promises3 = require("node:timers/promises");
 
 // src/wechat-api.mjs
-var import_node_crypto9 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.6.0";
+var VERSION = "0.6.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -133082,7 +133162,7 @@ var WechatApi = class {
     if (post) Object.assign(headers, {
       "Content-Type": "application/json",
       AuthorizationType: "ilink_bot_token",
-      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto9.randomBytes)(4).readUInt32BE())).toString("base64"),
+      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto10.randomBytes)(4).readUInt32BE())).toString("base64"),
       ...auth && this.token ? { Authorization: `Bearer ${this.token}` } : {}
     });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -133127,7 +133207,7 @@ var WechatApi = class {
     return this.bot("sendmessage", { msg: {
       from_user_id: "",
       to_user_id: userId,
-      client_id: `codex-${(0, import_node_crypto9.randomUUID)()}`,
+      client_id: `codex-${(0, import_node_crypto10.randomUUID)()}`,
       message_type: 2,
       message_state: 2,
       context_token: contextToken,
@@ -133162,7 +133242,7 @@ function parseWechatMessage(raw, account) {
   };
 }
 function wechatStateName(account) {
-  const key = (0, import_node_crypto10.createHash)("sha256").update(JSON.stringify([account.botId, account.ownerUserId])).digest("hex").slice(0, 24);
+  const key = (0, import_node_crypto11.createHash)("sha256").update(JSON.stringify([account.botId, account.ownerUserId])).digest("hex").slice(0, 24);
   return `wechat-state-${key}.json`;
 }
 function renderWechatReply(text, meta = {}) {
@@ -133451,7 +133531,7 @@ var import_node_http = __toESM(require("node:http"), 1);
 var import_node_fs6 = __toESM(require("node:fs"), 1);
 var import_node_path9 = __toESM(require("node:path"), 1);
 var import_node_url4 = require("node:url");
-var import_node_crypto13 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 init_storage();
 
 // src/wechat-auth.mjs
@@ -133459,7 +133539,7 @@ var import_node_fs4 = __toESM(require("node:fs"), 1);
 var import_node_path7 = __toESM(require("node:path"), 1);
 var import_node_url3 = require("node:url");
 var import_node_child_process4 = require("node:child_process");
-var import_node_crypto11 = require("node:crypto");
+var import_node_crypto12 = require("node:crypto");
 var import_qrcode = __toESM(require_lib3(), 1);
 init_storage();
 var directory3 = typeof __dirname === "string" ? __dirname : import_node_path7.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
@@ -133485,7 +133565,7 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
   if (!refresh && existing.configured) return { status: "confirmed", configured: true, note: "\u5FAE\u4FE1\u5DF2\u767B\u5F55\u3002\u8981\u6362\u7ED1\u8D26\u53F7\uFF0C\u8BF7\u663E\u5F0F\u5237\u65B0\u767B\u5F55\u4E8C\u7EF4\u7801\u3002" };
   const result = await api.qrcode(account.token ? [account.token] : []);
   if (typeof result.qrcode !== "string" || !result.qrcode || typeof result.qrcode_img_content !== "string" || !result.qrcode_img_content || result.qrcode_img_content.length > 8192) throw new Error("\u5FAE\u4FE1\u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u7684\u767B\u5F55\u4E8C\u7EF4\u7801\u3002");
-  const id = (0, import_node_crypto11.randomUUID)();
+  const id = (0, import_node_crypto12.randomUUID)();
   const qrPath = import_node_path7.default.join(dataDir, `wechat-login-${id}.png`);
   await import_qrcode.default.toFile(qrPath, result.qrcode_img_content, { width: 360, margin: 4, errorCorrectionLevel: "M" });
   import_node_fs4.default.chmodSync(qrPath, 384);
@@ -133538,7 +133618,7 @@ function disconnectWechat() {
 var import_node_fs5 = __toESM(require("node:fs"), 1);
 var import_node_path8 = __toESM(require("node:path"), 1);
 var import_node_os4 = __toESM(require("node:os"), 1);
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 init_storage();
 var runtimeDir = import_node_path8.default.join(dataDir, "runtime");
 var autostartEntry = () => import_node_path8.default.join(runtimeDir, "autostart.cjs");
@@ -133557,7 +133637,7 @@ function readHooks(file) {
 }
 function atomicWrite(file, data) {
   import_node_fs5.default.mkdirSync(import_node_path8.default.dirname(file), { recursive: true, mode: 448 });
-  const temp = file + "." + (0, import_node_crypto12.randomBytes)(8).toString("hex") + ".tmp";
+  const temp = file + "." + (0, import_node_crypto13.randomBytes)(8).toString("hex") + ".tmp";
   try {
     import_node_fs5.default.writeFileSync(temp, data, { mode: 384, flag: "wx" });
     import_node_fs5.default.renameSync(temp, file);
@@ -133664,7 +133744,7 @@ async function createDashboard({
   localThreads = readLocalThreads,
   wechat = { begin: beginWechatLogin, status: wechatLoginStatus, verify: submitWechatVerifyCode, disconnect: disconnectWechat }
 }) {
-  const saved = readJson("dashboard.json", {}), token = saved.token || (0, import_node_crypto13.randomBytes)(32).toString("hex"), csrf = saved.csrf || (0, import_node_crypto13.randomBytes)(32).toString("hex");
+  const saved = readJson("dashboard.json", {}), token = saved.token || (0, import_node_crypto14.randomBytes)(32).toString("hex"), csrf = saved.csrf || (0, import_node_crypto14.randomBytes)(32).toString("hex");
   let actualPort;
   const cookieName = () => `codex_connect_${actualPort}`;
   const authenticated = (request) => equalSecret((request.headers.cookie || "").split(";").map((p) => p.trim()).find((p) => p.startsWith(cookieName() + "="))?.slice(cookieName().length + 1), token);

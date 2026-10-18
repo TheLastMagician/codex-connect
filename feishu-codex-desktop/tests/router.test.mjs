@@ -213,6 +213,40 @@ test('receipt checks for the same target share one read and persist IDs without 
   let reads=0;f.desktop.call=async name=>{assert.equal(name,'read_thread');reads++;return {turns:[]};};
   await f.router.poll();assert.equal(reads,1);assert.equal(f.router.watches.size,2);assert.equal(f.writes,1);
 });
+
+test('a native five-second timeout with a different canonical user ID confirms and returns the actual answer after restart',async()=>{
+  const first=await uncertainFixture();const state=structuredClone(first.state);
+  const restored=fixture(first.settings,state),turn=acceptedTurn(first.turnId,randomUUID(),'completed','规范历史中的实际回复');
+  turn.startedAt=now/1000+6;turn.items[0].content=[{type:'text',text:'原始任务'}];
+  restored.router.selectThread(state.sessions['owner:chat-1'],{id:'other',hostId:'local',title:'另一个会话'});
+  restored.desktop.call=async(name,args,options)=>{assert.equal(name,'read_thread');assert.equal(args.threadId,'a');assert.equal(options.timeoutMs,20000);return {turns:[turn]};};
+  await restored.router.poll();await restored.router.poll();
+  assert.equal(restored.sent.filter(s=>s.text==='规范历史中的实际回复').length,1);
+  assert.equal(restored.router.watches.size,0);assert.equal(first.writes,1);
+  assert.equal(state.sessions['owner:chat-1'].selected.id,'other');
+});
+
+test('receipt recovery reads older pages when the accepted message has fallen out of the newest ten turns',async()=>{
+  const f=await uncertainFixture(),wanted=acceptedTurn(f.turnId,randomUUID(),'completed','翻页找回的回复');
+  wanted.startedAt=now/1000+6;wanted.items[0].content=[{type:'text',text:'原始任务'}];
+  const calls=[];f.desktop.call=async(name,args)=>{
+    assert.equal(name,'read_thread');calls.push(args.cursor);
+    if(!args.cursor)return {turns:[{id:randomUUID(),startedAt:now/1000+100}],page:{hasMore:true,nextCursor:'older'}};
+    return {turns:[wanted],page:{hasMore:false}};
+  };
+  await f.router.poll();assert.deepEqual(calls,[undefined,'older']);assert.equal(f.sent.at(-1).text,'翻页找回的回复');assert.equal(f.writes,1);
+});
+
+test('overlapping identical uncertain submissions cannot both claim the same canonical turn',async()=>{
+  const f=await uncertainFixture(),first=[...f.router.watches.values()][0];
+  const second={...structuredClone(first),clientUserMessageId:randomUUID()};
+  f.router.watches.set('receipt:second',second);f.router.persistWatches();
+  const turn=acceptedTurn(f.turnId,randomUUID(),'completed');turn.startedAt=now/1000+6;turn.items[0].content=[{type:'text',text:'原始任务'}];
+  f.desktop.call=async()=>({turns:[turn]});const before=f.sent.length;
+  await f.router.poll();assert.equal(f.sent.length,before);assert.equal(first.receiptState,'uncertain');assert.equal(second.receiptState,'uncertain');
+  f.router.watches.delete('receipt:second');f.router.claimReceiptTurn(second,turn.id);
+  await f.router.poll();assert.equal(f.sent.length,before);assert.equal(first.receiptState,'uncertain');
+});
 test('a notification read that finishes after a newer watch is installed cannot remove the new watch',async()=>{
   const f=fixture();await deliver(f,'/chats',{id:'race-list'});await deliver(f,'/use 1',{id:'race-select'});
   const session=f.state.sessions['owner:chat-1'];f.router.watch(session,{latestTurn:{id:'before'}});

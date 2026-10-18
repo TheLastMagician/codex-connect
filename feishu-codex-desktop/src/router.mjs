@@ -5,6 +5,7 @@ import {PAGE_SIZE,HELP_HINT,CHAT_NEXT,statusLabel,currentTarget,renderList} from
 import {CARD_TITLES} from './cards.mjs';
 import {EFFORTS,threadKey,modelSettings,modelSummary,taskModelArgs,loadModels} from './models.mjs';
 import {conversationMessages,renderConversation} from './conversation.mjs';
+import {nativeTurnId,receiptEvidence,receiptCandidates,receiptHistoryComplete} from './receipt-evidence.mjs';
 
 export const HELP = `Codex 桌面会话
 继续已有会话：
@@ -67,7 +68,6 @@ export function renderThread(result,onlyStatus=false) {
 }
 const keyOf = thread => `${thread.hostId||'local'}:${thread.id}`;
 const threadArgs = thread => ({threadId:thread.id,...(thread.hostId?{hostId:thread.hostId}:{})});
-const nativeTurnId=id=>typeof id==='string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
 export function threadSnapshot(result) {
   const turn=result.turns?.[0];
   const messages=(turn?.items||[]).filter(item=>item.type==='agentMessage' && item.text);
@@ -79,7 +79,8 @@ export class Router {
     Object.assign(this,{desktop,getLocalThreads,getConfig,saveConfig,state,saveState,send,now,channelLabel,isAuthorized,reportDeliveryFailure});
     this.state.sessions ||= {}; this.state.seen ||= {};
     this.watches = new Map(Object.entries(state.watches||{}));this.queues=new Map();this.pendingCounts=new Map();
-    // A crash before an ACK cannot prove delivery. Recover by ID, never by replay.
+    // A crash before an ACK cannot prove delivery. Recover from persisted
+    // receipt evidence, never by replaying the task.
     for(const watch of this.watches.values())if(watch.receiptState==='submitting')watch.receiptState='uncertain';
     this.cardRequests=new Map();
     if(clearLegacySessionData(this.state))this.saveState();
@@ -226,7 +227,10 @@ export class Router {
     const selected=this.selected(session);
     for(let attempt=0;attempt<2;attempt++) {
       authorize();
-      try {return threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:1,maxOutputCharsPerItem:20000},{beforeSend:authorize}));}
+      try {
+        const result=await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:1,maxOutputCharsPerItem:20000},{beforeSend:authorize});
+        return {...threadSnapshot(result),turns:result.turns||[]};
+      }
       catch(error) {
         authorize();
         const transient=['DESKTOP_DISCONNECTED','ECONNRESET','ECONNREFUSED','EPIPE','ENOENT','ETIMEDOUT'].includes(error.code) ||
@@ -411,10 +415,13 @@ export class Router {
         authorize();
         const clientUserMessageId=randomUUID(),receiptKey=`receipt:${clientUserMessageId}`;
         if([...this.watches.values()].filter(w=>w.receiptState).length>=100)throw new Error('待核对消息过多，这条消息尚未发送。请先查看已有会话结果。');
-        const receipt={openId:session.openId,chatId:session.chatId,thread:{...selected},clientUserMessageId,receiptState:'submitting',createdAt:this.now()};
+        const receipt={openId:session.openId,chatId:session.chatId,thread:{...selected},clientUserMessageId,receiptState:'submitting',createdAt:this.now(),
+          evidence:receiptEvidence(prompt,baseline.turns)};
         this.watches.set(receiptKey,receipt);this.persistWatches();
         try {
-          await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session),clientUserMessageId},{beforeSend:authorize});
+          const ack=await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session),clientUserMessageId},{beforeSend:authorize,
+            beforeSubmit:()=>{authorize();receipt.submittedAt=this.now();this.persistWatches();}});
+          if(ack?.turnId)this.claimReceiptTurn(receipt,ack.turnId);
         }catch(error) {
           this.noteDeliveryFailure('send',error,session);
           if(error.notSent){this.watches.delete(receiptKey);this.persistWatches();throw error;}
@@ -451,17 +458,38 @@ export class Router {
   }
   async checkReceipt(watch,reads) {
     if(!this.authorized(watch.openId))return;
-    const key=keyOf(watch.thread);
-    let request=reads?.get(key);
-    if(!request){request=this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:10,maxOutputCharsPerItem:20000},{timeoutMs:5000});reads?.set(key,request);}
-    const result=await request;
-    if(!this.authorized(watch.openId))return;
-    // Require an actual server turn ID and this exact client message. Never
-    // confirm from matching prompt text, a provisional turn, or unrelated work.
-    const turn=(result.turns||[]).find(turn=>nativeTurnId(turn.id) &&
-      (turn.id===watch.confirmedTurnId || (turn.items||[]).some(item=>item.type==='userMessage' && item.id===watch.clientUserMessageId)));
-    if(turn){watch.receiptState='confirmed';watch.confirmedTurnId=turn.id;this.persistWatches();}
-    return {result,turn};
+    const turns=[];let cursor;const cursors=new Set();let complete=false;
+    for(let page=0;page<10;page++) {
+      const key=JSON.stringify([keyOf(watch.thread),cursor||null]);
+      let request=reads?.get(key);
+      if(!request){request=this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:10,maxOutputCharsPerItem:20000,...(cursor?{cursor}:{})},{timeoutMs:20000});reads?.set(key,request);}
+      const result=await request;
+      if(!this.authorized(watch.openId))return;
+      for(const turn of result.turns||[])if(!turns.some(t=>t.id===turn.id))turns.push(turn);
+      const matched=receiptCandidates(turns,watch);
+      complete=receiptHistoryComplete(result,watch);
+      if((matched.method!=='evidence' && matched.turns.length===1) || complete)break;
+      cursor=result.page?.nextCursor;
+      if(!cursor || cursors.has(cursor))break;
+      cursors.add(cursor);
+    }
+    const matched=receiptCandidates(turns,watch);let turn;
+    if(matched.turns.length===1 && (matched.method!=='evidence' || complete)) {
+      const candidate=matched.turns[0];
+      const claimed=this.state.receiptTurnClaims?.[this.receiptTurnKey(watch,candidate.id)];
+      const competing=matched.method==='evidence' && [...this.watches.values()].some(other=>other!==watch && other.receiptState &&
+        keyOf(other.thread)===keyOf(watch.thread) && other.clientUserMessageId!==watch.clientUserMessageId && receiptCandidates([candidate],other).turns.length);
+      if(!competing && (!claimed || claimed===watch.clientUserMessageId))turn=candidate;
+    }
+    if(turn){watch.receiptState='confirmed';watch.confirmedTurnId=turn.id;this.claimReceiptTurn(watch,turn.id);this.persistWatches();}
+    return {turn};
+  }
+  receiptTurnKey(watch,turnId) {return fingerprint({id:JSON.stringify([keyOf(watch.thread),turnId])});}
+  claimReceiptTurn(watch,turnId) {
+    if(!nativeTurnId(turnId))return;
+    const claims=this.state.receiptTurnClaims ||= {};
+    claims[this.receiptTurnKey(watch,turnId)]=watch.clientUserMessageId;
+    this.state.receiptTurnClaims=Object.fromEntries(Object.entries(claims).slice(-1000));this.saveState();
   }
   async sendWatchedReply(watch,text,assistantId,kind='assistant') {
     const mark=fingerprint({id:JSON.stringify([watch.openId,watch.chatId,keyOf(watch.thread),assistantId])});
@@ -493,7 +521,7 @@ export class Router {
     const receiptReads=new Map();
     for(const [key,watch] of [...this.watches]) {
       if(!this.authorized(watch.openId)) {this.watches.delete(key);continue;}
-      if(watch.receiptState) {try{await this.pollReceipt(key,watch,receiptReads);}catch{/* Retain ID-only receipt checks across read/notification failures. */}continue;}
+      if(watch.receiptState) {try{await this.pollReceipt(key,watch,receiptReads);}catch{/* Retain receipt evidence across read/notification failures; never replay input. */}continue;}
       try {
         const snapshot=threadSnapshot(await this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:1,maxOutputCharsPerItem:20000}));
         if(this.watches.get(key)!==watch || !this.authorized(watch.openId))continue;
