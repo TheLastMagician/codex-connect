@@ -12260,16 +12260,16 @@ var require_axios = __commonJS({
         if (key === "__proto__" || key === "constructor" || key === "prototype") {
           return;
         }
-        const targetKey = caseless && typeof key === "string" && findKey(result, key) || key;
-        const existing = hasOwnProperty(result, targetKey) ? result[targetKey] : void 0;
+        const targetKey2 = caseless && typeof key === "string" && findKey(result, key) || key;
+        const existing = hasOwnProperty(result, targetKey2) ? result[targetKey2] : void 0;
         if (isPlainObject(existing) && isPlainObject(val)) {
-          result[targetKey] = merge(existing, val);
+          result[targetKey2] = merge(existing, val);
         } else if (isPlainObject(val)) {
-          result[targetKey] = merge({}, val);
+          result[targetKey2] = merge({}, val);
         } else if (isArray(val)) {
-          result[targetKey] = val.slice();
+          result[targetKey2] = val.slice();
         } else if (!skipUndefined || !isUndefined(val)) {
-          result[targetKey] = val;
+          result[targetKey2] = val;
         }
       };
       for (let i = 0, l = objs.length; i < l; i++) {
@@ -130666,7 +130666,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate, onLoading } = {}) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -130681,14 +130681,7 @@ var DesktopInput = class {
     authorize();
     let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
-    if (!owner) {
-      try {
-        await onLoading?.();
-      } catch {
-      }
-      authorize();
-      owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
-    }
+    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
     try {
       await beforeSubmit?.();
     } catch (error) {
@@ -131397,6 +131390,7 @@ var HELP = `Codex \u684C\u9762\u4F1A\u8BDD
 1. /chats \u67E5\u770B\u5217\u8868
 2. /use 1 \u9009\u62E9\u4F1A\u8BDD\uFF0C\u4E5F\u53EF\u5728\u5217\u8868\u540E\u76F4\u63A5\u56DE\u590D\u7F16\u53F7
 3. \u9009\u4E2D\u540E\u76F4\u63A5\u53D1\u6D88\u606F\uFF0C\u5C31\u662F\u4E0E\u8FD9\u4E2A Codex \u4F1A\u8BDD\u804A\u5929
+\u8FDE\u7EED\u53D1\u9001\u4F1A\u6309\u76EE\u6807\u4F1A\u8BDD\u6392\u961F\uFF1B/status \u67E5\u770B\u7B49\u5F85\u6570\u91CF\u3002
 
 \u5217\u8868\u6BCF\u9875 10 \u6761\uFF1A/next \u4E0B\u4E00\u9875\uFF1B/prev \u4E0A\u4E00\u9875\uFF1B/page 2 \u8DF3\u5230\u7B2C 2 \u9875\uFF1B/more \u4E5F\u53EF\u4E0B\u4E00\u9875\u3002
 /chats \u5173\u952E\u8BCD \u2014 \u6309\u4F1A\u8BDD\u6807\u9898\u67E5\u627E
@@ -131680,7 +131674,7 @@ ${thread.archived ? "\u5148\u53D1\u9001 /unarchive \u6062\u590D\u8FD9\u4E2A\u4F1
       authorize();
       try {
         const result = await this.desktop.call("read_thread", { ...threadArgs(selected), turnLimit: 1, maxOutputCharsPerItem: 2e4 }, { beforeSend: authorize });
-        return { ...threadSnapshot(result), turns: result.turns || [] };
+        return { ...result, ...threadSnapshot(result), turns: result.turns || [] };
       } catch (error) {
         authorize();
         const transient = ["DESKTOP_DISCONNECTED", "ECONNRESET", "ECONNREFUSED", "EPIPE", "ENOENT", "ETIMEDOUT"].includes(error.code) || /连接|超时|connection|socket|ECONN|ENOENT|EPIPE|timeout|unavailable|Codex app tool request failed/i.test(error.message);
@@ -131907,7 +131901,7 @@ ${HELP_HINT}`;
         if (command === "read") conversation = { messages: conversationMessages(result), turnCount: result.turns?.length || 0 };
         output = renderThread(result, command === "status") + (command === "status" ? `
 
-${modelSummary(session)}` : "") + `
+${modelSummary(session)}${this.queueSummary?.(selected) || ""}` : "") + `
 
 ${selected.archived ? "\u4F1A\u8BDD\u5DF2\u5F52\u6863\uFF0C\u5148 /unarchive \u6062\u590D\u518D\u804A\u5929\u3002" : this.selectionHint(session)}
 ${HELP_HINT}`;
@@ -131990,6 +131984,10 @@ ${currentTarget(session)}`;
         if (!prompt) throw new Error("\u8BF7\u5199\u4E0A\u4EFB\u52A1\u5185\u5BB9\u3002\u4F8B\u5982\uFF1A/send \u5E2E\u6211\u68C0\u67E5\u6784\u5EFA\u9519\u8BEF");
         const selected = this.selected(session);
         if (selected.archived) throw new Error("\u5F53\u524D\u4F1A\u8BDD\u5DF2\u5F52\u6863\u3002\u5148\u53D1\u9001 /unarchive \u6062\u590D\uFF0C\u518D\u76F4\u63A5\u804A\u5929\uFF1B\u6216 /chats \u9009\u62E9\u5176\u4ED6\u4F1A\u8BDD\u3002");
+        if (this.enqueueTask) {
+          await this.enqueueTask(message, session, prompt);
+          return;
+        }
         const baseline = await this.readBeforeSend(session, authorize);
         authorize();
         const clientUserMessageId = (0, import_node_crypto5.randomUUID)(), receiptKey = `receipt:${clientUserMessageId}`;
@@ -132008,15 +132006,6 @@ ${currentTarget(session)}`;
         try {
           const ack = await this.desktop.call("send_message_to_thread", { ...threadArgs(selected), prompt, ...taskModelArgs(session), clientUserMessageId }, {
             beforeSend: authorize,
-            onLoading: async () => {
-              authorize();
-              await this.send(
-                message.chatId,
-                `\u6B63\u5728\u6253\u5F00\u5E76\u52A0\u8F7D ${selected.title || selected.id}\uFF0C\u6700\u591A\u7B49\u5F85 2 \u5206\u949F\u3002
-\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\uFF1B\u52A0\u8F7D\u5C31\u7EEA\u540E\u4F1A\u81EA\u52A8\u53D1\u9001\uFF0C\u65E0\u9700\u91CD\u590D\u63D0\u4EA4\u3002`,
-                { kind: "info", title: "\u4F1A\u8BDD\u52A0\u8F7D\u4E2D", thread: { ...selected }, session, openId: message.openId }
-              );
-            },
             beforeSubmit: () => {
               authorize();
               receipt.submittedAt = this.now();
@@ -132062,7 +132051,8 @@ ${currentTarget(session)}`;
       updateMessageId: message.updateMessageId,
       command: command || "send",
       threadStatus,
-      conversation
+      conversation,
+      ...command === "status" ? { queueSummary: this.queueSummary?.(session.selected) } : {}
     };
     await this.send(message.chatId, output, meta);
   }
@@ -132088,12 +132078,14 @@ ${currentTarget(session)}`;
     for (const [key, watch] of this.watches) if (watch.openId === session.openId && watch.chatId === session.chatId && (!selected || keyOf(watch.thread) === keyOf(selected))) this.watches.delete(key);
     this.persistWatches();
   }
-  async checkReceipt(watch, reads) {
-    if (!this.authorized(watch.openId)) return;
+  async checkReceipt(watch, reads, { allowUnauthorized = false } = {}) {
+    const allowed = () => this.authorized(watch.openId) || allowUnauthorized && !this.stopped;
+    if (!allowed()) return;
     const turns = [];
     let cursor;
     const cursors = /* @__PURE__ */ new Set();
     let complete = false;
+    let first;
     for (let page = 0; page < 10; page++) {
       const key = JSON.stringify([keyOf(watch.thread), cursor || null]);
       let request = reads?.get(key);
@@ -132102,7 +132094,8 @@ ${currentTarget(session)}`;
         reads?.set(key, request);
       }
       const result = await request;
-      if (!this.authorized(watch.openId)) return;
+      first ||= result;
+      if (!allowed()) return;
       for (const turn2 of result.turns || []) if (!turns.some((t) => t.id === turn2.id)) turns.push(turn2);
       const matched2 = receiptCandidates(turns, watch);
       complete = receiptHistoryComplete(result, watch);
@@ -132125,7 +132118,7 @@ ${currentTarget(session)}`;
       this.claimReceiptTurn(watch, turn.id);
       this.persistWatches();
     }
-    return { turn };
+    return { turn, result: { ...first, turns } };
   }
   receiptTurnKey(watch, turnId) {
     return fingerprint({ id: JSON.stringify([keyOf(watch.thread), turnId]) });
@@ -132159,8 +132152,8 @@ ${currentTarget(session)}`;
     if (this.watches.get(key) !== watch || !this.authorized(watch.openId)) return;
     const turn = checked?.turn;
     if (!turn) return;
-    const terminal2 = ["completed", "failed", "interrupted"].includes(turn.status);
-    if (!watch.confirmationNotified && !terminal2) {
+    const terminal3 = ["completed", "failed", "interrupted"].includes(turn.status);
+    if (!watch.confirmationNotified && !terminal3) {
       await this.send(
         watch.chatId,
         `\u5DF2\u786E\u8BA4\uFF1A\u6D88\u606F\u5DF2\u8FDB\u5165 ${watch.thread.title || watch.thread.id}\uFF0C\u65E0\u9700\u91CD\u53D1\u3002\u56DE\u590D\u4F1A\u81EA\u52A8\u8FD4\u56DE\u3002`,
@@ -132169,7 +132162,7 @@ ${currentTarget(session)}`;
       watch.confirmationNotified = true;
       this.persistWatches();
     }
-    if (!terminal2) return;
+    if (!terminal3) return;
     const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
     await this.sendWatchedReply(watch, turn.status === "completed" ? assistant?.text || "\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : `\u5DF2\u786E\u8BA4\u6D88\u606F\u8FDB\u5165\u4F1A\u8BDD\uFF0C\u4F46\u8FD9\u6B21\u4EFB\u52A1${turn.status === "failed" ? "\u6267\u884C\u5931\u8D25" : "\u5DF2\u4E2D\u65AD"}\u3002\u8BF7 /read \u67E5\u770B\u8BE6\u60C5\u3002`, assistant?.id || turn.id, turn.status === "completed" ? "assistant" : "info");
     if (this.watches.get(key) === watch) this.watches.delete(key);
@@ -132433,7 +132426,15 @@ var import_node_sdk = __toESM(require_lib2(), 1);
 
 // src/fixed-router.mjs
 var import_node_crypto8 = require("node:crypto");
+
+// src/target-leases.mjs
 var leases = /* @__PURE__ */ new WeakMap();
+function targetLeases(desktop) {
+  if (!leases.has(desktop)) leases.set(desktop, /* @__PURE__ */ new Map());
+  return leases.get(desktop);
+}
+
+// src/fixed-router.mjs
 var terminal = (turn) => ["completed", "failed", "interrupted"].includes(turn?.status);
 var statusOf = (thread) => typeof thread?.status === "string" ? thread.status : thread?.status?.type;
 var idle = (snapshot) => ["idle", "notLoaded"].includes(statusOf(snapshot.thread)) && (!snapshot.turns?.[0] || terminal(snapshot.turns[0]));
@@ -132441,19 +132442,22 @@ var UNCONFIRMED_GRACE_MS = 12e4;
 var IDLE_CONFIRM_MS = 15e3;
 var inputsOf = (turn) => (turn?.items || []).filter((item) => item.type === "userMessage").map((item) => Array.isArray(item.content) ? item.content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : item.text || "");
 var FixedChatRouter = class extends Router {
-  constructor({ thread, isActive = () => true, ...options }) {
+  constructor({ thread, isActive = () => true, matchTurn, beforeDispatch, onAccepted, onSendError, deliverReply, readSnapshot, ...options }) {
     super(options);
-    this.thread = { ...thread };
-    this.isActive = isActive;
+    Object.assign(this, { thread: { ...thread }, isActive, matchTurn, beforeDispatch, onAccepted, onSendError, deliverReply, readSnapshot });
     this.state.fixedQueue ||= { pending: [], active: null };
     this.state.fixedQueue.review ||= [];
+    if (this.state.fixedQueue.active?.phase === "preparing") {
+      this.state.fixedQueue.pending.unshift(this.state.fixedQueue.active.message);
+      this.state.fixedQueue.active = null;
+      this.saveState();
+    }
     if (this.state.fixedQueue.active) {
       delete this.state.fixedQueue.active.idleSince;
       delete this.state.fixedQueue.active.idleSnapshot;
     }
     this.target = JSON.stringify([thread.hostId || "local", thread.id]);
-    if (!leases.has(this.desktop)) leases.set(this.desktop, /* @__PURE__ */ new Map());
-    this.leases = leases.get(this.desktop);
+    this.leases = targetLeases(this.desktop);
   }
   session(message) {
     const session = super.session(message);
@@ -132469,6 +132473,12 @@ var FixedChatRouter = class extends Router {
   }
   notify(message, text) {
     return this.send(message.chatId, text, this.meta(message));
+  }
+  reply(message, text, assistantId, kind = "assistant") {
+    return this.deliverReply ? this.deliverReply(message, text, assistantId, kind) : this.send(message.chatId, text, this.meta(message, kind));
+  }
+  matchingTurn(result, active) {
+    return this.matchTurn ? this.matchTurn(result, active) : this.findTurn(result, active);
   }
   acceptMessage(message) {
     if (!this.live() || !message?.id || !message.openId || !message.chatId || typeof message.text !== "string" || !message.text.trim() || message.text.length > 12e3 || !Number.isFinite(message.timestamp) || Math.abs(this.now() - message.timestamp) > 6e5 || !this.authorized(message.openId)) return false;
@@ -132519,7 +132529,7 @@ var FixedChatRouter = class extends Router {
     return work;
   }
   async read() {
-    return this.desktop.call("read_thread", { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, turnLimit: 10, maxOutputCharsPerItem: 2e4 });
+    return this.readSnapshot ? this.readSnapshot() : this.desktop.call("read_thread", { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, turnLimit: 10, maxOutputCharsPerItem: 2e4 });
   }
   async waitingNotice(message, text, reason = "connection") {
     this.state.fixedQueue.blockedReason = reason;
@@ -132547,10 +132557,10 @@ var FixedChatRouter = class extends Router {
     const result = await this.read();
     if (!this.live()) return;
     for (const record of [...queue.review]) {
-      const turn = this.findTurn(result, record);
+      const turn = await this.matchingTurn(result, record);
       if (!turn || !terminal(turn)) continue;
       const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
-      if (this.authorized(record.message.openId)) await this.send(record.message.chatId, "\u6B64\u524D\u5F85\u6838\u5BF9\u6D88\u606F\u7684\u7ED3\u679C\uFF1A\n\n" + (turn.status === "completed" ? assistant?.text || "\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728\u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002"), this.meta(record.message, turn.status === "completed" ? "assistant" : "notice"));
+      if (this.authorized(record.message.openId)) await this.reply(record.message, "\u6B64\u524D\u5F85\u6838\u5BF9\u6D88\u606F\u7684\u7ED3\u679C\uFF1A\n\n" + (turn.status === "completed" ? assistant?.text || "\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728\u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002"), assistant?.id || turn.id, turn.status === "completed" ? "assistant" : "notice");
       if (!this.live()) return;
       queue.review = queue.review.filter((item) => item !== record);
       this.saveState();
@@ -132609,7 +132619,7 @@ var FixedChatRouter = class extends Router {
           return;
         }
         if (!this.live()) return;
-        const turn = this.findTurn(result2, active2);
+        const turn = await this.matchingTurn(result2, active2);
         if (turn) {
           active2.turnId = turn.id;
           this.saveState();
@@ -132626,13 +132636,13 @@ var FixedChatRouter = class extends Router {
           delete active2.idleSnapshot;
           if (!terminal(turn)) return;
           const assistant = threadSnapshot({ turns: [turn] }).latestAssistantMessage;
-          active2.reply = { kind: turn.status === "completed" ? "assistant" : "notice", text: turn.status === "completed" ? assistant?.text || "\u8FD9\u6B21\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002" };
+          active2.reply = { id: assistant?.id || turn.id, kind: turn.status === "completed" ? "assistant" : "notice", text: turn.status === "completed" ? assistant?.text || "\u8FD9\u6B21\u4EFB\u52A1\u5DF2\u5B8C\u6210\uFF0C\u6CA1\u6709\u6587\u5B57\u56DE\u590D\u3002" : turn.status === "failed" ? "\u4F1A\u8BDD\u6267\u884C\u5931\u8D25\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\u8BE6\u60C5\u3002" : "\u8FD9\u6B21\u4F1A\u8BDD\u5DF2\u4E2D\u65AD\u3002" };
           this.saveState();
         }
       }
       if (queue.active) {
         if (!this.live()) return;
-        if (this.authorized(active2.message.openId)) await this.send(active2.message.chatId, active2.reply.text, this.meta(active2.message, active2.reply.kind));
+        if (this.authorized(active2.message.openId)) await this.reply(active2.message, active2.reply.text, active2.reply.id || active2.turnId, active2.reply.kind);
         if (!this.live()) return;
         queue.active = null;
         this.saveState();
@@ -132657,12 +132667,18 @@ var FixedChatRouter = class extends Router {
       await this.waitingNotice(message, "\u5DF2\u6392\u961F\uFF0C\u4F1A\u8BDD\u6B63\u5728\u5904\u7406\u524D\u9762\u7684\u4EFB\u52A1\uFF1B\u7ED3\u675F\u540E\u4F1A\u81EA\u52A8\u5904\u7406\u4F60\u7684\u95EE\u9898\u3002", "busy");
       return;
     }
+    if (this.beforeDispatch && !await this.beforeDispatch(result)) {
+      await this.waitingNotice(message, "\u524D\u4E00\u6761\u53D1\u9001\u56DE\u6267\u4ECD\u5728\u6838\u5BF9\uFF0C\u4F60\u7684\u6D88\u606F\u5DF2\u4FDD\u5B58\u7B49\u5F85\u3002", "receipt");
+      return;
+    }
+    if (!this.live() || !this.authorized(message.openId)) return;
     const active = {
       message,
-      phase: "sending",
+      phase: "preparing",
       sentAt: this.now(),
       clientUserMessageId: (0, import_node_crypto8.randomUUID)(),
       baselineTurnId: latest?.id,
+      evidence: receiptEvidence(message.text, result.turns || []),
       baselineAssistantMessageId: threadSnapshot(result).latestAssistantMessage?.id,
       baselineTurnIds: (result.turns || []).map((turn) => turn.id)
     };
@@ -132673,7 +132689,7 @@ var FixedChatRouter = class extends Router {
     try {
       const receipt = await this.desktop.call(
         "send_message_to_thread",
-        { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, prompt: message.text, clientUserMessageId: active.clientUserMessageId },
+        { threadId: this.thread.id, ...this.thread.hostId ? { hostId: this.thread.hostId } : {}, prompt: message.text, clientUserMessageId: active.clientUserMessageId, ...message.modelArgs },
         {
           beforeSend: () => {
             if (!this.live() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
@@ -132693,13 +132709,22 @@ var FixedChatRouter = class extends Router {
             active.baselineAssistantMessageId = threadSnapshot(fresh).latestAssistantMessage?.id;
             active.baselineTurnIds = (fresh.turns || []).map((turn) => turn.id);
             this.saveState();
+            active.phase = "sending";
+            active.submittedAt = this.now();
+            active.evidence = receiptEvidence(message.text, fresh.turns || []);
+            this.saveState();
           }
         }
       );
       active.phase = "waiting";
       if (typeof receipt?.turnId === "string") active.turnId = receipt.turnId;
       this.saveState();
+      try {
+        await this.onAccepted?.(message, receipt);
+      } catch {
+      }
     } catch (error) {
+      this.onSendError?.(error, message);
       if (error.notSent) {
         queue.active = null;
         queue.pending.unshift(message);
@@ -132708,7 +132733,7 @@ var FixedChatRouter = class extends Router {
       } else {
         active.phase = "uncertain";
         this.saveState();
-        if (this.live() && this.authorized(message.openId)) await this.notify(message, "\u6D88\u606F\u53D1\u9001\u7ED3\u679C\u5F85\u786E\u8BA4\uFF0C\u6B63\u5728\u6838\u5BF9\u684C\u9762\u72B6\u6001\u3002\u539F\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u91CD\u53D1\uFF1B\u8FD9\u4E0D\u8868\u793A\u4F1A\u8BDD\u4ECD\u5728\u6267\u884C\u3002");
+        if (this.live() && this.authorized(message.openId)) await this.notify(message, "\u6D88\u606F\u53D1\u9001\u7ED3\u679C\u5F85\u786E\u8BA4\uFF0C\u6B63\u5728\u81EA\u52A8\u6838\u5BF9\u684C\u9762\u72B6\u6001\u3002\u539F\u6D88\u606F\u5DF2\u4FDD\u5B58\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u91CD\u53D1\uFF1B\u8FD9\u4E0D\u8868\u793A\u4F1A\u8BDD\u4ECD\u5728\u6267\u884C\u3002");
       }
     }
   }
@@ -132754,6 +132779,108 @@ function fixedReply(text, meta = {}) {
   if (meta.kind === "error") return /未确认|结果未知|超时/.test(meta.error?.message || text) ? "\u6682\u65F6\u6CA1\u80FD\u786E\u8BA4\u8FD9\u6761\u6D88\u606F\u662F\u5426\u5DF2\u9001\u8FBE\u3002\u8BF7\u5148\u5728 Codex \u684C\u9762\u786E\u8BA4\uFF0C\u907F\u514D\u91CD\u590D\u53D1\u9001\u3002" : "\u8FD9\u6761\u6D88\u606F\u6682\u65F6\u672A\u80FD\u9001\u8FBE\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002";
   return String(text);
 }
+
+// src/managed-router.mjs
+var targetKey = (thread) => JSON.stringify([thread.hostId || "local", thread.id]);
+var terminal2 = (turn) => ["completed", "failed", "interrupted"].includes(turn?.status);
+var ManagedChatRouter = class extends Router {
+  constructor({ isActive = () => true, ...options }) {
+    super(options);
+    this.isActive = isActive;
+    this.workers = /* @__PURE__ */ new Map();
+    this.state.taskQueues ||= {};
+    for (const entry of Object.values(this.state.taskQueues)) if (entry.thread?.id) this.worker(entry.thread);
+  }
+  worker(thread) {
+    const key = targetKey(thread);
+    if (this.workers.has(key)) return this.workers.get(key);
+    const entry = this.state.taskQueues[key] ||= { thread: { ...thread }, sessions: {}, seen: {}, watches: {} };
+    const send = (chatId, text, meta = {}) => this.send(chatId, text, {
+      ...meta,
+      kind: meta.kind === "notice" ? "info" : meta.kind,
+      title: /发送结果|回执/.test(text) ? "\u53D1\u9001\u6838\u5BF9\u4E2D" : "\u6D88\u606F\u961F\u5217",
+      thread: { ...entry.thread },
+      session: this.state.sessions[`${meta.openId}:${chatId}`]
+    });
+    const worker = new FixedChatRouter({
+      thread: entry.thread,
+      desktop: this.desktop,
+      state: entry,
+      getConfig: this.getConfig,
+      saveState: () => this.saveState(),
+      isActive: () => !this.stopped && this.isActive(),
+      isAuthorized: (id) => this.authorized(id),
+      now: this.now,
+      send,
+      readSnapshot: () => this.readBeforeSend({ selected: entry.thread }, () => {
+        if (this.stopped || !this.isActive()) throw new Error("\u901A\u9053\u5DF2\u65AD\u5F00");
+      }),
+      beforeDispatch: () => ![...this.watches.values()].some((w) => w.receiptState && targetKey(w.thread) === key),
+      onAccepted: (message) => this.send(
+        message.chatId,
+        `\u5DF2\u53D1\u9001\u5230\uFF1A${entry.thread.title || entry.thread.id}
+\u56DE\u590D\u4F1A\u81EA\u52A8\u53D1\u56DE${this.channelLabel}\u3002`,
+        { kind: "info", title: "\u4EFB\u52A1\u5DF2\u53D1\u9001", command: "send", thread: entry.thread, openId: message.openId, session: this.state.sessions[`${message.openId}:${message.chatId}`] }
+      ),
+      onSendError: (error) => this.noteDeliveryFailure("send", error, { selected: entry.thread }),
+      deliverReply: (message, text, id, kind) => this.sendWatchedReply({ thread: entry.thread, openId: message.openId, chatId: message.chatId }, text, id, kind === "assistant" ? "assistant" : "info"),
+      matchTurn: async (result, active) => {
+        const baseline = result.turns?.find((t) => t.id === active.turnId);
+        if (active.turnId === active.baselineTurnId && terminal2(baseline) && threadSnapshot({ turns: [baseline] }).latestAssistantMessage?.id === active.baselineAssistantMessageId && !(baseline.items || []).some((i) => i.type === "userMessage" && (i.id === active.clientUserMessageId || i.clientId === active.clientUserMessageId))) return;
+        active.receipt ||= {
+          thread: entry.thread,
+          openId: active.message.openId,
+          chatId: active.message.chatId,
+          clientUserMessageId: active.clientUserMessageId,
+          createdAt: active.sentAt,
+          submittedAt: active.submittedAt,
+          evidence: active.evidence,
+          receiptState: "uncertain"
+        };
+        if (nativeTurnId(active.turnId)) active.receipt.confirmedTurnId = active.turnId;
+        const reads = /* @__PURE__ */ new Map([[JSON.stringify([`${entry.thread.hostId || "local"}:${entry.thread.id}`, null]), Promise.resolve(result)]]);
+        return (await this.checkReceipt(active.receipt, reads, { allowUnauthorized: true }))?.turn;
+      }
+    });
+    this.workers.set(key, worker);
+    return worker;
+  }
+  async enqueueTask(message, session, prompt) {
+    if (this.stopped || !this.isActive() || !this.authorized(message.openId)) throw new Error("\u901A\u9053\u5DF2\u65AD\u5F00\uFF0C\u672C\u6761\u6D88\u606F\u672A\u52A0\u5165\u961F\u5217\u3002");
+    const waiting = Object.values(this.state.taskQueues).reduce((n, e) => n + (e.fixedQueue?.pending.length || 0) + (e.fixedQueue?.active ? 1 : 0), 0);
+    if (waiting >= 100) throw new Error("\u7B49\u5F85\u961F\u5217\u5DF2\u6EE1\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u63A5\u6536\uFF0C\u8BF7\u7A0D\u540E\u91CD\u65B0\u53D1\u9001\u3002");
+    const worker = this.worker({ ...this.selected(session) });
+    const accepted = worker.acceptMessage({
+      id: message.id,
+      openId: message.openId,
+      chatId: message.chatId,
+      text: prompt,
+      timestamp: message.timestamp ?? this.now(),
+      ...message.chatType ? { chatType: message.chatType } : {},
+      modelArgs: { ...taskModelArgs(session) }
+    });
+    if (!accepted) throw new Error("\u672C\u6761\u6D88\u606F\u672A\u52A0\u5165\u961F\u5217\uFF0C\u8BF7\u68C0\u67E5\u901A\u9053\u8FDE\u63A5\u540E\u91CD\u65B0\u53D1\u9001\u3002");
+    session.awaitingChoice = null;
+    this.saveState();
+  }
+  queueSummary(thread) {
+    const queue = this.state.taskQueues[targetKey(thread)]?.fixedQueue;
+    if (!queue) return "";
+    const phase = queue.active?.phase;
+    return `
+
+\u6D88\u606F\u961F\u5217\uFF1A${queue.pending.length} \u6761\u7B49\u5F85${phase ? `\uFF1B\u5F53\u524D${phase === "preparing" ? "\u7B49\u5F85\u8FDE\u63A5" : phase === "uncertain" || phase === "sending" ? "\u6838\u5BF9\u53D1\u9001\u7ED3\u679C" : "\u7B49\u5F85\u56DE\u590D"}` : ""}${queue.review?.length ? `\uFF1B${queue.review.length} \u6761\u6B64\u524D\u6D88\u606F\u5F85\u6838\u5BF9` : ""}\u3002`;
+  }
+  async poll() {
+    if (this.stopped || !this.isActive()) return;
+    await super.poll();
+    for (const worker of this.workers.values()) void worker.poll();
+  }
+  stop() {
+    this.stopped = true;
+    for (const worker of this.workers.values()) worker.stop();
+  }
+};
 
 // src/card-actions.mjs
 var import_node_crypto9 = require("node:crypto");
@@ -133050,7 +133177,7 @@ function createFeishuChannel({
     isAuthorized: authorized,
     reportDeliveryFailure: (record) => onStatus({ lastDeliveryFailure: record })
   };
-  const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread, isActive: active }) : new Router(options);
+  const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread, isActive: active }) : new ManagedChatRouter({ ...options, isActive: active });
   const receive = (event) => {
     const message = parseMessage(event, { botOpenId, appId: settings.appId });
     if (!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now() - message.timestamp) > 6e5) return;
@@ -133148,7 +133275,7 @@ var import_promises3 = require("node:timers/promises");
 var import_node_crypto10 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.6.2";
+var VERSION = "0.7.0";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -133303,7 +133430,7 @@ function renderWechatReply(text, meta = {}) {
     "\u{1F9ED} \u4F7F\u7528\u6307\u5357",
     `\u5F00\u59CB${lineBreak}\u5148\u53D1\u9001 /projects \u6216 /chats\uFF0C\u56DE\u590D\u9879\u76EE\u548C\u4F1A\u8BDD\u7F16\u53F7\u3002${lineBreak}\u9009\u4E2D\u540E\u76F4\u63A5\u53D1\u6D88\u606F\uFF0C\u5C31\u662F\u4E0E\u8BE5\u4F1A\u8BDD\u804A\u5929\u3002`,
     `\u9009\u62E9\u4E0E\u7FFB\u9875${lineBreak}/chats \u5173\u952E\u8BCD \u2192 \u627E\u4F1A\u8BDD${lineBreak}/use 12 \u2192 \u9009\u4F1A\u8BDD 12${lineBreak}/next \u4E0B\u4E00\u9875 \xB7 /prev \u4E0A\u4E00\u9875 \xB7 /page 2 \u8DF3\u9875`,
-    `\u67E5\u770B\u4EFB\u52A1${lineBreak}/read \u6700\u8FD1\u56DE\u590D \xB7 /status \u5F53\u524D\u72B6\u6001${lineBreak}/watch \u5F00\u542F\u901A\u77E5 \xB7 /unwatch \u5173\u95ED\u901A\u77E5`,
+    `\u67E5\u770B\u4EFB\u52A1${lineBreak}\u8FDE\u7EED\u53D1\u9001\u6309\u4F1A\u8BDD\u6392\u961F\uFF0C\u5B8C\u6210\u4E0A\u4E00\u6761\u624D\u53D1\u9001\u4E0B\u4E00\u6761\u3002${lineBreak}/read \u6700\u8FD1\u56DE\u590D \xB7 /status \u5F53\u524D\u72B6\u6001\u4E0E\u7B49\u5F85\u6570\u91CF${lineBreak}/watch \u5F00\u542F\u901A\u77E5 \xB7 /unwatch \u5173\u95ED\u901A\u77E5`,
     `\u6A21\u578B${lineBreak}/models \u53EF\u7528\u6A21\u578B \xB7 /model \u67E5\u770B\u8BBE\u7F6E${lineBreak}/model \u6A21\u578BID \u2192 \u8BBE\u7F6E \xB7 /model default \u2192 \u6CBF\u7528\u684C\u9762${lineBreak}/effort high \u2192 \u63A8\u7406\u5F3A\u5EA6`,
     `\u7BA1\u7406\u4F1A\u8BDD${lineBreak}/rename \u6807\u9898 \u2192 \u91CD\u547D\u540D${lineBreak}/pin \u7F6E\u9876 \xB7 /unpin \u53D6\u6D88\u7F6E\u9876${lineBreak}/archive \u5F52\u6863 \xB7 /archived \u5F52\u6863\u5217\u8868${lineBreak}/unarchive \u6062\u590D \xB7 /fork \u590D\u5236 \xB7 /open \u672C\u673A\u6253\u5F00`,
     `\u65B0\u5EFA${lineBreak}/new 1 | \u4EFB\u52A1\u5185\u5BB9 \u2192 \u5728\u9879\u76EE 1 \u4E2D\u65B0\u5EFA${lineBreak}/new - | \u4EFB\u52A1\u5185\u5BB9 \u2192 \u65B0\u5EFA\u72EC\u7ACB\u4F1A\u8BDD`,
@@ -133330,6 +133457,7 @@ function renderWechatReply(text, meta = {}) {
     name,
     "\u72B6\u6001\uFF5C" + statusLabel(meta.threadStatus),
     modelSummary(s).split("\n").join(lineBreak),
+    meta.queueSummary?.trim(),
     selected?.archived ? "\u5DF2\u5F52\u6863\uFF0C\u4F7F\u7528 /unarchive \u6062\u590D\u3002" : null,
     quick("/read \u67E5\u770B\u56DE\u590D", "/models \u6A21\u578B", "/chats \u5207\u6362\u4F1A\u8BDD")
   ]);
@@ -133372,8 +133500,8 @@ ${part}` : part, token, { signal: stopController.signal });
     }
     onStatus({ lastReplyAt: Date.now() });
   };
-  const router = new Router({ desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: () => {
-  }, state, saveState, send, channelLabel: "\u5FAE\u4FE1" });
+  const router = new ManagedChatRouter({ desktop, getLocalThreads: readLocalThreads, getConfig, saveConfig: () => {
+  }, state, saveState, send, channelLabel: "\u5FAE\u4FE1", isActive: active });
   async function receiveBatch(result) {
     if (!Array.isArray(result.msgs)) throw new Error("\u5FAE\u4FE1\u6D88\u606F\u54CD\u5E94\u65E0\u6548");
     for (const raw of result.msgs) {
@@ -133451,6 +133579,7 @@ ${part}` : part, token, { signal: stopController.signal });
     },
     stop: async () => {
       stopped = true;
+      router.stop();
       stopController.abort();
       await loop;
     },

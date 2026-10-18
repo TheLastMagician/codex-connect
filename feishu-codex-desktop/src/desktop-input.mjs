@@ -130,7 +130,7 @@ export class DesktopInput {
     try {return await loading;}
     finally {if(this.loading.get(key)===loading)this.loading.delete(key);}
   }
-  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend,{beforeSubmit,beforeActivate,onLoading}={}) {
+  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend,{beforeSubmit,beforeActivate}={}) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
     if(clientUserMessageId!==undefined && (typeof clientUserMessageId!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -141,12 +141,7 @@ export class DesktopInput {
     // Loaded chats stay in the background. For cold chats the user permits
     // opening the target; navigation alone is not proof that it has loaded.
     authorize();
-    if(!owner) {
-      // Long histories can finish hydrating after the former 20-second limit.
-      // A progress notice is best effort; it does not acknowledge submission.
-      try {await onLoading?.();}catch{}
-      authorize();owner=await this.loadOwner(threadId,hostId,authorize,beforeActivate);
-    }
+    if(!owner)owner=await this.loadOwner(threadId,hostId,authorize,beforeActivate);
     // Loading can take seconds. Recheck queue readiness after it completes,
     // before any native write, so a newly started desktop task is not steered.
     try {await beforeSubmit?.();}

@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
-import {Router,fingerprint} from '../router.mjs';
+import {fingerprint} from '../router.mjs';
+import {ManagedChatRouter} from '../managed-router.mjs';
 import {PAGE_SIZE,statusLabel,currentTarget,projectName} from '../navigation.mjs';
 import {readLocalThreads} from '../catalog.mjs';
 import {WechatApi} from '../wechat-api.mjs';
@@ -62,7 +63,7 @@ export function renderWechatReply(text,meta={}) {
   if(meta.kind==='help')return sections(['🧭 使用指南',
     `开始${lineBreak}先发送 /projects 或 /chats，回复项目和会话编号。${lineBreak}选中后直接发消息，就是与该会话聊天。`,
     `选择与翻页${lineBreak}/chats 关键词 → 找会话${lineBreak}/use 12 → 选会话 12${lineBreak}/next 下一页 · /prev 上一页 · /page 2 跳页`,
-    `查看任务${lineBreak}/read 最近回复 · /status 当前状态${lineBreak}/watch 开启通知 · /unwatch 关闭通知`,
+    `查看任务${lineBreak}连续发送按会话排队，完成上一条才发送下一条。${lineBreak}/read 最近回复 · /status 当前状态与等待数量${lineBreak}/watch 开启通知 · /unwatch 关闭通知`,
     `模型${lineBreak}/models 可用模型 · /model 查看设置${lineBreak}/model 模型ID → 设置 · /model default → 沿用桌面${lineBreak}/effort high → 推理强度`,
     `管理会话${lineBreak}/rename 标题 → 重命名${lineBreak}/pin 置顶 · /unpin 取消置顶${lineBreak}/archive 归档 · /archived 归档列表${lineBreak}/unarchive 恢复 · /fork 复制 · /open 本机打开`,
     `新建${lineBreak}/new 1 | 任务内容 → 在项目 1 中新建${lineBreak}/new - | 任务内容 → 新建独立会话`,
@@ -77,7 +78,7 @@ export function renderWechatReply(text,meta={}) {
   if(['send','new'].includes(meta.command))return sections([meta.command==='new'?'✨ 新会话已开始':'📨 任务已发送',name,
     '完成后会自动在微信回复。',quick('/status 查看进度','/read 查看回复')]);
   if(meta.command==='status')return sections(['📍 当前会话',name,
-    '状态｜'+statusLabel(meta.threadStatus),modelSummary(s).split('\n').join(lineBreak),selected?.archived?'已归档，使用 /unarchive 恢复。':null,
+    '状态｜'+statusLabel(meta.threadStatus),modelSummary(s).split('\n').join(lineBreak),meta.queueSummary?.trim(),selected?.archived?'已归档，使用 /unarchive 恢复。':null,
     quick('/read 查看回复','/models 模型','/chats 切换会话')]);
   return sections([meta.title||'Codex',tidyInfo(text)]);
 }
@@ -101,7 +102,7 @@ export function createWechatChannel({desktop,account,onStatus,api=new WechatApi(
     }
     onStatus({lastReplyAt:Date.now()});
   };
-  const router=new Router({desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:()=>{},state,saveState,send,channelLabel:'微信'});
+  const router=new ManagedChatRouter({desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:()=>{},state,saveState,send,channelLabel:'微信',isActive:active});
   async function receiveBatch(result) {
     if(!Array.isArray(result.msgs))throw new Error('微信消息响应无效');
     for(const raw of result.msgs) {
@@ -149,7 +150,7 @@ export function createWechatChannel({desktop,account,onStatus,api=new WechatApi(
       try{await work;}finally{if(router.queues.get(session.chatId)===work)router.queues.delete(session.chatId);}
     },
     start:async()=>{onStatus({state:'connecting'});loop=monitor().catch(()=>onStatus({state:'failed',error:'微信通道停止，请查看连接状态。'}));},
-    stop:async()=>{stopped=true;stopController.abort();await loop;},
+    stop:async()=>{stopped=true;router.stop();stopController.abort();await loop;},
     poll:async()=>{if(active())await router.poll();}
   };
 }

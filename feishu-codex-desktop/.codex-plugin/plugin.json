@@ -17,7 +17,7 @@
     "defaultPrompt": "帮我配置并启动飞书 Codex 桌面桥接，先检查真实桌面会话接口"
   },
   "name": "feishu-codex-desktop",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "通过飞书或微信 ClawBot 私聊控制本机 Codex 桌面真实会话，选择项目、继续聊天并接收回复。支持扫码连接微信与飞书同时运行。",
   "author": {
     "name": "Local Workspace"

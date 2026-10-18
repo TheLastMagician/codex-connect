@@ -1,6 +1,6 @@
 {
   "name": "feishu-codex-desktop",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/receipt-evidence.test.mjs tests/router.test.mjs tests/desktop.test.mjs tests/desktop-input.test.mjs tests/cards.test.mjs tests/catalog.test.mjs tests/wechat.test.mjs tests/wechat-auth.test.mjs tests/models.test.mjs tests/legacy-cleanup.test.mjs tests/conversation.test.mjs tests/autostart.test.mjs tests/responses-compat.test.mjs tests/connections.test.mjs tests/fixed-queue.test.mjs tests/dashboard.test.mjs",
+    "test": "node --test tests/receipt-evidence.test.mjs tests/router.test.mjs tests/desktop.test.mjs tests/desktop-input.test.mjs tests/cards.test.mjs tests/catalog.test.mjs tests/wechat.test.mjs tests/wechat-auth.test.mjs tests/models.test.mjs tests/legacy-cleanup.test.mjs tests/conversation.test.mjs tests/autostart.test.mjs tests/responses-compat.test.mjs tests/connections.test.mjs tests/fixed-queue.test.mjs tests/managed-queue.test.mjs tests/dashboard.test.mjs",
     "setup": "node dist/setup.cjs",
     "probe": "node src/probe.mjs"
   },

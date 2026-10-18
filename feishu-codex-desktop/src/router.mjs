@@ -12,6 +12,7 @@ export const HELP = `Codex 桌面会话
 1. /chats 查看列表
 2. /use 1 选择会话，也可在列表后直接回复编号
 3. 选中后直接发消息，就是与这个 Codex 会话聊天
+连续发送会按目标会话排队；/status 查看等待数量。
 
 列表每页 10 条：/next 下一页；/prev 上一页；/page 2 跳到第 2 页；/more 也可下一页。
 /chats 关键词 — 按会话标题查找
@@ -229,7 +230,7 @@ export class Router {
       authorize();
       try {
         const result=await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:1,maxOutputCharsPerItem:20000},{beforeSend:authorize});
-        return {...threadSnapshot(result),turns:result.turns||[]};
+        return {...result,...threadSnapshot(result),turns:result.turns||[]};
       }
       catch(error) {
         authorize();
@@ -368,7 +369,7 @@ export class Router {
         const result=await this.desktop.call('read_thread',{...threadArgs(selected),turnLimit:command==='read'?3:1,includeOutputs:command==='read',maxOutputCharsPerItem:4000});
         threadStatus=result.thread?.status;
         if(command==='read') conversation={messages:conversationMessages(result),turnCount:result.turns?.length||0};
-        output=renderThread(result,command==='status')+(command==='status'?`\n\n${modelSummary(session)}`:'')+`\n\n${selected.archived?'会话已归档，先 /unarchive 恢复再聊天。':this.selectionHint(session)}\n${HELP_HINT}`;break;
+        output=renderThread(result,command==='status')+(command==='status'?`\n\n${modelSummary(session)}${this.queueSummary?.(selected)||''}`:'')+`\n\n${selected.archived?'会话已归档，先 /unarchive 恢复再聊天。':this.selectionHint(session)}\n${HELP_HINT}`;break;
       }
       case 'rename': {
         if(!arg || arg.length>200) throw new Error('请输入 1–200 字符的标题。例如：/rename 修复启动错误');
@@ -410,6 +411,7 @@ export class Router {
         if(!prompt) throw new Error('请写上任务内容。例如：/send 帮我检查构建错误');
         const selected=this.selected(session);
         if(selected.archived) throw new Error('当前会话已归档。先发送 /unarchive 恢复，再直接聊天；或 /chats 选择其他会话。');
+        if(this.enqueueTask){await this.enqueueTask(message,session,prompt);return;}
         const baseline=await this.readBeforeSend(session,authorize);
         // This text is an authenticated user's explicit instruction to this selected chat.
         authorize();
@@ -420,11 +422,6 @@ export class Router {
         this.watches.set(receiptKey,receipt);this.persistWatches();
         try {
           const ack=await this.desktop.call('send_message_to_thread',{...threadArgs(selected),prompt,...taskModelArgs(session),clientUserMessageId},{beforeSend:authorize,
-            onLoading:async()=>{
-              authorize();
-              await this.send(message.chatId,`正在打开并加载 ${selected.title||selected.id}，最多等待 2 分钟。\n本条消息尚未发送；加载就绪后会自动发送，无需重复提交。`,
-                {kind:'info',title:'会话加载中',thread:{...selected},session,openId:message.openId});
-            },
             beforeSubmit:()=>{authorize();receipt.submittedAt=this.now();this.persistWatches();}});
           if(ack?.turnId)this.claimReceiptTurn(receipt,ack.turnId);
         }catch(error) {
@@ -445,7 +442,7 @@ export class Router {
     const listCommands=['chats','projects','project','archived','next','prev','page','more'];
     const meta={kind:listCommands.includes(command)?'list':command==='models'?'models':command==='read'?'conversation':command==='help'?'help':'info',
       title:receiptStatus==='uncertain'?'发送核对中':receiptStatus==='confirmed'?'发送已确认':CARD_TITLES[command||'send']||(command==='projectinfo'?'项目详情':'Codex'),session,openId:message.openId,updateMessageId:message.updateMessageId,
-      command:command||'send',threadStatus,conversation};
+      command:command||'send',threadStatus,conversation,...(command==='status'?{queueSummary:this.queueSummary?.(session.selected)}:{})};
     await this.send(message.chatId,output,meta);
   }
   watch(session,baseline) {
@@ -461,15 +458,17 @@ export class Router {
     for(const [key,watch] of this.watches) if(watch.openId===session.openId && watch.chatId===session.chatId && (!selected || keyOf(watch.thread)===keyOf(selected))) this.watches.delete(key);
     this.persistWatches();
   }
-  async checkReceipt(watch,reads) {
-    if(!this.authorized(watch.openId))return;
-    const turns=[];let cursor;const cursors=new Set();let complete=false;
+  async checkReceipt(watch,reads,{allowUnauthorized=false}={}) {
+    const allowed=()=>this.authorized(watch.openId) || (allowUnauthorized && !this.stopped);
+    if(!allowed())return;
+    const turns=[];let cursor;const cursors=new Set();let complete=false;let first;
     for(let page=0;page<10;page++) {
       const key=JSON.stringify([keyOf(watch.thread),cursor||null]);
       let request=reads?.get(key);
       if(!request){request=this.desktop.call('read_thread',{...threadArgs(watch.thread),turnLimit:10,maxOutputCharsPerItem:20000,...(cursor?{cursor}:{})},{timeoutMs:20000});reads?.set(key,request);}
       const result=await request;
-      if(!this.authorized(watch.openId))return;
+      first ||= result;
+      if(!allowed())return;
       for(const turn of result.turns||[])if(!turns.some(t=>t.id===turn.id))turns.push(turn);
       const matched=receiptCandidates(turns,watch);
       complete=receiptHistoryComplete(result,watch);
@@ -487,7 +486,7 @@ export class Router {
       if(!competing && (!claimed || claimed===watch.clientUserMessageId))turn=candidate;
     }
     if(turn){watch.receiptState='confirmed';watch.confirmedTurnId=turn.id;this.claimReceiptTurn(watch,turn.id);this.persistWatches();}
-    return {turn};
+    return {turn,result:{...first,turns}};
   }
   receiptTurnKey(watch,turnId) {return fingerprint({id:JSON.stringify([keyOf(watch.thread),turnId])});}
   claimReceiptTurn(watch,turnId) {

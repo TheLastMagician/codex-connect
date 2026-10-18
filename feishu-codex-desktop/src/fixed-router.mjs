@@ -1,7 +1,8 @@
 import {Router,threadSnapshot,fingerprint} from './router.mjs';
 import {randomUUID} from 'node:crypto';
+import {targetLeases} from './target-leases.mjs';
+import {receiptEvidence} from './receipt-evidence.mjs';
 
-const leases=new WeakMap();
 const terminal=turn=>['completed','failed','interrupted'].includes(turn?.status);
 const statusOf=thread=>typeof thread?.status==='string'?thread.status:thread?.status?.type;
 const idle=snapshot=>['idle','notLoaded'].includes(statusOf(snapshot.thread)) && (!snapshot.turns?.[0] || terminal(snapshot.turns[0]));
@@ -10,14 +11,16 @@ const inputsOf=turn=>(turn?.items||[]).filter(item=>item.type==='userMessage').m
   Array.isArray(item.content)?item.content.filter(part=>part.type==='text').map(part=>part.text).join('\n'):item.text||'');
 
 export class FixedChatRouter extends Router {
-  constructor({thread,isActive=()=>true,...options}) {
-    super(options);this.thread={...thread};this.isActive=isActive;
+  constructor({thread,isActive=()=>true,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot,...options}) {
+    super(options);Object.assign(this,{thread:{...thread},isActive,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot});
     this.state.fixedQueue ||= {pending:[],active:null};
     this.state.fixedQueue.review ||= [];
+    if(this.state.fixedQueue.active?.phase==='preparing') {
+      this.state.fixedQueue.pending.unshift(this.state.fixedQueue.active.message);this.state.fixedQueue.active=null;this.saveState();
+    }
     if(this.state.fixedQueue.active) {delete this.state.fixedQueue.active.idleSince;delete this.state.fixedQueue.active.idleSnapshot;}
     this.target=JSON.stringify([thread.hostId||'local',thread.id]);
-    if(!leases.has(this.desktop))leases.set(this.desktop,new Map());
-    this.leases=leases.get(this.desktop);
+    this.leases=targetLeases(this.desktop);
   }
   session(message) {
     const session=super.session(message);
@@ -27,6 +30,10 @@ export class FixedChatRouter extends Router {
   live() {return !this.stopped && this.isActive();}
   meta(message,kind='notice') {return {kind,openId:message.openId,...(message.chatType==='group'?{chatType:'group',replyOpenIds:[message.openId]}:{})};}
   notify(message,text) {return this.send(message.chatId,text,this.meta(message));}
+  reply(message,text,assistantId,kind='assistant') {
+    return this.deliverReply?this.deliverReply(message,text,assistantId,kind):this.send(message.chatId,text,this.meta(message,kind));
+  }
+  matchingTurn(result,active) {return this.matchTurn?this.matchTurn(result,active):this.findTurn(result,active);}
   acceptMessage(message) {
     if(!this.live() || !message?.id || !message.openId || !message.chatId || typeof message.text!=='string' || !message.text.trim() || message.text.length>12000
       || !Number.isFinite(message.timestamp) || Math.abs(this.now()-message.timestamp)>600000 || !this.authorized(message.openId))return false;
@@ -62,7 +69,7 @@ export class FixedChatRouter extends Router {
     });
     this.queues.set(this.target,work);return work;
   }
-  async read() {return this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:10,maxOutputCharsPerItem:20000});}
+  async read() {return this.readSnapshot?this.readSnapshot():this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:10,maxOutputCharsPerItem:20000});}
   async waitingNotice(message,text,reason='connection') {
     this.state.fixedQueue.blockedReason=reason;
     if(message.waitReason===reason || !this.live() || !this.authorized(message.openId)){this.saveState();return;}
@@ -84,10 +91,10 @@ export class FixedChatRouter extends Router {
     const queue=this.state.fixedQueue;if(!queue.review.length)return;
     const result=await this.read();if(!this.live())return;
     for(const record of [...queue.review]) {
-      const turn=this.findTurn(result,record);if(!turn || !terminal(turn))continue;
+      const turn=await this.matchingTurn(result,record);if(!turn || !terminal(turn))continue;
       const assistant=threadSnapshot({turns:[turn]}).latestAssistantMessage;
-      if(this.authorized(record.message.openId))await this.send(record.message.chatId,'此前待核对消息的结果：\n\n'+
-        (turn.status==='completed'?(assistant?.text||'任务已完成，没有文字回复。'):turn.status==='failed'?'会话执行失败，请在桌面查看详情。':'这次会话已中断。'),this.meta(record.message,turn.status==='completed'?'assistant':'notice'));
+      if(this.authorized(record.message.openId))await this.reply(record.message,'此前待核对消息的结果：\n\n'+
+        (turn.status==='completed'?(assistant?.text||'任务已完成，没有文字回复。'):turn.status==='failed'?'会话执行失败，请在桌面查看详情。':'这次会话已中断。'),assistant?.id||turn.id,turn.status==='completed'?'assistant':'notice');
       if(!this.live())return;
       queue.review=queue.review.filter(item=>item!==record);this.saveState();
     }
@@ -125,7 +132,7 @@ export class FixedChatRouter extends Router {
         try {result=await this.read();}
         catch {delete active.idleSince;delete active.idleSnapshot;this.saveState();return;}
         if(!this.live())return;
-        const turn=this.findTurn(result,active);
+        const turn=await this.matchingTurn(result,active);
         if(turn) {active.turnId=turn.id;this.saveState();}
         if(statusOf(result.thread)==='needsAttention' && !active.attentionNotified && this.authorized(active.message.openId)) {
           active.attentionNotified=true;this.saveState();await this.notify(active.message,'这个会话需要你在 Codex 桌面处理审批或输入；后续问题会继续排队。');
@@ -136,14 +143,14 @@ export class FixedChatRouter extends Router {
           delete active.idleSince;delete active.idleSnapshot;
           if(!terminal(turn))return;
           const assistant=threadSnapshot({turns:[turn]}).latestAssistantMessage;
-          active.reply={kind:turn.status==='completed'?'assistant':'notice',text:turn.status==='completed'?(assistant?.text||'这次任务已完成，没有文字回复。'):
+          active.reply={id:assistant?.id||turn.id,kind:turn.status==='completed'?'assistant':'notice',text:turn.status==='completed'?(assistant?.text||'这次任务已完成，没有文字回复。'):
             turn.status==='failed'?'会话执行失败，请在 Codex 桌面查看详情。':'这次会话已中断。'};
           this.saveState();
         }
       }
       if(queue.active) {
         if(!this.live())return;
-        if(this.authorized(active.message.openId))await this.send(active.message.chatId,active.reply.text,this.meta(active.message,active.reply.kind));
+        if(this.authorized(active.message.openId))await this.reply(active.message,active.reply.text,active.reply.id||active.turnId,active.reply.kind);
         if(!this.live())return;
         queue.active=null;this.saveState();
       }
@@ -158,11 +165,16 @@ export class FixedChatRouter extends Router {
     if(!['idle','notLoaded'].includes(status) || (latest && !terminal(latest))) {
       await this.waitingNotice(message,'已排队，会话正在处理前面的任务；结束后会自动处理你的问题。','busy');return;
     }
-    const active={message,phase:'sending',sentAt:this.now(),clientUserMessageId:randomUUID(),baselineTurnId:latest?.id,
+    if(this.beforeDispatch && !await this.beforeDispatch(result)) {
+      await this.waitingNotice(message,'前一条发送回执仍在核对，你的消息已保存等待。','receipt');return;
+    }
+    if(!this.live() || !this.authorized(message.openId))return;
+    const active={message,phase:'preparing',sentAt:this.now(),clientUserMessageId:randomUUID(),baselineTurnId:latest?.id,
+      evidence:receiptEvidence(message.text,result.turns||[]),
       baselineAssistantMessageId:threadSnapshot(result).latestAssistantMessage?.id,baselineTurnIds:(result.turns||[]).map(turn=>turn.id)};
     queue.pending.shift();queue.active=active;delete queue.blockedReason;this.saveState();
     try {
-      const receipt=await this.desktop.call('send_message_to_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),prompt:message.text,clientUserMessageId:active.clientUserMessageId},
+      const receipt=await this.desktop.call('send_message_to_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),prompt:message.text,clientUserMessageId:active.clientUserMessageId,...message.modelArgs},
         {beforeSend:()=>{if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');},
           beforeActivate:()=>{
             if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');
@@ -176,9 +188,12 @@ export class FixedChatRouter extends Router {
             active.baselineTurnId=fresh.turns?.[0]?.id;
             active.baselineAssistantMessageId=threadSnapshot(fresh).latestAssistantMessage?.id;
             active.baselineTurnIds=(fresh.turns||[]).map(turn=>turn.id);this.saveState();
+            active.phase='sending';active.submittedAt=this.now();active.evidence=receiptEvidence(message.text,fresh.turns||[]);this.saveState();
           }});
       active.phase='waiting';if(typeof receipt?.turnId==='string')active.turnId=receipt.turnId;this.saveState();
+      try {await this.onAccepted?.(message,receipt);}catch{/* Notification failure must never replay a native write. */}
     }catch(error) {
+      this.onSendError?.(error,message);
       if(error.notSent) {
         queue.active=null;queue.pending.unshift(message);this.saveState();
         await this.waitingNotice(message,error.code==='THREAD_BUSY'
@@ -186,7 +201,7 @@ export class FixedChatRouter extends Router {
           :'已排队，暂时无法连接目标会话；连接恢复后会自动处理。',error.code==='THREAD_BUSY'?'busy':'connection');
       }else {
         active.phase='uncertain';this.saveState();
-        if(this.live() && this.authorized(message.openId))await this.notify(message,'消息发送结果待确认，正在核对桌面状态。原消息已保存，不会自动重发；这不表示会话仍在执行。');
+        if(this.live() && this.authorized(message.openId))await this.notify(message,'消息发送结果待确认，正在自动核对桌面状态。原消息已保存，不会自动重发；这不表示会话仍在执行。');
       }
     }
   }

@@ -291,7 +291,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate, onLoading } = {}) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -306,14 +306,7 @@ var DesktopInput = class {
     authorize();
     let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
-    if (!owner) {
-      try {
-        await onLoading?.();
-      } catch {
-      }
-      authorize();
-      owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
-    }
+    if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
     try {
       await beforeSubmit?.();
     } catch (error) {

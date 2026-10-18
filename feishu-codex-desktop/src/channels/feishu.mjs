@@ -1,5 +1,6 @@
 import {Client,WSClient,EventDispatcher,Domain,LoggerLevel} from '@larksuiteoapi/node-sdk';
-import {Router,parseMessage,equalSecret,fingerprint} from '../router.mjs';
+import {parseMessage,equalSecret,fingerprint} from '../router.mjs';
+import {ManagedChatRouter} from '../managed-router.mjs';
 import {FixedChatRouter,fixedReply} from '../fixed-router.mjs';
 import {CardActions} from '../card-actions.mjs';
 import {createSender} from '../outbound.mjs';
@@ -61,7 +62,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},
   };
   const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,isAuthorized:authorized,
     reportDeliveryFailure:record=>onStatus({lastDeliveryFailure:record})};
-  const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new Router(options);
+  const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new ManagedChatRouter({...options,isActive:active});
   const receive=event=>{
     const message=parseMessage(event,{botOpenId,appId:settings.appId});
     if(!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now()-message.timestamp)>600000)return;

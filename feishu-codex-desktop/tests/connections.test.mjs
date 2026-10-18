@@ -71,15 +71,16 @@ test('an unconfirmed full-bot submission uses a pending card rather than a task-
   try {
     await receive(f,f.event('任务原文'));
     const card=JSON.parse(f.sent.at(-1).data.content);assert.equal(card.header.title.content,'发送核对中');
-    assert.match(card.body.elements[0].content,/自动核对/);assert.equal(f.channel.router.watches.size,1);
-    assert.doesNotMatch(JSON.stringify(state.watches),/任务原文/);
+    assert.match(card.body.elements[0].content,/自动核对/);assert.equal(Object.values(state.taskQueues)[0].fixedQueue.active.phase,'uncertain');
+    assert.doesNotMatch(JSON.stringify(state.watches||{}),/任务原文/);
+    assert.equal(Object.values(state.taskQueues)[0].fixedQueue.active.message.text,'任务原文');
   }finally{f.channel.stop();}
 });
 function groupEvent(f,text,{owner='owner',id=Math.random().toString(),chat='group-chat',bot='ou_robot',mentions}={}) {
   const event=f.event(text,owner,id);Object.assign(event.message,{chat_type:'group',chat_id:chat,
     mentions:mentions||[{key:'@_user_1',id:{open_id:bot},name:'Codex'}]});return event;
 }
-async function receive(f,event){f.events()['im.message.receive_v1'](event);await new Promise(resolve=>setImmediate(resolve));await Promise.all(f.channel.router.queues.values());}
+async function receive(f,event){f.events()['im.message.receive_v1'](event);await new Promise(resolve=>setImmediate(resolve));await Promise.all(f.channel.router.queues.values());await Promise.all([...(f.channel.router.workers?.values()||[])].flatMap(w=>[...w.queues.values()]));}
 async function complete(f,text='完成',id=Math.random().toString()) {
   const prompt=f.channel.router.state.fixedQueue.active?.message.text;
   f.setSnapshot({thread:{status:{type:'idle'}},turns:[{id,status:'completed',items:[{type:'userMessage',content:[{type:'text',text:prompt}]},{type:'agentMessage',id:'reply-'+id,text}]}]});

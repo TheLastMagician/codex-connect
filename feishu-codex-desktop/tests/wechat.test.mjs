@@ -90,6 +90,12 @@ test('WeChat lists show page and selection guidance; split replies preserve Unic
   const reply=renderWechatReply('',{kind:'list',session});assert.match(reply,/第 2\/4 页/);assert.match(reply,/11｜会话 11/);assert.match(reply,/上一页/);assert.match(reply,/下一页/);assert.match(reply,/\/use 11/);
   const text='😀中文代码'.repeat(800);const parts=splitWechatText(text);assert.equal(parts.join(''),text);assert.ok(parts.every(p=>Array.from(p).length<=1500));
 });
+test('WeChat status includes the durable conversation queue count',()=>{
+  const reply=renderWechatReply('',{command:'status',session:{selected:{id:'a',title:'项目会话'}},
+    threadStatus:{type:'active'},queueSummary:'\n\n消息队列：2 条等待；当前等待回复。'});
+  assert.match(reply,/消息队列：2 条等待；当前等待回复/);
+});
+
 test('long WeChat code replies close and reopen code fences across message boundaries',()=>{
   const text='说明\n\n```js\n'+'const value = "中文😀";\n'.repeat(200)+'```\n\n结束';
   const parts=splitWechatText(text,500);assert.ok(parts.length>1);
