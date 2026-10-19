@@ -1,7 +1,8 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import {Server} from '@modelcontextprotocol/sdk/server/index.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
-import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotocol/sdk/types.js';
+import {ListToolsRequestSchema,CallToolRequestSchema,ListResourcesRequestSchema,ReadResourceRequestSchema} from '@modelcontextprotocol/sdk/types.js';
 import {secureDirectory,config,readJson,writeJson} from './storage.mjs';
 import {DesktopClient} from './desktop.mjs';
 import {stopControl} from './control.mjs';
@@ -11,7 +12,7 @@ import {beginWechatLogin,wechatLoginStatus,submitWechatVerifyCode,disconnectWech
 import {desktopContext,ensureBridge,alive,pauseAutostart} from './bridge-lifecycle.mjs';
 import {configureAutostart,autostartStatus,syncAutostartRuntime} from './autostart-settings.mjs';
 import {providerCatalogStatus,responsesCompatStatus,configureResponsesCompat,syncResponsesCompatRuntime,ensureResponsesCompat} from './responses-compat-settings.mjs';
-import {dashboardLink} from './dashboard.mjs';
+import {SETTINGS_URI,SETTINGS_REQUEST_SCHEMA,settingsRequest,connectionSettings,SETTINGS_READ_OUTPUT,SETTINGS_UPDATE_INPUT} from './settings-panel.mjs';
 import {feishuBots,publicBot} from './connections.mjs';
 import {setTimeout as delay} from 'node:timers/promises';
 
@@ -19,7 +20,11 @@ function context(extra) {
   return desktopContext(extra);
 }
 const tools=[
-  {name:'open_settings',description:'打开 Codex 连接的本机管理页面。配置飞书、微信、多个机器人和固定会话绑定；页面只在本机可访问。返回的访问链接视为私密凭据，仅展示给本机用户。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:false}},
+  {name:'open_settings',title:'Codex 连接',description:'在 Codex 内打开通道配置面板。管理飞书、微信、多个机器人、固定会话绑定与账号授权，无需浏览器网址。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'global'}]}}},
+  {name:'open_thread_settings',title:'通道配置',description:'在当前聊天旁打开飞书、微信与机器人配置面板。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'thread'}]}}},
+  {name:'settings_request',description:'通道配置面板使用的本机配置操作，不创建会话、不发送任务。',inputSchema:SETTINGS_REQUEST_SCHEMA,annotations:{readOnlyHint:false},_meta:{ui:{visibility:['app']}}},
+  {name:'read_connection_settings',description:'读取插件详情页的通道配置入口与自动连接设置。',inputSchema:{type:'object',properties:{},additionalProperties:false},outputSchema:SETTINGS_READ_OUTPUT,annotations:{readOnlyHint:true}},
+  {name:'update_connection_settings',description:'保存插件详情页的自动连接设置。',inputSchema:SETTINGS_UPDATE_INPUT,outputSchema:{type:'object',properties:{values:{type:'object'}},required:['values']},annotations:{readOnlyHint:false}},
   {name:'responses_compat_status',description:'查看本机第三方 Responses 兼容层与供应商地址，不读取或返回 API Key。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}},
   {name:'configure_responses_compat',description:'仅用于关闭 0.4.1 已启用的全局 Responses 兼容，恢复供应商原地址。enabled 只能为 false；恢复后需重启桌面。不能启用全局代理或声称仅兼容新建。',inputSchema:{type:'object',properties:{providerId:{type:'string'},enabled:{type:'boolean',enum:[false]}},required:['providerId','enabled'],additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'configure_autostart',description:'用户要求随 Codex 自动连接时开启；在本机注册启动/恢复会话钩子，需要用户在设置的钩子页信任一次。关闭仅取消自启动，不停止当前桥接。',inputSchema:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false},annotations:{readOnlyHint:false}},
@@ -49,17 +54,33 @@ async function autoConnect(extra) {
     writeJson('autostart-status.json',{state:result.skipped||'started',checkedAt:Date.now()});
   }catch {writeJson('autostart-status.json',{state:'waiting_desktop',checkedAt:Date.now()});}
 }
-const server=new Server({name:'feishu-codex-desktop',version:VERSION},{capabilities:{tools:{}}});
+async function settingsReady(extra) {
+  const saved=readJson('dashboard.json',{}),lock=readJson('bridge.lock',{});
+  if(saved.pid && saved.pid===lock.pid && saved.port && alive(saved.pid))return;
+  const started=await managementService(extra);
+  for(let i=0;i<100;i++){const saved=readJson('dashboard.json',{});if(saved.pid===started.pid && saved.port)return;await delay(100);}
+  throw new Error('配置服务正在启动，请稍后重新打开面板');
+}
+const server=new Server({name:'feishu-codex-desktop',version:VERSION},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_connection_settings',updateTool:'update_connection_settings'}}}});
 server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
+server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:SETTINGS_URI,name:'Codex 连接 · 通道配置',mimeType:'text/html;profile=mcp-app'}]}));
+server.setRequestHandler(ReadResourceRequestSchema,async request=>{
+  if(request.params.uri!==SETTINGS_URI)throw new Error('未知面板资源');
+  return {contents:[{uri:SETTINGS_URI,mimeType:'text/html;profile=mcp-app',text:fs.readFileSync(path.join(__dirname,'settings-panel.html'),'utf8'),
+    _meta:{ui:{prefersBorder:false,csp:{connectDomains:[],resourceDomains:[]}},'openai/ui':{availableDisplayModes:['inline','fullscreen'],preferredDisplayMode:'fullscreen'}}}]};
+});
 server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
   try {
     let result;
     switch(request.params.name) {
-      case 'open_settings': {
-        const started=await managementService(extra);
-        let ready=false;for(let i=0;i<100;i++){const saved=readJson('dashboard.json',{});if(saved.pid===started.pid && saved.port){ready=true;break;}await delay(100);}
-        if(!ready)throw new Error('管理页面正在启动，请稍后再试');
-        result={url:dashboardLink(),note:'本机管理页面。可收藏去掉 # 后内容的地址；访问授权保存在本机浏览器中。'};break;
+      case 'open_settings':case 'open_thread_settings':await settingsReady(extra);result={ready:true,note:'在 Codex 面板内管理飞书、微信和专用机器人。'};break;
+      case 'settings_request':result=await settingsRequest(request.params.arguments,{ready:()=>settingsReady(extra)});return {content:[],structuredContent:result};
+      case 'read_connection_settings':result=connectionSettings(autostartStatus().enabled);break;
+      case 'update_connection_settings': {
+        const args=request.params.arguments,set=args?.set;
+        if(!args || Object.keys(args).some(k=>k!=='set') || !set || Object.keys(set).length!==1 || typeof set.autostart!=='boolean')throw new Error('自动连接设置无效');
+        configureAutostart(set.autostart,{bundleDir:__dirname});if(set.autostart)await autoConnect(extra);
+        result={values:{autostart:autostartStatus().enabled}};break;
       }
       case 'responses_compat_status':result={...responsesCompatStatus(),catalog:await providerCatalogStatus()};break;
       case 'configure_responses_compat':result=await configureResponsesCompat(request.params.arguments||{});break;
@@ -113,7 +134,7 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
       }
       default:throw new Error('未知工具');
     }
-    return {content:[{type:'text',text:JSON.stringify(result)}]};
+    return {content:[{type:'text',text:JSON.stringify(result)}],structuredContent:result};
   }catch(error){return {content:[{type:'text',text:error.message}],isError:true};}
 });
 async function main() {

@@ -9,6 +9,7 @@ const folder=fs.mkdtempSync(path.join(os.tmpdir(),'codex-dashboard-test-'));proc
 delete process.env.FEISHU_APP_ID;delete process.env.FEISHU_APP_SECRET;
 const {readJson,writeJson}=await import('../src/storage.mjs');
 const {createDashboard}=await import('../src/dashboard.mjs');
+const {settingsRequest}=await import('../src/settings-panel.mjs');
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 let changes=0,qrCalls=0;
 const desktop={call:async(name)=>name==='list_projects'?{projects:[{projectId:'p',label:'项目一',projectKind:'local'}]}:{threads:[{id:'recent',title:'最近会话',kind:'codex',hostId:'local',projectId:'p'}]}};
@@ -50,4 +51,29 @@ test('QR operations are explicit and file serving is limited to the current vali
   const qrPath=path.join(folder,'wechat-login-00000000-0000-0000-0000-000000000001.png');fs.writeFileSync(qrPath,'fixture-png');
   writeJson('qr-fixture.json',{status:'wait',loginId:'00000000-0000-0000-0000-000000000001',expiresAt:Date.now()+60000,qrPath});assert.equal((await request('/api/wechat/qr')).status,200);
   writeJson('qr-fixture.json',{status:'expired',qrPath});assert.equal((await request('/api/wechat/qr')).status,400);
+});
+
+test('native panel uses the same protected settings API without exposing cookies, tokens or saved secrets',async()=>{
+  const options={ready:async()=>{},read:()=>readJson('dashboard.json',{})};
+  const state=await settingsRequest({route:'state'},options);
+  assert.equal(state.version,'fixture');assert.equal(state.bots[0].secretConfigured,true);
+  assert.doesNotMatch(JSON.stringify(state),/never-echo|another-secret/);assert.ok(!JSON.stringify(state).includes(token));
+  await settingsRequest({route:'bots',method:'PUT',value:{id:'default',enabled:false}},options);
+  assert.equal(readJson('config.json',{}).feishuEnabled,false);assert.equal(readJson('config.json',{}).appSecret,'never-echo-secret');
+  const catalog=await settingsRequest({route:'catalog'},options);assert.equal(catalog.threads.length,76);
+  const id='00000000-0000-0000-0000-000000000001';
+  writeJson('qr-fixture.json',{status:'wait',loginId:id,expiresAt:Date.now()+60000,qrPath:path.join(folder,'wechat-login-'+id+'.png')});
+  const qr=await settingsRequest({route:'wechat/qr'},options);assert.equal(qr.dataUrl,'data:image/png;base64,'+Buffer.from('fixture-png').toString('base64'));
+  for(const input of [{route:'../../config.json'},{route:'https://attacker.example'},{route:'session',method:'POST',value:{}},{route:'send_message_to_thread',method:'POST',value:{}},
+    {route:'state',method:'POST',value:{}},{route:'bots',method:'PUT',value:[]},{route:'state',token:'invented'}]) {
+    await assert.rejects(settingsRequest(input,{ready:()=>assert.fail('Invalid actions must be rejected before contacting the service')}));
+  }
+});
+
+test('native settings transport refuses redirects and sanitizes connection failures',async()=>{
+  let captured;
+  await assert.rejects(settingsRequest({route:'state'},{ready:async()=>{},read:()=>readJson('dashboard.json',{}),fetcher:async(url,options)=>{
+    captured={url,options};throw Error('raw private token '+token);
+  }}),error=>!error.message.includes(token));
+  assert.equal(captured.options.redirect,'error');assert.equal(new URL(captured.url).hostname,'127.0.0.1');
 });

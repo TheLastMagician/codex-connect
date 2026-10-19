@@ -3269,8 +3269,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path11) {
-      let input = path11;
+    function removeDotSegments(path9) {
+      let input = path9;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3679,8 +3679,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path11 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path11 && path11 !== "/" ? path11 : void 0;
+        const path9 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7193,12 +7193,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs7, exportName) {
+    function addFormats(ajv, list, fs8, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs7[f]);
+        ajv.addFormat(f, fs8[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -8804,10 +8804,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version2);
-      const path11 = dijkstra.find_path(graph.map, "start", "end");
+      const path9 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path11.length - 1; i++) {
-        optimizedSegs.push(graph.table[path11[i]].node);
+      for (let i = 1; i < path9.length - 1; i++) {
+        optimizedSegs.push(graph.table[path9[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -11243,7 +11243,7 @@ var require_utils3 = __commonJS({
 // node_modules/qrcode/lib/renderer/png.js
 var require_png2 = __commonJS({
   "node_modules/qrcode/lib/renderer/png.js"(exports2) {
-    var fs7 = require("fs");
+    var fs8 = require("fs");
     var PNG = require_png().PNG;
     var Utils = require_utils3();
     exports2.render = function render(qrData, options) {
@@ -11284,7 +11284,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path9, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -11295,7 +11295,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs7.createWriteStream(path11);
+      const stream = fs8.createWriteStream(path9);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -11357,14 +11357,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path9, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs7 = require("fs");
+      const fs8 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs7.writeFile(path11, utf8, cb);
+      fs8.writeFile(path9, utf8, cb);
     };
   }
 });
@@ -11485,7 +11485,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path11 = "";
+      let path9 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -11496,19 +11496,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path11 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path9 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path11 += svgCmd("h", lineLength);
+            path9 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path11;
+      return path9;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -11516,10 +11516,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path11 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path9 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path11 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path9 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -11533,15 +11533,15 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path9, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs7 = require("fs");
+      const fs8 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs7.writeFile(path11, xmlStr, cb);
+      fs8.writeFile(path9, xmlStr, cb);
     };
   }
 });
@@ -11699,8 +11699,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path11) {
-      return path11.slice((path11.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path9) {
+      return path9.slice((path9.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -11764,17 +11764,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path11, text, opts, cb) {
-      if (typeof path11 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path9, text, opts, cb) {
+      if (typeof path9 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path11);
+      const type = params.opts.type || getTypeFromFilename(path9);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path11);
+      const renderToFile = renderer.renderToFile.bind(null, path9);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -11797,7 +11797,8 @@ var require_lib = __commonJS({
 });
 
 // src/server.mjs
-var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_fs7 = __toESM(require("node:fs"), 1);
 
 // node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -12036,10 +12037,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path11) {
-  if (!path11)
+function getElementAtPath(obj, path9) {
+  if (!path9)
     return obj;
-  return path11.reduce((acc, key) => acc?.[key], obj);
+  return path9.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12379,11 +12380,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path11, issues) {
+function prefixIssues(path9, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path11);
+    iss.path.unshift(path9);
     return iss;
   });
 }
@@ -12841,16 +12842,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path11 = []) => {
+  const processError = (error3, path9 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
       } else {
-        const fullpath = [...path11, ...issue2.path];
+        const fullpath = [...path9, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -22162,7 +22163,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.7.1";
+var VERSION = "0.8.0";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -22800,25 +22801,59 @@ async function configureResponsesCompat({ providerId, enabled }, {
   });
 }
 
-// src/dashboard.mjs
-var import_node_path9 = __toESM(require("node:path"), 1);
-var import_node_url5 = require("node:url");
+// src/settings-panel.mjs
 init_storage();
-
-// src/catalog.mjs
-var import_node_child_process6 = require("node:child_process");
-var import_node_util2 = require("node:util");
-var import_node_path8 = __toESM(require("node:path"), 1);
-var import_node_url4 = require("node:url");
-var execute2 = (0, import_node_util2.promisify)(import_node_child_process6.execFile);
-var directory4 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
-
-// src/dashboard.mjs
-var directory5 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
-function dashboardLink() {
-  const saved = readJson("dashboard.json", {});
-  if (!saved.port || !saved.token) throw new Error("\u7BA1\u7406\u9875\u9762\u5C1A\u672A\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
-  return `http://127.0.0.1:${saved.port}/#${saved.token}`;
+var SETTINGS_URI = "ui://codex-connect/settings.html";
+var SETTINGS_REQUEST_SCHEMA = { type: "object", properties: { route: { type: "string", maxLength: 160 }, method: { type: "string", enum: ["GET", "POST", "PUT", "DELETE"] }, value: { type: "object" } }, required: ["route"], additionalProperties: false };
+var routes = [
+  ["GET", /^(state|catalog|wechat\/qr)$/],
+  ["POST", /^(bots|bots\/(default|[0-9a-f-]{36})\/users|wechat\/(login|verify|disconnect|enabled)|autostart|resume)$/],
+  ["PUT", /^bots$/],
+  ["DELETE", /^bots\/[0-9a-f-]{36}$/]
+];
+async function settingsRequest(input, { ready, read = () => readJson("dashboard.json", {}), fetcher = fetch } = {}) {
+  if (!input || Object.keys(input).some((k) => !["route", "method", "value"].includes(k))) throw new Error("\u914D\u7F6E\u64CD\u4F5C\u65E0\u6548");
+  const { route, method = "GET", value } = input;
+  if (typeof route !== "string" || !routes.some(([verb, pattern]) => verb === method && pattern.test(route)) || method === "GET" && value !== void 0 || method !== "GET" && (!value || typeof value !== "object" || Array.isArray(value))) throw new Error("\u4E0D\u652F\u6301\u8FD9\u4E2A\u914D\u7F6E\u64CD\u4F5C");
+  const body = value === void 0 ? void 0 : JSON.stringify(value);
+  if (body && Buffer.byteLength(body) > 65536) throw new Error("\u914D\u7F6E\u5185\u5BB9\u8FC7\u957F");
+  await ready();
+  const saved = read();
+  if (!Number.isInteger(saved.port) || saved.port < 1 || saved.port > 65535 || !/^[0-9a-f]{64}$/.test(saved.token || "") || !/^[0-9a-f]{64}$/.test(saved.csrf || "")) throw new Error("\u914D\u7F6E\u670D\u52A1\u5C1A\u672A\u5C31\u7EEA\uFF0C\u8BF7\u91CD\u65B0\u6253\u5F00\u9762\u677F");
+  const origin = `http://127.0.0.1:${saved.port}`;
+  let response;
+  try {
+    response = await fetcher(`${origin}/api/${route}`, {
+      method,
+      redirect: "error",
+      signal: AbortSignal.timeout(25e3),
+      headers: { Cookie: `codex_connect_${saved.port}=${saved.token}`, Origin: origin, "Content-Type": "application/json", "X-Codex-Csrf": saved.csrf },
+      ...body ? { body } : {}
+    });
+  } catch {
+    throw new Error("\u672C\u673A\u914D\u7F6E\u670D\u52A1\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u8BF7\u5237\u65B0\u72B6\u6001\uFF1B\u4FDD\u5B58\u7ED3\u679C\u4E0D\u786E\u5B9A\u65F6\u5148\u68C0\u67E5\u914D\u7F6E\uFF0C\u907F\u514D\u91CD\u590D\u64CD\u4F5C");
+  }
+  if (route === "wechat/qr" && response.ok) {
+    if (!response.headers.get("content-type")?.startsWith("image/png")) throw new Error("\u4E8C\u7EF4\u7801\u5185\u5BB9\u65E0\u6548\uFF0C\u8BF7\u5237\u65B0\u4E8C\u7EF4\u7801");
+    const data = Buffer.from(await response.arrayBuffer());
+    if (data.length > 1048576) throw new Error("\u4E8C\u7EF4\u7801\u5185\u5BB9\u8FC7\u5927");
+    return { dataUrl: "data:image/png;base64," + data.toString("base64") };
+  }
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "\u914D\u7F6E\u64CD\u4F5C\u672A\u5B8C\u6210");
+  return result;
+}
+var SETTINGS_READ_OUTPUT = { type: "object", properties: { schema: { type: "object" }, values: { type: "object" }, layout: { type: "array", items: { type: "object" } } }, required: ["schema", "values"] };
+var SETTINGS_UPDATE_INPUT = { type: "object", properties: { set: { type: "object", properties: { autostart: { type: "boolean" } }, required: ["autostart"], additionalProperties: false } }, required: ["set"], additionalProperties: false };
+function connectionSettings(enabled) {
+  return {
+    schema: { type: "object", properties: { autostart: { type: "boolean", title: "\u684C\u9762\u4F1A\u8BDD\u542F\u52A8\u65F6\u81EA\u52A8\u8FDE\u63A5", description: "\u9996\u6B21\u542F\u7528\u540E\uFF0C\u5728 Codex \u8BBE\u7F6E \u2192 \u94A9\u5B50\u4E2D\u5BA1\u9605\u5E76\u4FE1\u4EFB\u3002" } }, required: ["autostart"] },
+    values: { autostart: enabled },
+    layout: [
+      { kind: "group", title: "\u98DE\u4E66\u4E0E\u5FAE\u4FE1", items: [{ kind: "tool", tool: "open_settings", description: "\u7BA1\u7406\u673A\u5668\u4EBA\u3001\u7ED1\u5B9A\u4F1A\u8BDD\u3001\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u53CA\u6279\u51C6\u8D26\u53F7\u3002" }] },
+      { kind: "group", title: "\u81EA\u52A8\u8FDE\u63A5", items: [{ kind: "property", property: "autostart" }] }
+    ]
+  };
 }
 
 // src/server.mjs
@@ -22827,7 +22862,11 @@ function context(extra) {
   return desktopContext(extra);
 }
 var tools = [
-  { name: "open_settings", description: "\u6253\u5F00 Codex \u8FDE\u63A5\u7684\u672C\u673A\u7BA1\u7406\u9875\u9762\u3002\u914D\u7F6E\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u548C\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\uFF1B\u9875\u9762\u53EA\u5728\u672C\u673A\u53EF\u8BBF\u95EE\u3002\u8FD4\u56DE\u7684\u8BBF\u95EE\u94FE\u63A5\u89C6\u4E3A\u79C1\u5BC6\u51ED\u636E\uFF0C\u4EC5\u5C55\u793A\u7ED9\u672C\u673A\u7528\u6237\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false } },
+  { name: "open_settings", title: "Codex \u8FDE\u63A5", description: "\u5728 Codex \u5185\u6253\u5F00\u901A\u9053\u914D\u7F6E\u9762\u677F\u3002\u7BA1\u7406\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u3001\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\u4E0E\u8D26\u53F7\u6388\u6743\uFF0C\u65E0\u9700\u6D4F\u89C8\u5668\u7F51\u5740\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "global" }] } } },
+  { name: "open_thread_settings", title: "\u901A\u9053\u914D\u7F6E", description: "\u5728\u5F53\u524D\u804A\u5929\u65C1\u6253\u5F00\u98DE\u4E66\u3001\u5FAE\u4FE1\u4E0E\u673A\u5668\u4EBA\u914D\u7F6E\u9762\u677F\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "thread" }] } } },
+  { name: "settings_request", description: "\u901A\u9053\u914D\u7F6E\u9762\u677F\u4F7F\u7528\u7684\u672C\u673A\u914D\u7F6E\u64CD\u4F5C\uFF0C\u4E0D\u521B\u5EFA\u4F1A\u8BDD\u3001\u4E0D\u53D1\u9001\u4EFB\u52A1\u3002", inputSchema: SETTINGS_REQUEST_SCHEMA, annotations: { readOnlyHint: false }, _meta: { ui: { visibility: ["app"] } } },
+  { name: "read_connection_settings", description: "\u8BFB\u53D6\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u901A\u9053\u914D\u7F6E\u5165\u53E3\u4E0E\u81EA\u52A8\u8FDE\u63A5\u8BBE\u7F6E\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, outputSchema: SETTINGS_READ_OUTPUT, annotations: { readOnlyHint: true } },
+  { name: "update_connection_settings", description: "\u4FDD\u5B58\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u81EA\u52A8\u8FDE\u63A5\u8BBE\u7F6E\u3002", inputSchema: SETTINGS_UPDATE_INPUT, outputSchema: { type: "object", properties: { values: { type: "object" } }, required: ["values"] }, annotations: { readOnlyHint: false } },
   { name: "responses_compat_status", description: "\u67E5\u770B\u672C\u673A\u7B2C\u4E09\u65B9 Responses \u517C\u5BB9\u5C42\u4E0E\u4F9B\u5E94\u5546\u5730\u5740\uFF0C\u4E0D\u8BFB\u53D6\u6216\u8FD4\u56DE API Key\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true } },
   { name: "configure_responses_compat", description: "\u4EC5\u7528\u4E8E\u5173\u95ED 0.4.1 \u5DF2\u542F\u7528\u7684\u5168\u5C40 Responses \u517C\u5BB9\uFF0C\u6062\u590D\u4F9B\u5E94\u5546\u539F\u5730\u5740\u3002enabled \u53EA\u80FD\u4E3A false\uFF1B\u6062\u590D\u540E\u9700\u91CD\u542F\u684C\u9762\u3002\u4E0D\u80FD\u542F\u7528\u5168\u5C40\u4EE3\u7406\u6216\u58F0\u79F0\u4EC5\u517C\u5BB9\u65B0\u5EFA\u3002", inputSchema: { type: "object", properties: { providerId: { type: "string" }, enabled: { type: "boolean", enum: [false] } }, required: ["providerId", "enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
   { name: "configure_autostart", description: "\u7528\u6237\u8981\u6C42\u968F Codex \u81EA\u52A8\u8FDE\u63A5\u65F6\u5F00\u542F\uFF1B\u5728\u672C\u673A\u6CE8\u518C\u542F\u52A8/\u6062\u590D\u4F1A\u8BDD\u94A9\u5B50\uFF0C\u9700\u8981\u7528\u6237\u5728\u8BBE\u7F6E\u7684\u94A9\u5B50\u9875\u4FE1\u4EFB\u4E00\u6B21\u3002\u5173\u95ED\u4EC5\u53D6\u6D88\u81EA\u542F\u52A8\uFF0C\u4E0D\u505C\u6B62\u5F53\u524D\u6865\u63A5\u3002", inputSchema: { type: "object", properties: { enabled: { type: "boolean" } }, required: ["enabled"], additionalProperties: false }, annotations: { readOnlyHint: false } },
@@ -22843,7 +22882,7 @@ var tools = [
   { name: "stop_bridge", description: "\u505C\u6B62\u6240\u6709\u804A\u5929\u901A\u9053\u7684\u6865\u63A5\u670D\u52A1\u3002\u4E0D\u4F1A\u505C\u6B62\u4EFB\u4F55 Codex \u4F1A\u8BDD\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false } }
 ];
 async function startBridge(extra) {
-  return ensureBridge(context(extra), { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs") });
+  return ensureBridge(context(extra), { entryPath: import_node_path8.default.join(__dirname, "bridge.cjs") });
 }
 async function managementService(extra) {
   syncAutostartRuntime(__dirname);
@@ -22853,36 +22892,61 @@ async function managementService(extra) {
   } catch {
     current = {};
   }
-  return ensureBridge(current, { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), management: true });
+  return ensureBridge(current, { entryPath: import_node_path8.default.join(__dirname, "bridge.cjs"), management: true });
 }
 async function autoConnect(extra) {
   if (readJson("autostart.json", {}).enabled !== true) return;
   try {
-    const result = await ensureBridge(context(extra), { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), automatic: true });
+    const result = await ensureBridge(context(extra), { entryPath: import_node_path8.default.join(__dirname, "bridge.cjs"), automatic: true });
     writeJson("autostart-status.json", { state: result.skipped || "started", checkedAt: Date.now() });
   } catch {
     writeJson("autostart-status.json", { state: "waiting_desktop", checkedAt: Date.now() });
   }
 }
-var server = new Server({ name: "feishu-codex-desktop", version: VERSION }, { capabilities: { tools: {} } });
+async function settingsReady(extra) {
+  const saved = readJson("dashboard.json", {}), lock2 = readJson("bridge.lock", {});
+  if (saved.pid && saved.pid === lock2.pid && saved.port && alive(saved.pid)) return;
+  const started = await managementService(extra);
+  for (let i = 0; i < 100; i++) {
+    const saved2 = readJson("dashboard.json", {});
+    if (saved2.pid === started.pid && saved2.port) return;
+    await (0, import_promises4.setTimeout)(100);
+  }
+  throw new Error("\u914D\u7F6E\u670D\u52A1\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u65B0\u6253\u5F00\u9762\u677F");
+}
+var server = new Server({ name: "feishu-codex-desktop", version: VERSION }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_connection_settings", updateTool: "update_connection_settings" } } } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: SETTINGS_URI, name: "Codex \u8FDE\u63A5 \xB7 \u901A\u9053\u914D\u7F6E", mimeType: "text/html;profile=mcp-app" }] }));
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  if (request.params.uri !== SETTINGS_URI) throw new Error("\u672A\u77E5\u9762\u677F\u8D44\u6E90");
+  return { contents: [{
+    uri: SETTINGS_URI,
+    mimeType: "text/html;profile=mcp-app",
+    text: import_node_fs7.default.readFileSync(import_node_path8.default.join(__dirname, "settings-panel.html"), "utf8"),
+    _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } }, "openai/ui": { availableDisplayModes: ["inline", "fullscreen"], preferredDisplayMode: "fullscreen" } }
+  }] };
+});
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   try {
     let result;
     switch (request.params.name) {
-      case "open_settings": {
-        const started = await managementService(extra);
-        let ready = false;
-        for (let i = 0; i < 100; i++) {
-          const saved = readJson("dashboard.json", {});
-          if (saved.pid === started.pid && saved.port) {
-            ready = true;
-            break;
-          }
-          await (0, import_promises4.setTimeout)(100);
-        }
-        if (!ready) throw new Error("\u7BA1\u7406\u9875\u9762\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u518D\u8BD5");
-        result = { url: dashboardLink(), note: "\u672C\u673A\u7BA1\u7406\u9875\u9762\u3002\u53EF\u6536\u85CF\u53BB\u6389 # \u540E\u5185\u5BB9\u7684\u5730\u5740\uFF1B\u8BBF\u95EE\u6388\u6743\u4FDD\u5B58\u5728\u672C\u673A\u6D4F\u89C8\u5668\u4E2D\u3002" };
+      case "open_settings":
+      case "open_thread_settings":
+        await settingsReady(extra);
+        result = { ready: true, note: "\u5728 Codex \u9762\u677F\u5185\u7BA1\u7406\u98DE\u4E66\u3001\u5FAE\u4FE1\u548C\u4E13\u7528\u673A\u5668\u4EBA\u3002" };
+        break;
+      case "settings_request":
+        result = await settingsRequest(request.params.arguments, { ready: () => settingsReady(extra) });
+        return { content: [], structuredContent: result };
+      case "read_connection_settings":
+        result = connectionSettings(autostartStatus().enabled);
+        break;
+      case "update_connection_settings": {
+        const args = request.params.arguments, set = args?.set;
+        if (!args || Object.keys(args).some((k) => k !== "set") || !set || Object.keys(set).length !== 1 || typeof set.autostart !== "boolean") throw new Error("\u81EA\u52A8\u8FDE\u63A5\u8BBE\u7F6E\u65E0\u6548");
+        configureAutostart(set.autostart, { bundleDir: __dirname });
+        if (set.autostart) await autoConnect(extra);
+        result = { values: { autostart: autostartStatus().enabled } };
         break;
       }
       case "responses_compat_status":
@@ -22974,7 +23038,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       default:
         throw new Error("\u672A\u77E5\u5DE5\u5177");
     }
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    return { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result };
   } catch (error2) {
     return { content: [{ type: "text", text: error2.message }], isError: true };
   }

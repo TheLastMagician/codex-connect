@@ -5,12 +5,12 @@
   <aside><a class="brand" href="#"><img src="/icon.png" alt=""><span>Codex 连接<small>本机控制台</small></span></a><nav aria-label="导航"><a href="#feishu" class="active">◈　飞书机器人</a><a href="#wechat">◎　微信 ClawBot</a><a href="#runtime">▤　运行设置</a></nav><div class="local"><span class="dot"></span>仅在这台电脑上运行<small>配置保存在本机</small></div></aside>
   <main>
     <header><div><p class="eyebrow">CHANNELS</p><h1>连接你的工作会话</h1><p class="muted">从手机继续 Codex，把不同的机器人交给不同的工作。</p></div><div class="desktop-status" id="desktop-status">正在读取状态…</div></header>
-    <div id="locked" class="notice hidden"><strong>需要本机访问授权</strong><p>请在 Codex 中让插件“打开配置页面”，使用返回的本机链接进入。</p></div>
+    <div id="locked" class="notice hidden"><strong>配置连接暂不可用</strong><p>请从 Codex 左上角菜单重新打开“Codex 连接”。</p></div>
     <div id="paused" class="notice hidden"><strong>聊天通道已暂停</strong><p>恢复后会重新连接已启用的机器人。</p><button id="resume">恢复连接</button></div>
     <div id="content" class="hidden">
       <section id="feishu"><div class="section-head"><div><h2>飞书机器人 <span id="bot-count" class="count"></span></h2><p class="muted">完整管理，或只与一个固定会话聊天。</p></div><button class="primary" id="add-bot">＋ 添加机器人</button></div><div id="bots" class="bot-grid"></div></section>
       <section id="wechat"><div class="section-head"><div><h2>微信 ClawBot</h2><p class="muted">扫码连接你的微信，无需填写应用凭据。</p></div></div><div class="panel wechat-panel"><div class="channel-icon wechat">微</div><div class="grow"><h3>个人微信 <span id="wechat-state" class="badge"></span></h3><p class="muted" id="wechat-detail"></p></div><div class="button-row" id="wechat-actions"></div></div></section>
-      <section id="runtime"><div class="section-head"><div><h2>运行设置</h2><p class="muted">页面随插件启动，可以收藏当前地址。</p></div></div><div class="panel runtime"><div><h3>桌面启动钩子</h3><p class="muted">插件加载时连接已启用的通道；钩子还能在启动或恢复桌面会话时触发连接。</p><p class="small muted" id="hook-note"></p></div><label class="switch"><input type="checkbox" id="autostart"><span>启用钩子</span></label></div></section>
+      <section id="runtime"><div class="section-head"><div><h2>运行设置</h2><p class="muted">从 Codex 菜单随时打开，无需记住网址。</p></div></div><div class="panel runtime"><div><h3>桌面启动钩子</h3><p class="muted">插件加载时连接已启用的通道；钩子还能在启动或恢复桌面会话时触发连接。</p><p class="small muted" id="hook-note"></p></div><label class="switch"><input type="checkbox" id="autostart"><span>启用钩子</span></label></div></section>
       <footer><span>Codex 连接 <span id="version"></span></span><span>管理页面不调用模型 · 凭据仅保存在本机</span></footer>
     </div>
   </main>

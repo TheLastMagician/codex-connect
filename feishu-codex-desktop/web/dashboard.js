@@ -3,6 +3,7 @@ const element=(tag,text,cls)=>{const el=document.createElement(tag);if(text!==un
 let csrf='',state,editing=null,catalogData=null,bound=null,busy=false,qrBusy=false,lastQr='',toastTimer;
 const labels={connected:'已连接',connecting:'连接中',reconnecting:'重连中',failed:'连接失败',disabled:'已停用',not_configured:'待配置',waiting_login:'等待扫码',login_expired:'登录过期',login_required:'请重新扫码',paused:'已暂停'};
 async function api(route,method='GET',value) {
+  if(globalThis.codexConnectPanel)return globalThis.codexConnectPanel.request(route,method,value);
   const response=await fetch('/api/'+route,{method,headers:{...(method!=='GET'?{'Content-Type':'application/json','X-Codex-Csrf':csrf}:{})},...(value!==undefined?{body:JSON.stringify(value)}:{})});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'操作未完成');return result;
 }
@@ -76,7 +77,9 @@ async function newQr(refresh){if(qrBusy)return;qrBusy=true;$('refresh-qr').disab
 async function refreshStateQr(){await refresh();renderQr();}
 function renderQr(){const wx=state.wechat,labels={wait:'等待扫码',scaned:'已扫码，请在手机确认',need_verifycode:'请填写手机显示的配对验证码',confirmed:'连接成功',expired:'二维码已过期，请刷新',cancelled:'已取消登录',bound_elsewhere:'这个账号已在其他地方绑定',failed:'登录失败，请重新扫码'};
   $('qr-status').textContent=labels[wx.status]||'请生成登录二维码';$('verify-form').classList.toggle('hidden',!wx.needsCode);
-  if(wx.hasQr){if(lastQr!==wx.loginId){lastQr=wx.loginId;const img=element('img');img.alt='微信登录二维码';img.src='/api/wechat/qr?login='+encodeURIComponent(wx.loginId);$('qr-image').replaceChildren(img);}}
+  if(wx.hasQr){if(lastQr!==wx.loginId){lastQr=wx.loginId;const img=element('img');img.alt='微信登录二维码';
+    if(globalThis.codexConnectPanel){const id=wx.loginId;run(async()=>{try{const qr=await api('wechat/qr');if(lastQr===id && state.wechat.hasQr){img.src=qr.dataUrl;$('qr-image').replaceChildren(img);}}catch(error){if(lastQr===id)lastQr='';throw error;}});}
+    else{img.src='/api/wechat/qr?login='+encodeURIComponent(wx.loginId);$('qr-image').replaceChildren(img);}}}
   else{$('qr-image').replaceChildren();lastQr='';}
 }
 $('add-bot').onclick=()=>run(()=>openBot());$('bot-form').onsubmit=saveBot;$('refresh-catalog').onclick=()=>run(loadCatalog);
@@ -87,5 +90,5 @@ document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>$(b.dataset.c
 $('refresh-qr').onclick=()=>run(()=>newQr(true));$('verify-form').onsubmit=event=>{event.preventDefault();run(async()=>{await api('wechat/verify','POST',{code:$('verify-code').value});$('verify-code').value='';toast('验证码已提交');await refresh();});};
 $('autostart').onchange=()=>run(async()=>{try{await api('autostart','POST',{enabled:$('autostart').checked});await refresh();toast('自动连接设置已保存');}catch(error){$('autostart').checked=!$('autostart').checked;throw error;}});
 $('resume').onclick=()=>run(async()=>{await api('resume','POST',{});await refresh();});
-async function boot(){try{const token=location.hash.slice(1);if(token && /^[0-9a-f]{64}$/.test(token)){csrf=(await api('session','POST',{token})).csrf;history.replaceState(null,'',location.pathname);}else csrf=(await api('session')).csrf;await refresh();setInterval(()=>{if(!document.hidden)refresh().catch(error=>toast(error.message,true));},4000);}catch(error){$('locked').classList.remove('hidden');$('desktop-status').textContent='等待访问授权';toast(error.message,true);}}
+async function boot(){try{if(globalThis.codexConnectPanel)await globalThis.codexConnectPanel.ready;else{const token=location.hash.slice(1);if(token && /^[0-9a-f]{64}$/.test(token)){csrf=(await api('session','POST',{token})).csrf;history.replaceState(null,'',location.pathname);}else csrf=(await api('session')).csrf;}await refresh();setInterval(()=>{if(!document.hidden)refresh().catch(error=>toast(error.message,true));},4000);}catch(error){$('locked').classList.remove('hidden');$('desktop-status').textContent='连接暂不可用';toast(error.message,true);}}
 boot();
