@@ -22163,7 +22163,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.8.1";
+var VERSION = "0.8.2";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -22861,9 +22861,10 @@ var import_promises4 = require("node:timers/promises");
 function context(extra) {
   return desktopContext(extra);
 }
+var icons = [{ src: "data:image/svg+xml;base64," + import_node_fs7.default.readFileSync(import_node_path8.default.join(__dirname, "entrypoint-icon.svg")).toString("base64"), mimeType: "image/svg+xml", sizes: ["64x64"] }];
 var tools = [
-  { name: "open_settings", title: "Codex \u8FDE\u63A5", description: "\u5728 Codex \u5185\u6253\u5F00\u901A\u9053\u914D\u7F6E\u9762\u677F\u3002\u7BA1\u7406\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u3001\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\u4E0E\u8D26\u53F7\u6388\u6743\uFF0C\u65E0\u9700\u6D4F\u89C8\u5668\u7F51\u5740\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "global" }] } } },
-  { name: "open_thread_settings", title: "\u901A\u9053\u914D\u7F6E", description: "\u5728\u5F53\u524D\u804A\u5929\u65C1\u6253\u5F00\u98DE\u4E66\u3001\u5FAE\u4FE1\u4E0E\u673A\u5668\u4EBA\u914D\u7F6E\u9762\u677F\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "thread" }] } } },
+  { name: "open_settings", title: "Codex \u8FDE\u63A5", icons, description: "\u5728 Codex \u5185\u6253\u5F00\u901A\u9053\u914D\u7F6E\u9762\u677F\u3002\u7BA1\u7406\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u3001\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\u4E0E\u8D26\u53F7\u6388\u6743\uFF0C\u65E0\u9700\u6D4F\u89C8\u5668\u7F51\u5740\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "global" }] } } },
+  { name: "open_thread_settings", title: "\u901A\u9053\u914D\u7F6E", icons, description: "\u5728\u5F53\u524D\u804A\u5929\u65C1\u6253\u5F00\u98DE\u4E66\u3001\u5FAE\u4FE1\u4E0E\u673A\u5668\u4EBA\u914D\u7F6E\u9762\u677F\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "thread" }] } } },
   { name: "settings_request", description: "\u901A\u9053\u914D\u7F6E\u9762\u677F\u4F7F\u7528\u7684\u672C\u673A\u914D\u7F6E\u64CD\u4F5C\uFF0C\u4E0D\u521B\u5EFA\u4F1A\u8BDD\u3001\u4E0D\u53D1\u9001\u4EFB\u52A1\u3002", inputSchema: SETTINGS_REQUEST_SCHEMA, annotations: { readOnlyHint: false }, _meta: { ui: { visibility: ["app"] } } },
   { name: "read_connection_settings", description: "\u8BFB\u53D6\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u901A\u9053\u914D\u7F6E\u5165\u53E3\u4E0E\u81EA\u52A8\u8FDE\u63A5\u8BBE\u7F6E\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, outputSchema: SETTINGS_READ_OUTPUT, annotations: { readOnlyHint: true } },
   { name: "update_connection_settings", description: "\u4FDD\u5B58\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u81EA\u52A8\u8FDE\u63A5\u8BBE\u7F6E\u3002", inputSchema: SETTINGS_UPDATE_INPUT, outputSchema: { type: "object", properties: { values: { type: "object" } }, required: ["values"] }, annotations: { readOnlyHint: false } },
@@ -22914,7 +22915,7 @@ async function settingsReady(extra) {
   }
   throw new Error("\u914D\u7F6E\u670D\u52A1\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u65B0\u6253\u5F00\u9762\u677F");
 }
-var server = new Server({ name: "feishu-codex-desktop", version: VERSION }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_connection_settings", updateTool: "update_connection_settings" } } } });
+var server = new Server({ name: "feishu-codex-desktop", version: VERSION, icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_connection_settings", updateTool: "update_connection_settings" } } } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: SETTINGS_URI, name: "Codex \u8FDE\u63A5 \xB7 \u901A\u9053\u914D\u7F6E", mimeType: "text/html;profile=mcp-app" }] }));
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {

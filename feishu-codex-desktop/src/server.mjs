@@ -19,9 +19,10 @@ import {setTimeout as delay} from 'node:timers/promises';
 function context(extra) {
   return desktopContext(extra);
 }
+const icons=[{src:'data:image/svg+xml;base64,'+fs.readFileSync(path.join(__dirname,'entrypoint-icon.svg')).toString('base64'),mimeType:'image/svg+xml',sizes:['64x64']}];
 const tools=[
-  {name:'open_settings',title:'Codex 连接',description:'在 Codex 内打开通道配置面板。管理飞书、微信、多个机器人、固定会话绑定与账号授权，无需浏览器网址。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'global'}]}}},
-  {name:'open_thread_settings',title:'通道配置',description:'在当前聊天旁打开飞书、微信与机器人配置面板。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'thread'}]}}},
+  {name:'open_settings',title:'Codex 连接',icons,description:'在 Codex 内打开通道配置面板。管理飞书、微信、多个机器人、固定会话绑定与账号授权，无需浏览器网址。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'global'}]}}},
+  {name:'open_thread_settings',title:'通道配置',icons,description:'在当前聊天旁打开飞书、微信与机器人配置面板。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'thread'}]}}},
   {name:'settings_request',description:'通道配置面板使用的本机配置操作，不创建会话、不发送任务。',inputSchema:SETTINGS_REQUEST_SCHEMA,annotations:{readOnlyHint:false},_meta:{ui:{visibility:['app']}}},
   {name:'read_connection_settings',description:'读取插件详情页的通道配置入口与自动连接设置。',inputSchema:{type:'object',properties:{},additionalProperties:false},outputSchema:SETTINGS_READ_OUTPUT,annotations:{readOnlyHint:true}},
   {name:'update_connection_settings',description:'保存插件详情页的自动连接设置。',inputSchema:SETTINGS_UPDATE_INPUT,outputSchema:{type:'object',properties:{values:{type:'object'}},required:['values']},annotations:{readOnlyHint:false}},
@@ -61,7 +62,7 @@ async function settingsReady(extra) {
   for(let i=0;i<100;i++){const saved=readJson('dashboard.json',{});if(saved.pid===started.pid && saved.port)return;await delay(100);}
   throw new Error('配置服务正在启动，请稍后重新打开面板');
 }
-const server=new Server({name:'feishu-codex-desktop',version:VERSION},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_connection_settings',updateTool:'update_connection_settings'}}}});
+const server=new Server({name:'feishu-codex-desktop',version:VERSION,icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_connection_settings',updateTool:'update_connection_settings'}}}});
 server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
 server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:SETTINGS_URI,name:'Codex 连接 · 通道配置',mimeType:'text/html;profile=mcp-app'}]}));
 server.setRequestHandler(ReadResourceRequestSchema,async request=>{
