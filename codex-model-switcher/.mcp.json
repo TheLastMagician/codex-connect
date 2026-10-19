@@ -1,0 +1,3 @@
+{
+  "mcpServers": {"codex-model-switcher": {"command": "node", "args": ["${PLUGIN_ROOT}/dist/server.cjs"], "cwd": "${PLUGIN_ROOT}", "env_vars": ["CODEX_THREAD_ID", "USERPROFILE", "LOCALAPPDATA", "PATH"], "startup_timeout_sec": 15, "tool_timeout_sec": 120}}
+}

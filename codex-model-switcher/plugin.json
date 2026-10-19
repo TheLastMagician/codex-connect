@@ -1,0 +1,34 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "codex-model-switcher",
+  "version": "0.1.7",
+  "description": "在本机面板选择供应商和模型，新建并打开真实 Codex 桌面会话。",
+  "author": {
+    "name": "Local Workspace"
+  },
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "mcpServers": "./.mcp.json",
+      "skills": "./skills/",
+      "interface": {
+        "displayName": "供应商与模型",
+        "shortDescription": "选择供应商和模型，新建 Codex 会话",
+        "longDescription": "通过本机 MCP App 面板选择已配置的供应商、模型和工作目录，新建真实 Codex 会话并打开。密钥只在本机后端使用。原生模型菜单首次接入可能需要重新启动桌面一次；不修改默认账号、供应商或模型。跨供应商切换当前会话尚未实现。",
+        "developerName": "Local Workspace",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive",
+          "Read",
+          "Write"
+        ],
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg",
+        "defaultPrompt": "打开供应商与模型面板，选择供应商和模型新建会话"
+      }
+    }
+  },
+  "repository": "https://github.com/TheLastMagician/codex-connect",
+  "homepage": "https://github.com/TheLastMagician/codex-connect/tree/main/codex-model-switcher"
+}

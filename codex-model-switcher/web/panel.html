@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>供应商与模型</title><style>/* STYLES */</style></head>
+<body><main>
+  <header><div><h1>供应商与模型</h1><p class="subtitle">选择模型与项目，开始新会话。</p></div><button id="refresh" class="quiet" type="button">刷新</button></header>
+  <section aria-labelledby="create-heading">
+    <div class="section-heading"><h2 id="create-heading">模型</h2></div>
+    <form id="create-form">
+      <div class="field-row"><label for="provider">供应商</label><div class="field-control">
+        <select id="provider" required disabled><option value="">正在读取…</option></select><p id="endpoint" class="hint"></p>
+      </div></div>
+      <div class="field-row"><label for="model">模型</label><div class="field-control">
+        <div class="inline-controls"><select id="model" required disabled><option value="">正在读取…</option></select><button class="text" id="reload-models" type="button">刷新</button></div>
+        <label class="check"><input type="checkbox" id="manual">手动填写模型 ID</label>
+        <input id="manual-model" aria-label="模型 ID" placeholder="完整模型 ID" hidden>
+      </div></div>
+      <div class="field-row"><label for="effort">思考强度</label><div class="field-control">
+        <select id="effort"><option value="xhigh">xhigh</option></select><p class="hint" id="effort-note">按所选值请求供应商。</p>
+      </div></div>
+      <div class="section-heading group-gap"><h2>新会话</h2></div>
+      <div class="field-row"><label for="project">所属项目</label><div class="field-control">
+        <select id="project" required disabled><option value="">正在读取 Codex 项目…</option></select><p id="project-source" class="hint"></p>
+      </div></div>
+      <div class="field-row"><label for="cwd">工作目录</label><div class="field-control">
+        <select id="cwd" required disabled><option value="">请先选择项目</option></select>
+      </div></div>
+      <div class="field-row"><label for="title">会话标题</label><div class="field-control"><input id="title" required maxlength="100" placeholder="新会话"></div></div>
+      <div class="actions"><div class="selection" id="selection">正在读取配置…</div><button id="create" class="primary" type="submit" disabled>新建会话</button></div>
+      <p class="hint footnote">新会话会保存到所选项目。</p>
+    </form>
+  </section>
+  <section class="result" id="result" hidden aria-live="polite"><p class="section-caption">最近创建</p><h2 id="result-title"></h2><dl id="result-data"></dl><p id="result-note" class="hint"></p><button id="complete" type="button">打开并确认模型</button></section>
+  <details class="advanced"><summary>模型来源与高级设置</summary><div class="advanced-content">
+    <p id="model-source" class="hint"></p>
+    <h2>原生模型菜单</h2><p class="hint">如果会话输入框仍显示 GPT，可尝试将所选模型加入原生菜单。插件会先检查版本兼容性，再显示处理结果。</p>
+    <button id="native" type="button" disabled>加入原生模型菜单</button><p id="native-note" class="hint" aria-live="polite"></p>
+  </div></details>
+  <div id="status" role="status" aria-live="polite"></div>
+</main><script>/* SCRIPT */</script></body></html>

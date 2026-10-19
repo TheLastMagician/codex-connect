@@ -1,0 +1,72 @@
+# 供应商与模型（本机插件原型）
+
+在 Codex 插件原生设置或 MCP App 面板中选择供应商、模型、思考强度和已有项目，创建并打开真实桌面会话。也提供可在 Codex 浏览器面板中使用的本机页面。当前仅验证 Windows。
+
+源码：[TheLastMagician/codex-connect](https://github.com/TheLastMagician/codex-connect/tree/main/codex-model-switcher)。这是需要本机执行的插件；保存到账号后，在另一台电脑仍需安装 Node.js 20+、运行并登录 Codex，并配置该电脑自己的供应商凭据和项目。
+
+## 已实现
+
+- 新建面板默认选择 `custom / qwen3.8-27b / xhigh`；供应商未配置时才使用 Codex 原默认值。它是插件新建页的默认值，不修改 Codex 的全局配置。页面使用与 Codex 接近的中性配色、单列表单和宿主主题变量，高级选项默认折叠。
+- 侧栏与会话入口使用独立的双向切换箭头图标，提供浅色、深色和通用版本。图标通过 MCP 工具 `icons` 与服务器图标声明，以便原生入口识别。
+- 读取本机 `config.toml` 中的供应商定义，明确显示供应商 ID 和地址。
+- OpenAI 模型来自 Codex `model/list`；自定义供应商来自它自己的 `/models`，也可以手动填写模型 ID。
+- 思考强度可选择 `xhigh`，第三方默认使用 `xhigh`，并记住所选供应商的强度。它是请求参数，不保证供应商采用特定推理预算。目录中也可能包含非聊天模型，`/models` 不证明模型兼容 Codex 或支持某种强度。
+- 项目来自本机 app-server `project/list`，不扫描磁盘或使用手填目录。通过 `thread/start.projectId` 保存归属，工作目录从项目根目录中选择；创建前校验项目仍存在，创建后读回项目 ID 和目录。
+- 通过与桌面配套的官方 app-server 创建会话并保存供应商，打开桌面后设置模型和思考强度，再读回核对。
+- 桌面刚打开外部创建的会话时，供应商可能暂为空。插件先独立核对持久化会话的供应商，等待桌面恢复，再应用模型设置并等待真实设置通知；不会把前端临时的 GPT 默认值判成最终结果。明确的其他供应商仍会拒绝覆盖，确认超时可恢复原会话，不重复创建。
+- 不发送首条消息；不更换账号，不修改默认供应商、默认模型和密钥。
+- 同一个新建操作 ID 不会重复创建。结果未知时保留记录，用户可以检查会话列表。
+- 提供独立的“将所选模型加入原生菜单”按钮：备份配置后添加合并的模型目录，保留原有 GPT 条目。
+
+## 当前验证边界
+
+已验证 `custom / qwen3.8-27b / xhigh` 的桌面设置。0.1.5 修复新会话临时供应商为空时过早失败，以及设置通知晚于请求应答到达的问题。原生输入框可以用“自定义”表示目录之外的模型，不要求显示完整的千问模型名；`settings_verified` **只表示实际供应商、模型和强度读回一致，不表示原生文字或实际推理请求已验证**。接入完整原生模型目录仍是独立功能。
+
+尚未验证千问通过 Codex 的完整工具调用、长会话、多模态或实际发送流程。第三方目录元数据使用保守的 32768 上下文上限和普通工具模式；强度是允许用户明确请求的覆盖值，不能当作供应商能力声明。不要从模型名推断供应商，供应商始终由会话保存的 `modelProvider` 决定。
+
+当前机器的 npm CLI 为 0.134，桌面内核为 0.162；旧 CLI 无法读取桌面的新目录枚举。插件先检查目录与现有 npm CLI 的兼容性，检查失败只生成文件，不修改共享配置。实际验证中已撤回全局目录引用，保留旧 CLI 可用。原生菜单同步仍未完成。
+
+不支持在原会话中无缝更换供应商。当前优先提供新建会话，不调整原有聊天。
+
+## 使用
+
+安装后，在插件中选择“供应商与模型”，或在聊天中说“打开供应商与模型面板”。支持 MCP Extensions 的宿主可显示侧边栏/会话页入口；入口能否即时出现取决于宿主刷新。
+
+也声明了官方 `openai/settings` 结构化设置接口：支持它的桌面会在插件详情页直接用原生控件显示供应商、模型 ID、思考强度、项目下拉框、标题，以及“按以上配置新建会话”按钮。项目选项以名称和完整路径区分，底层保存真实项目 ID。这个原生设置页不依赖外部浏览器。实际宿主是否已经渲染这些控件需要在插件重新加载后确认。
+
+1. 选择供应商，例如 `custom`，再选择 `qwen3.8-27b`。
+2. 首次使用该模型时点击“将所选模型加入原生菜单”，按结果提示重新加载桌面。
+3. 选择思考强度（例如 `xhigh`）、Codex 已有项目和会话标题，点击“创建并在 Codex 打开”。多根项目还可以选择根目录；不支持从此处创建项目或选择远程主机项目。
+4. 核对桌面原生输入框显示的模型，再发送自己的首条消息。
+
+插件按调用时的配置读取供应商和密钥。支持环境变量和直接 bearer token；目录发现暂不执行凭据助手，也不使用 ChatGPT 登录凭据去请求第三方的 `/models`。密钥不发送到 UI、日志或插件包。
+
+## 开发
+
+```powershell
+npm ci
+npm test
+npm run build
+```
+
+私有账号插件上传包使用 `python scripts/package.py` 生成（Python 3.11+）。打包仅包含插件文件、源码和运行文件，不包含 `node_modules`、密钥或本机运行状态。通过仓库安装时，在 Codex 添加 `https://github.com/TheLastMagician/codex-connect.git` marketplace，再选择 `codex-model-switcher`。
+
+`dist` 已包含运行文件，安装插件不需要下载 npm 依赖。运行依赖为 Node.js 20+、已登录并运行的 Codex 桌面版。`CODEX_SWITCHER_CODEX_PATH` 可指定与桌面匹配的 Codex 可执行文件。
+
+本机页面备用入口：
+
+```powershell
+node dist/server.cjs --serve
+```
+
+启动信息在 `%USERPROFILE%\.codex\model-switcher\launcher.json`，其中 URL 带本机访问授权，不应分享。页面 API 只绑定 `127.0.0.1`，要求 bearer token 并校验 Origin 和 Host。
+
+模型目录路径与配置备份也保存在 `.codex/model-switcher/`。如需撤销原生菜单接入，将配置中的 `model_catalog_json` 恢复为备份中的原值（原来不存在则删除该项）。不要用旧备份覆盖后来新增的其他配置。
+
+## 实现来源
+
+- [Codex App Server](https://learn.chatgpt.com/docs/app-server)
+- [MCP Extensions](https://developers.openai.com/plugins/build/extensions)
+- [自定义模型目录](https://learn.chatgpt.com/docs/enterprise/roll-out-a-gateway#use-a-model-catalog-for-custom-names)
+
+桌面模型读写使用当前版本已发布的本机协调接口，属于版本相关适配；桌面升级后需要重新验证。插件没有修改桌面安装文件。
