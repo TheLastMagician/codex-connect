@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codex 连接 · 通道管理</title><link rel="icon" href="/icon.png"><link rel="stylesheet" href="/dashboard.css"><script src="/dashboard.js" defer></script></head>
 <body>
-  <aside><a class="brand" href="#"><img src="/icon.png" alt=""><span>Codex 连接<small>本机控制台</small></span></a><nav aria-label="导航"><a href="#feishu" class="active">◈　飞书机器人</a><a href="#wechat">◎　微信 ClawBot</a><a href="#runtime">▤　运行设置</a></nav><div class="local"><span class="dot"></span>仅在这台电脑上运行<small>配置保存在本机</small></div></aside>
   <main>
-    <header><div><p class="eyebrow">CHANNELS</p><h1>连接你的工作会话</h1><p class="muted">从手机继续 Codex，把不同的机器人交给不同的工作。</p></div><div class="desktop-status" id="desktop-status">正在读取状态…</div></header>
+    <header><div><h1>通道配置</h1><p class="muted">配置飞书和微信，管理机器人与会话绑定。</p></div><div class="desktop-status" id="desktop-status">正在读取状态…</div></header>
+    <nav aria-label="配置分类"><a href="#feishu" class="active">飞书机器人</a><a href="#wechat">微信</a><a href="#runtime">运行设置</a></nav>
     <div id="locked" class="notice hidden"><strong>配置连接暂不可用</strong><p>请从 Codex 左上角菜单重新打开“Codex 连接”。</p></div>
     <div id="paused" class="notice hidden"><strong>聊天通道已暂停</strong><p>恢复后会重新连接已启用的机器人。</p><button id="resume">恢复连接</button></div>
     <div id="content" class="hidden">
