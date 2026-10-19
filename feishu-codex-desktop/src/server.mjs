@@ -19,7 +19,7 @@ import {setTimeout as delay} from 'node:timers/promises';
 function context(extra) {
   return desktopContext(extra);
 }
-const icons=[{src:'data:image/svg+xml;base64,'+fs.readFileSync(path.join(__dirname,'entrypoint-icon.svg')).toString('base64'),mimeType:'image/svg+xml',sizes:['64x64']}];
+const icons=['light','dark'].map(theme=>({src:'data:image/png;base64,'+fs.readFileSync(path.join(__dirname,theme==='dark'?'entrypoint-icon-dark.png':'entrypoint-icon.png')).toString('base64'),mimeType:'image/png',sizes:['128x128'],theme}));
 const tools=[
   {name:'open_settings',title:'Codex 连接',icons,description:'在 Codex 内打开通道配置面板。管理飞书、微信、多个机器人、固定会话绑定与账号授权，无需浏览器网址。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'global'}]}}},
   {name:'open_thread_settings',title:'通道配置',icons,description:'在当前聊天旁打开飞书、微信与机器人配置面板。',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:SETTINGS_URI},'openai/ui':{entrypoints:[{type:'thread'}]}}},

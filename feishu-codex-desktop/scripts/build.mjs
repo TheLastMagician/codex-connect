@@ -11,6 +11,7 @@ await copyFile('src/discover-desktop.ps1','dist/discover-desktop.ps1');
 for(const name of ['dashboard.html','dashboard.js','dashboard.css'])await copyFile('web/'+name,'dist/'+name);
 await copyFile('assets/icon.png','dist/dashboard-icon.png');
 await copyFile('assets/entrypoint-icon.svg','dist/entrypoint-icon.svg');
+for(const name of ['entrypoint-icon-dark.svg','entrypoint-icon.png','entrypoint-icon-dark.png'])await copyFile('assets/'+name,'dist/'+name);
 const app=await build({entryPoints:['web/settings-panel.mjs'],bundle:true,platform:'browser',target:'es2022',format:'iife',minify:true,write:false});
 const script=app.outputFiles[0].text+'\n'+await readFile('web/dashboard.js','utf8');
 let html=await readFile('web/dashboard.html','utf8');

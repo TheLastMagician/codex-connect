@@ -22163,7 +22163,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.8.2";
+var VERSION = "0.8.3";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -22861,7 +22861,7 @@ var import_promises4 = require("node:timers/promises");
 function context(extra) {
   return desktopContext(extra);
 }
-var icons = [{ src: "data:image/svg+xml;base64," + import_node_fs7.default.readFileSync(import_node_path8.default.join(__dirname, "entrypoint-icon.svg")).toString("base64"), mimeType: "image/svg+xml", sizes: ["64x64"] }];
+var icons = ["light", "dark"].map((theme) => ({ src: "data:image/png;base64," + import_node_fs7.default.readFileSync(import_node_path8.default.join(__dirname, theme === "dark" ? "entrypoint-icon-dark.png" : "entrypoint-icon.png")).toString("base64"), mimeType: "image/png", sizes: ["128x128"], theme }));
 var tools = [
   { name: "open_settings", title: "Codex \u8FDE\u63A5", icons, description: "\u5728 Codex \u5185\u6253\u5F00\u901A\u9053\u914D\u7F6E\u9762\u677F\u3002\u7BA1\u7406\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u3001\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\u4E0E\u8D26\u53F7\u6388\u6743\uFF0C\u65E0\u9700\u6D4F\u89C8\u5668\u7F51\u5740\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "global" }] } } },
   { name: "open_thread_settings", title: "\u901A\u9053\u914D\u7F6E", icons, description: "\u5728\u5F53\u524D\u804A\u5929\u65C1\u6253\u5F00\u98DE\u4E66\u3001\u5FAE\u4FE1\u4E0E\u673A\u5668\u4EBA\u914D\u7F6E\u9762\u677F\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "thread" }] } } },
