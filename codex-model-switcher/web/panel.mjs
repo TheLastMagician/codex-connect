@@ -106,9 +106,9 @@ $('edit-form').onsubmit=event=>{event.preventDefault();busy(async()=>{
   $('edit-result').hidden=true;status('正在打开所选会话、修改模型并等待设置读回…');
   const result=await call('modify_existing_thread',{threadRef:$('edit-ref').value.trim(),providerId:$('edit-provider').value,model:$('edit-model').value.trim(),effort:$('edit-effort').value});
   const verified=result.status==='settings_verified';
-  $('edit-result').hidden=false;$('edit-result-text').textContent=`${result.title} · ${result.providerId} / ${result.model} / ${result.effort}。${verified?'设置已读回核对，上下文保留。':result.note}`;
+  $('edit-result').hidden=false;$('edit-result-text').textContent=`${result.title} · ${result.providerId} / ${result.model} / ${result.effort}。${result.note||'仅完成设置核对，尚未验证实际消息请求。'}`;
   $('edit-result-link').href=result.url;
-  status(verified?'已有会话的模型和强度已修改并读回确认。':result.note,!verified);
+  status(verified?(result.requiresContextReview?'模型设置已修改；历史上下文仍属于旧模型，请先处理压缩。':'模型设置已读回确认；实际消息请求尚未验证。'):result.note,!verified||result.requiresContextReview);
 });};
 $('provider').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:provider',$('provider').value);$('manual').checked=false;$('manual-model').hidden=true;loadModels();};
 $('model').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:model:'+$('provider').value,modelId());updateEffort();update();};
@@ -131,7 +131,7 @@ if(window.parent===window){
   call=async(name,args)=>{const response=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({name,arguments:args})});return unpack(await response.json());};
   refresh();
 }else{
-  const app=new App({name:'供应商与模型',version:'0.2.0'});
+  const app=new App({name:'供应商与模型',version:'0.2.1'});
   function apply(ctx){if(ctx.theme)applyDocumentTheme(ctx.theme);if(ctx.styles?.variables)applyHostStyleVariables(ctx.styles.variables);if(ctx.safeAreaInsets){const s=ctx.safeAreaInsets;document.body.style.padding=`${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`;}}
   app.onhostcontextchanged=apply;app.ontoolresult=()=>{};app.onerror=()=>status('面板与 Codex 的连接暂不可用，请重新打开。',true);
   call=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));

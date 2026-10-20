@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
+import {createInterface} from 'node:readline';
 import {readConfig,providerList,requireSelection,discoverModels,home,launcherDefaults} from './providers.mjs';
 import {withAppServer} from './app-server.mjs';
 import {DesktopReader} from './desktop-ipc.mjs';
@@ -13,6 +14,33 @@ export function existingThreadId(reference) {
   const id=reference.trim().replace(/^codex:\/\/threads\//i,'');
   if(!UUID.test(id))throw new Error('会话链接或 ID 无效，请粘贴完整的 codex://threads/ 链接。');
   return id.toLowerCase();
+}
+export async function historyModel(thread) {
+  if(typeof thread.path!=='string')return {status:'unavailable'};
+  let input,lines;
+  try{
+    const size=fs.statSync(thread.path).size;
+    if(size>128*1024*1024)return {status:'unavailable'};
+    input=fs.createReadStream(thread.path,{encoding:'utf8',signal:AbortSignal.timeout(5000)});
+    lines=createInterface({input,crlfDelay:Infinity});
+    let model=null;
+    for await(const line of lines){
+      if(!/"type"\s*:\s*"turn_context"/.test(line))continue;
+      let record;try{record=JSON.parse(line);}catch{continue;}
+      if(record.type==='turn_context'&&typeof record.payload?.model==='string'&&record.payload.model.length<=160)model=record.payload.model;
+    }
+    return model?{status:'recorded',model}:{status:'empty'};
+  }catch{return {status:'unavailable'};}
+  finally{lines?.close();input?.destroy();}
+}
+export function continuationCheck(history,model) {
+  const requiresContextReview=history.status==='recorded'&&history.model!==model;
+  const note=requiresContextReview
+    ?`模型设置已读回为 ${model}，但历史上下文模型仍是 ${history.model}。Codex 发送前可能先调用旧模型压缩；旧模型不可用时会阻断回复。请在原会话先执行 /compact，等当前模型压缩完成后再发送。此操作只验证设置，未验证普通消息请求。`
+    :history.status==='recorded'
+      ?'模型设置和历史上下文模型一致；只完成设置核对，尚未验证下一条普通消息请求。'
+      :'模型设置已读回，但历史上下文模型暂无法核对；发送时仍可能触发压缩。此操作未发送验证消息。';
+  return {history,requiresContextReview,verificationScope:'settings_only',note};
 }
 export function openThread(threadId) {
   if(!UUID.test(threadId))throw new Error('无效的会话 ID。');
@@ -89,7 +117,11 @@ export class LauncherService {
     if(thread.modelProvider!==providerId)throw new Error(`该会话的供应商是 ${thread.modelProvider||'未知'}，与 ${providerId} 不一致。请选择原供应商的会话；此操作不切换供应商。`);
     if(thread.status?.type==='active')throw new Error('该会话正在运行，请等待当前回复完成后再修改。');
     const record={threadId,providerId,model:selection.model,effort,title:thread.name||thread.title||'已有会话',cwd:thread.cwd,url:`codex://threads/${threadId}`};
-    try{return {...await this.confirm(record,{readThread}),action:'modified'};}
+    try{
+      const confirmed=await this.confirm(record,{readThread});
+      const history=await historyModel(thread);
+      return {...confirmed,action:'modified',...continuationCheck(history,selection.model)};
+    }
     catch(error){return {...record,action:'modified',status:'needs_confirmation',note:`修改结果尚未确认：${error.message} 请对同一会话重试并读回设置。`};}
   }
   projects(){return this.rpc(client=>listProjects(client));}

@@ -40,7 +40,7 @@ export class AppServer {
       if(message.error)item.reject(new Error(`Codex 拒绝了 ${item.method} 请求（${message.error.code}）。`));
       else item.resolve(message.result);
     });
-    await this.request('initialize',{clientInfo:{name:'codex_model_switcher',title:'供应商与模型',version:'0.2.0'},capabilities:{experimentalApi:true}});
+    await this.request('initialize',{clientInfo:{name:'codex_model_switcher',title:'供应商与模型',version:'0.2.1'},capabilities:{experimentalApi:true}});
     this.child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'initialized'})+'\n');
     return this;
   }

@@ -98,7 +98,7 @@ if(process.argv.includes('--serve')) {
   fs.writeFileSync(path.join(folder,'launcher.json'),JSON.stringify({pid:process.pid,url:browserLink}),{mode:0o600});
   console.error('供应商与模型启动器已在本机运行。');
 }else{
-  const server=new Server({name:'codex-model-switcher',version:'0.2.0',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
+  const server=new Server({name:'codex-model-switcher',version:'0.2.1',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
   server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
   server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:URI,name:'供应商与模型',mimeType:'text/html;profile=mcp-app'}]}));
   server.setRequestHandler(ReadResourceRequestSchema,async request=>{

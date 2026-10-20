@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "codex-model-switcher",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "选择供应商和模型，新建 Codex 会话或修改已有会话的模型。",
   "author": {
     "name": "zeng ge",

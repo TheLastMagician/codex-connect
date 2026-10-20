@@ -23,3 +23,5 @@ description: 打开本机供应商与模型面板，选择已配置的 API 供�
 用户明确要求修改已有会话模型时，先确定用户提供或选择的会话，必要时调用 `list_existing_threads` 分页读取列表；不要猜测目标会话。调用 `modify_existing_thread`，threadRef 使用该会话 ID 或 codex://threads/ 链接；默认 providerId=custom、model=qwen3.8-27b、effort=xhigh。插件先核对持久化供应商，再打开原会话并修改、读回设置。供应商不一致时不得强行覆盖；needs_confirmation 不等于成功，可对同一会话重试，不另建会话。也可在原生插件设置填入会话链接，点击“修改已有会话模型”。
 
 修改已有会话仅设置同一供应商下的模型和强度，保留上下文，不发送消息，不修改定时任务或全局模型目录。不要承诺修复调度器覆盖模型、跨供应商切换或实际推理能力，不修改认证文件，不全局切换默认供应商，不自动重新启动 Codex。
+
+修改已有会话后检查 `requiresContextReview`、`history` 和 `note`。`verificationScope=settings_only` 始终不证明实际普通消息请求成功。历史模型与目标模型不同时，Codex 可能先用旧模型进行 ModelDownshift 压缩并失败；提示用户在原会话执行 `/compact`，等待当前模型压缩完成，再发送消息。不要自动压缩、删除或篡改历史，也不要擅自发送探测消息。历史记录不可读时必须说明核对范围有限。

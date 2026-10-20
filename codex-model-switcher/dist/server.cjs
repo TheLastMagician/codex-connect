@@ -16994,6 +16994,7 @@ var import_node_fs4 = __toESM(require("node:fs"), 1);
 var import_node_path5 = __toESM(require("node:path"), 1);
 var import_node_child_process2 = require("node:child_process");
 var import_promises2 = require("node:timers/promises");
+var import_node_readline2 = require("node:readline");
 
 // src/providers.mjs
 var import_node_fs = __toESM(require("node:fs"), 1);
@@ -17894,7 +17895,7 @@ var AppServer = class {
       if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
       else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.2.0" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.2.1" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }
@@ -18113,6 +18114,38 @@ function existingThreadId(reference) {
   if (!UUID.test(id)) throw new Error("\u4F1A\u8BDD\u94FE\u63A5\u6216 ID \u65E0\u6548\uFF0C\u8BF7\u7C98\u8D34\u5B8C\u6574\u7684 codex://threads/ \u94FE\u63A5\u3002");
   return id.toLowerCase();
 }
+async function historyModel(thread) {
+  if (typeof thread.path !== "string") return { status: "unavailable" };
+  let input, lines;
+  try {
+    const size = import_node_fs4.default.statSync(thread.path).size;
+    if (size > 128 * 1024 * 1024) return { status: "unavailable" };
+    input = import_node_fs4.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) });
+    lines = (0, import_node_readline2.createInterface)({ input, crlfDelay: Infinity });
+    let model = null;
+    for await (const line of lines) {
+      if (!/"type"\s*:\s*"turn_context"/.test(line)) continue;
+      let record2;
+      try {
+        record2 = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (record2.type === "turn_context" && typeof record2.payload?.model === "string" && record2.payload.model.length <= 160) model = record2.payload.model;
+    }
+    return model ? { status: "recorded", model } : { status: "empty" };
+  } catch {
+    return { status: "unavailable" };
+  } finally {
+    lines?.close();
+    input?.destroy();
+  }
+}
+function continuationCheck(history, model) {
+  const requiresContextReview = history.status === "recorded" && history.model !== model;
+  const note = requiresContextReview ? `\u6A21\u578B\u8BBE\u7F6E\u5DF2\u8BFB\u56DE\u4E3A ${model}\uFF0C\u4F46\u5386\u53F2\u4E0A\u4E0B\u6587\u6A21\u578B\u4ECD\u662F ${history.model}\u3002Codex \u53D1\u9001\u524D\u53EF\u80FD\u5148\u8C03\u7528\u65E7\u6A21\u578B\u538B\u7F29\uFF1B\u65E7\u6A21\u578B\u4E0D\u53EF\u7528\u65F6\u4F1A\u963B\u65AD\u56DE\u590D\u3002\u8BF7\u5728\u539F\u4F1A\u8BDD\u5148\u6267\u884C /compact\uFF0C\u7B49\u5F53\u524D\u6A21\u578B\u538B\u7F29\u5B8C\u6210\u540E\u518D\u53D1\u9001\u3002\u6B64\u64CD\u4F5C\u53EA\u9A8C\u8BC1\u8BBE\u7F6E\uFF0C\u672A\u9A8C\u8BC1\u666E\u901A\u6D88\u606F\u8BF7\u6C42\u3002` : history.status === "recorded" ? "\u6A21\u578B\u8BBE\u7F6E\u548C\u5386\u53F2\u4E0A\u4E0B\u6587\u6A21\u578B\u4E00\u81F4\uFF1B\u53EA\u5B8C\u6210\u8BBE\u7F6E\u6838\u5BF9\uFF0C\u5C1A\u672A\u9A8C\u8BC1\u4E0B\u4E00\u6761\u666E\u901A\u6D88\u606F\u8BF7\u6C42\u3002" : "\u6A21\u578B\u8BBE\u7F6E\u5DF2\u8BFB\u56DE\uFF0C\u4F46\u5386\u53F2\u4E0A\u4E0B\u6587\u6A21\u578B\u6682\u65E0\u6CD5\u6838\u5BF9\uFF1B\u53D1\u9001\u65F6\u4ECD\u53EF\u80FD\u89E6\u53D1\u538B\u7F29\u3002\u6B64\u64CD\u4F5C\u672A\u53D1\u9001\u9A8C\u8BC1\u6D88\u606F\u3002";
+  return { history, requiresContextReview, verificationScope: "settings_only", note };
+}
 function openThread(threadId) {
   if (!UUID.test(threadId)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
   const url = `codex://threads/${threadId}`;
@@ -18238,7 +18271,9 @@ var LauncherService = class {
     if (thread.status?.type === "active") throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u7B49\u5F85\u5F53\u524D\u56DE\u590D\u5B8C\u6210\u540E\u518D\u4FEE\u6539\u3002");
     const record2 = { threadId, providerId, model: selection.model, effort, title: thread.name || thread.title || "\u5DF2\u6709\u4F1A\u8BDD", cwd: thread.cwd, url: `codex://threads/${threadId}` };
     try {
-      return { ...await this.confirm(record2, { readThread }), action: "modified" };
+      const confirmed = await this.confirm(record2, { readThread });
+      const history = await historyModel(thread);
+      return { ...confirmed, action: "modified", ...continuationCheck(history, selection.model) };
     } catch (error2) {
       return { ...record2, action: "modified", status: "needs_confirmation", note: `\u4FEE\u6539\u7ED3\u679C\u5C1A\u672A\u786E\u8BA4\uFF1A${error2.message} \u8BF7\u5BF9\u540C\u4E00\u4F1A\u8BDD\u91CD\u8BD5\u5E76\u8BFB\u56DE\u8BBE\u7F6E\u3002` };
     }
@@ -18494,7 +18529,7 @@ var NativeSettings = class {
     }, required: ["providerId", "model", "effort", "project", "title"] }, values: { ...this.values(), project: choice?.label || "\u8BF7\u9009\u62E9\u9879\u76EE" }, layout: [
       { kind: "group", title: "\u65B0\u5EFA\u4F1A\u8BDD\u7684\u8FDE\u63A5", items: [{ kind: "property", property: "providerId" }, { kind: "property", property: "model" }, { kind: "property", property: "effort" }, { kind: "tool", tool: "open_model_panel", description: "\u5728 Codex \u5185\u6253\u5F00\u6A21\u578B\u9009\u62E9\u9762\u677F\u3002" }] },
       { kind: "group", title: "\u65B0\u4F1A\u8BDD", items: [{ kind: "property", property: "project" }, { kind: "property", property: "title" }, { kind: "tool", tool: "launch_from_settings", description: "\u5728\u6240\u9009\u9879\u76EE\u4E2D\u65B0\u5EFA\u771F\u5B9E\u4F1A\u8BDD\u5E76\u6253\u5F00\uFF0C\u4E0D\u53D1\u9001\u9996\u6761\u6D88\u606F\u3002" }] },
-      { kind: "group", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", items: [{ kind: "property", property: "editThread" }, { kind: "property", property: "editProvider" }, { kind: "property", property: "editModel" }, { kind: "property", property: "editEffort" }, { kind: "tool", tool: "modify_from_settings", description: "\u4FEE\u6539\u6240\u586B\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\uFF0C\u4FDD\u7559\u4E0A\u4E0B\u6587\uFF1B\u5B9A\u65F6\u4EFB\u52A1\u914D\u7F6E\u4FDD\u6301\u539F\u6837\u3002" }] }
+      { kind: "group", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", items: [{ kind: "property", property: "editThread" }, { kind: "property", property: "editProvider" }, { kind: "property", property: "editModel" }, { kind: "property", property: "editEffort" }, { kind: "tool", tool: "modify_from_settings", description: "\u4FEE\u6539\u6A21\u578B\u5E76\u6838\u5BF9\u5386\u53F2\u6A21\u578B\u8BB0\u5F55\uFF1B\u4EC5\u9A8C\u8BC1\u8BBE\u7F6E\u3002\u65E7\u6A21\u578B\u538B\u7F29\u5931\u8D25\u65F6\u9700\u5728\u539F\u4F1A\u8BDD\u6267\u884C /compact\uFF0C\u672C\u64CD\u4F5C\u4E0D\u81EA\u52A8\u538B\u7F29\u6216\u53D1\u9001\u6D88\u606F\u3002" }] }
     ] };
   }
   async update(set) {
@@ -18698,7 +18733,7 @@ async function main() {
     import_node_fs7.default.writeFileSync(import_node_path8.default.join(folder, "launcher.json"), JSON.stringify({ pid: process.pid, url: browserLink }), { mode: 384 });
     console.error("\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B\u542F\u52A8\u5668\u5DF2\u5728\u672C\u673A\u8FD0\u884C\u3002");
   } else {
-    const server = new Server({ name: "codex-model-switcher", version: "0.2.0", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
+    const server = new Server({ name: "codex-model-switcher", version: "0.2.1", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
     server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: URI, name: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", mimeType: "text/html;profile=mcp-app" }] }));
     server.setRequestHandler(ReadResourceRequestSchema, async (request) => {

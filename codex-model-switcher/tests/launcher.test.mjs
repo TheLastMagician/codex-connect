@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {providerList,discoverModels,requireSelection,launcherDefaults} from '../src/providers.mjs';
-import {LauncherService,confirmDesktop,existingThreadId} from '../src/service.mjs';
+import {LauncherService,confirmDesktop,existingThreadId,historyModel,continuationCheck} from '../src/service.mjs';
 import {DesktopReader} from '../src/desktop-ipc.mjs';
 import {buildCatalog} from '../src/catalog.mjs';
 import {NativeSettings} from '../src/settings.mjs';
@@ -239,4 +239,31 @@ test('native existing-thread settings work without any project and preserve crea
   await new NativeSettings(settings.service,{directory,read:()=>config}).modify();
   assert.equal(modified.providerId,'custom');assert.equal(modified.model,'qwen3.8-27b');assert.equal(modified.effort,'xhigh');
   assert.equal(settings.values().title,'新会话');assert.equal(modified.threadRef,`codex://threads/${id}`);
+});
+
+test('history checks read the latest model context, including a completed manual compaction',async t=>{
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'codex-launcher-test-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const file=path.join(directory,'rollout.jsonl');
+  fs.writeFileSync(file,JSON.stringify({type:'turn_context',payload:{model:'gpt-6.1-sol'}})+'\n');
+  const old=await historyModel({path:file});assert.equal(old.model,'gpt-6.1-sol');
+  const warning=continuationCheck(old,'qwen3.8-27b');
+  assert.equal(warning.requiresContextReview,true);assert.equal(warning.verificationScope,'settings_only');assert.match(warning.note,/\/compact/);
+  fs.appendFileSync(file,JSON.stringify({type:'turn_context',payload:{model:'qwen3.8-27b'}})+'\n');
+  const current=await historyModel({path:file});assert.equal(current.model,'qwen3.8-27b');
+  assert.equal(continuationCheck(current,'qwen3.8-27b').requiresContextReview,false);
+  const unknown=continuationCheck(await historyModel({path:path.join(directory,'missing')}),'qwen3.8-27b');
+  assert.match(unknown.note,/无法核对/);assert.equal(unknown.verificationScope,'settings_only');
+});
+
+test('a verified model setting still reports old-model compaction risk without changing history or sending messages',async t=>{
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'codex-launcher-test-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const file=path.join(directory,'rollout.jsonl'),id=randomUUID();
+  const original=JSON.stringify({type:'turn_context',payload:{model:'gpt-6.1-sol'}})+'\n';fs.writeFileSync(file,original);
+  const service=new LauncherService({read:()=>config,rpc:async action=>action({request:async method=>{
+    assert.equal(method,'thread/read');return {thread:{id,modelProvider:'custom',path:file}};
+  }}),confirm:async record=>({...record,status:'settings_verified'})});
+  const result=await service.modifyExisting({threadRef:id});
+  assert.equal(result.status,'settings_verified');assert.equal(result.requiresContextReview,true);
+  assert.equal(result.history.model,'gpt-6.1-sol');assert.match(result.note,/未验证普通消息/);
+  assert.equal(fs.readFileSync(file,'utf8'),original);
 });

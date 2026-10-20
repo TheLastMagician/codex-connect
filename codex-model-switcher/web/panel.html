@@ -38,7 +38,7 @@
       <div class="field-row"><label for="edit-model">修改为模型</label><div class="field-control"><input id="edit-model" required value="qwen3.8-27b" maxlength="160" spellcheck="false"></div></div>
       <div class="field-row"><label for="edit-effort">思考强度</label><div class="field-control"><select id="edit-effort"><option value="xhigh">xhigh</option></select></div></div>
       <div class="actions"><div class="selection">保留原会话的上下文和项目。</div><button id="edit-submit" class="primary" type="submit" disabled>修改并确认模型</button></div>
-      <p class="hint footnote">会打开所选会话并核对设置。定时任务的配置保持原样。</p>
+      <p class="hint footnote">会打开所选会话并核对设置及历史模型记录。模型切换可能触发旧模型压缩；本操作不会发送验证消息或自动压缩上下文。</p>
     </form>
     <div id="edit-result" class="result" hidden aria-live="polite"><h2>修改结果</h2><p id="edit-result-text" class="hint"></p><a id="edit-result-link">打开该会话</a></div>
   </section>
