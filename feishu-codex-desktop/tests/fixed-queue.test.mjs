@@ -84,16 +84,30 @@ test('definitely unsent messages survive connection errors and automatically ret
   delete f.writeError;await f.router.poll();assert.deepEqual(f.writes,['A','A']);await f.complete('a','A');assert.equal(f.answers().length,1);
 });
 
-test('reply delivery failure retries the saved answer without rerunning tasks or advancing early',async()=>{
+test('reply delivery failure saves an independent outbox and allows the next task to run',async()=>{
   const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));f.sendError=Error('Feishu offline');await f.complete('a','A');
-  assert.deepEqual(f.writes,['A']);assert.equal(f.state.fixedQueue.active.reply.text,'答复 A');
+  await f.router.deliveryWork;
+  assert.deepEqual(f.writes,['A','B']);assert.equal(f.state.fixedQueue.deliveries[0].reply.text,'答复 A');
   const state=structuredClone(f.state);f.router.stop();const restored=fixture({state});restored.snapshot=f.snapshot;
-  await restored.router.poll();assert.deepEqual(restored.writes,['B']);assert.equal(restored.answers()[0].text,'答复 A');
+  restored.time=f.time+5001;await restored.router.poll();await restored.router.deliveryWork;
+  assert.deepEqual(restored.writes,[]);assert.equal(restored.answers()[0].text,'答复 A');
+  assert.equal(restored.state.fixedQueue.deliveries.length,0);
 });
 
 test('revocation drops queued work but keeps the active turn barrier until the desktop finishes',async()=>{
   const f=fixture();await f.accept(f.message('A'),f.message('B','bob'),f.message('C','carol'));f.allowed.delete('alice');f.allowed.delete('bob');
   await f.router.poll();assert.deepEqual(f.writes,['A']);await f.complete('a','A');assert.deepEqual(f.writes,['A','C']);assert.equal(f.answers().length,0);
+});
+
+test('a hanging reply transport cannot block execution, and a saved legacy reply migrates without a native resend',async()=>{
+  const f=fixture();await f.accept(f.message('A'),f.message('B'));
+  let release;const slow=new Promise(resolve=>{release=resolve;});
+  const original=f.router.reply.bind(f.router);f.router.reply=async(...args)=>{await slow;return original(...args);};
+  await f.complete('a','A');assert.deepEqual(f.writes,['A','B']);assert.equal(f.state.fixedQueue.deliveries.length,1);
+  release();await f.router.deliveryWork;assert.equal(f.state.fixedQueue.deliveries.length,0);
+  const legacy=fixture({state:{fixedQueue:{pending:[],active:{message:f.message('old'),phase:'waiting',clientUserMessageId:'legacy',reply:{id:'answer',kind:'assistant',text:'旧回复'}}}}});
+  legacy.readError=Error('desktop offline');await legacy.router.poll();await legacy.router.deliveryWork;
+  assert.deepEqual(legacy.writes,[]);assert.equal(legacy.answers()[0].text,'旧回复');assert.equal(legacy.state.fixedQueue.active,null);
 });
 
 test('stopping or rebinding during a baseline read prevents the native write',async()=>{

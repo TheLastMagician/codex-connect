@@ -57,7 +57,7 @@ export class ManagedChatRouter extends Router {
   queueSummary(thread) {
     const queue=this.state.taskQueues[targetKey(thread)]?.fixedQueue;if(!queue)return '';
     const phase=queue.active?.phase;
-    return `\n\n消息队列：${queue.pending.length} 条等待${phase?`；当前${phase==='preparing'?'等待连接':phase==='uncertain' || phase==='sending'?'核对发送结果':'等待回复'}`:''}${queue.review?.length?`；${queue.review.length} 条此前消息待核对`:''}。`;
+    return `\n\n消息队列：${queue.pending.length} 条等待${phase?`；当前${phase==='preparing'?'等待连接':phase==='uncertain' || phase==='sending'?'核对发送结果':'等待回复'}`:''}${queue.deliveries?.length?`；${queue.deliveries.length} 条已完成回复待投递`:''}${queue.review?.length?`；${queue.review.length} 条此前消息待核对`:''}。`;
   }
   async poll() {
     if(this.stopped || !this.isActive())return;

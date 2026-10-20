@@ -37,6 +37,7 @@ function fixture({state={},desktop}={}) {
 async function flush(f) {
   await Promise.all(f.router.queues.values());await Promise.resolve();
   await Promise.all([...f.router.workers.values()].flatMap(w=>[...w.queues.values()]));
+  await Promise.all([...f.router.workers.values()].map(w=>w.deliveryWork));
 }
 
 test('management messages wait for actual completion, not an ACK, and return separate answers',async()=>{
@@ -106,9 +107,9 @@ test('read failures preserve queued input and revoked senders cannot dispatch or
   assert.equal(f.writes.length,0);delete f.readError;await f.poll();await f.deliver('B','bob');
   f.allowed.delete('alice');f.complete();await f.poll();assert.equal(f.writes.at(-1).prompt,'B');assert.equal(f.answers().length,0);
 });
-test('failed reply delivery retries the saved reply without advancing or rerunning the task',async()=>{
+test('failed reply delivery retries independently while the next queued task runs',async()=>{
   const f=fixture();f.select('a');await f.deliver('A');await f.deliver('B');f.complete();f.sendError=Error('offline');
-  await f.poll();assert.equal(f.writes.length,1);delete f.sendError;await f.poll();
+  await f.poll();assert.equal(f.writes.length,2);delete f.sendError;f.time+=5001;await f.poll();
   assert.deepEqual(f.writes.map(w=>w.prompt),['A','B']);assert.equal(f.answers().filter(s=>s.text==='答复 A').length,1);
 });
 test('unmatched delivery leaves the active barrier only after stable idle checks and never replays itself',async()=>{

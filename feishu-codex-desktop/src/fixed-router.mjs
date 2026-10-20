@@ -15,6 +15,7 @@ export class FixedChatRouter extends Router {
     super(options);Object.assign(this,{thread:{...thread},isActive,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot});
     this.state.fixedQueue ||= {pending:[],active:null};
     this.state.fixedQueue.review ||= [];
+    this.state.fixedQueue.deliveries ||= [];
     if(this.state.fixedQueue.active?.phase==='preparing') {
       this.state.fixedQueue.pending.unshift(this.state.fixedQueue.active.message);this.state.fixedQueue.active=null;this.saveState();
     }
@@ -31,7 +32,38 @@ export class FixedChatRouter extends Router {
   meta(message,kind='notice') {return {kind,openId:message.openId,...(message.chatType==='group'?{chatType:'group',replyOpenIds:[message.openId]}:{})};}
   notify(message,text) {return this.send(message.chatId,text,this.meta(message));}
   reply(message,text,assistantId,kind='assistant') {
-    return this.deliverReply?this.deliverReply(message,text,assistantId,kind):this.send(message.chatId,text,this.meta(message,kind));
+    return this.deliverReply?this.deliverReply(message,text,assistantId,kind):this.send(message.chatId,text,
+      {...this.meta(message,kind),deliveryId:fingerprint({id:JSON.stringify([message.id,assistantId])})});
+  }
+  parkReply(active) {
+    const queue=this.state.fixedQueue,id=active.clientUserMessageId||active.message.id;
+    if(!queue.deliveries.some(job=>job.id===id))queue.deliveries.push({id,message:active.message,reply:active.reply,turnId:active.turnId,createdAt:this.now(),attempts:0});
+    queue.active=null;this.saveState();
+  }
+  pollDeliveries() {
+    if(this.deliveryWork)return this.deliveryWork;
+    const work=Promise.resolve().then(async()=>{
+      const queue=this.state.fixedQueue,seenChats=new Set();
+      for(const job of [...queue.deliveries]) {
+        if(!this.live())return;
+        if(!this.authorized(job.message.openId)){queue.deliveries=queue.deliveries.filter(item=>item!==job);this.saveState();continue;}
+        // Preserve reply order in each original chat, without blocking other chats.
+        if(seenChats.has(job.message.chatId))continue;seenChats.add(job.message.chatId);
+        if((job.nextAttemptAt||0)>this.now())continue;
+        job.attempts++;job.lastAttemptAt=this.now();this.saveState();
+        try {
+          await this.reply(job.message,job.reply.text,job.reply.id||job.turnId,job.reply.kind);
+          if(!this.live())return;
+          queue.deliveries=queue.deliveries.filter(item=>item!==job);this.saveState();
+        }catch(error){
+          const code=Number(error?.response?.data?.code??error?.data?.code);
+          job.lastError={at:this.now(),...(Number.isInteger(code) && code!==0?{code}:{}),
+            ...(error?.code==='FEISHU_DELIVERY_UNCERTAIN'?{reason:'delivery_unknown'}:{})};
+          job.nextAttemptAt=this.now()+Math.min(60000,5000*2**Math.min(job.attempts-1,4));this.saveState();
+        }
+      }
+    }).catch(()=>{}).finally(()=>{if(this.deliveryWork===work)this.deliveryWork=null;});
+    this.deliveryWork=work;return work;
   }
   matchingTurn(result,active) {return this.matchTurn?this.matchTurn(result,active):this.findTurn(result,active);}
   acceptMessage(message) {
@@ -139,6 +171,10 @@ export class FixedChatRouter extends Router {
   async advance() {
     const queue=this.state.fixedQueue;
     if(!this.live())return;
+    // Upgrade saved completed replies before doing any I/O. Delivery failures
+    // must never hold the execution lease or cause a model task to be replayed.
+    if(queue.active?.reply)this.parkReply(queue.active);
+    void this.pollDeliveries();
     await this.pollReviews().catch(()=>{});if(!this.live() || (!queue.active && !queue.pending.length && !this.watches.size))return;
     const owner=this.leases.get(this.target);
     if(owner && owner!==this) {
@@ -175,9 +211,7 @@ export class FixedChatRouter extends Router {
       }
       if(queue.active) {
         if(!this.live())return;
-        if(this.authorized(active.message.openId))await this.reply(active.message,active.reply.text,active.reply.id||active.turnId,active.reply.kind);
-        if(!this.live())return;
-        queue.active=null;this.saveState();
+        this.parkReply(active);void this.pollDeliveries();
       }
     }
     while(queue.pending.length && !this.authorized(queue.pending[0].openId)){queue.pending.shift();this.saveState();}

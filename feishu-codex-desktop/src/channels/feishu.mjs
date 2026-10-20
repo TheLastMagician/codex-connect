@@ -3,7 +3,8 @@ import {parseMessage,equalSecret,fingerprint} from '../router.mjs';
 import {ManagedChatRouter} from '../managed-router.mjs';
 import {FixedChatRouter,fixedReply} from '../fixed-router.mjs';
 import {CardActions} from '../card-actions.mjs';
-import {createSender} from '../outbound.mjs';
+import {createSender,createCardWriter} from '../outbound.mjs';
+import {createFeishuMedia} from '../feishu-media.mjs';
 import {fixedReplyCards} from '../fixed-cards.mjs';
 import {readJson,writeJson} from '../storage.mjs';
 import {readLocalThreads} from '../catalog.mjs';
@@ -45,20 +46,25 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},
     })();return identityRequest;
   };
   const authorized=openId=>active() && allowsFeishuUser(getSettings(),openId);
-  const fullSend=createSender({client,actions,state,saveState,getConfig,canSend:authorized});
+  const report=record=>onStatus({lastReplyError:record});
+  const media=createFeishuMedia({client,state,saveState,canSend:authorized,namespace:settings.appId,report});
+  const writeCard=createCardWriter({client,state,saveState,canSend:authorized,namespace:settings.appId,report});
+  const fullSend=createSender({client,actions,state,saveState,getConfig,canSend:authorized,prepareText:media.prepare,writeCard});
   const send=async(chatId,text,meta={})=>{
     const openId=meta.openId||meta.session?.openId||Object.values(state.sessions||{}).find(s=>s.chatId===chatId)?.openId;
     if(!authorized(openId))return;
-    if(settings.mode!=='fixed')return fullSend(chatId,text,meta);
+    if(settings.mode!=='fixed'){const result=await fullSend(chatId,text,meta);media.forget(meta.deliveryId);return result;}
     const reply=fixedReply(text,meta);if(reply===null)return;
     const session=meta.session||state.sessions?.[`${openId}:${chatId}`];
     const group=(meta.chatType||session?.chatType)==='group';
     const mentionIds=group?(meta.replyOpenIds||[openId]).filter(authorized):[];
-    for(const card of fixedReplyCards(reply,{botName:getSettings()?.name||settings.name,kind:meta.kind,mentionIds})) {
+    const prepared=await media.prepare(reply,{thread:settings.thread,openId,deliveryId:meta.deliveryId});
+    const cards=fixedReplyCards(prepared,{botName:getSettings()?.name||settings.name,kind:meta.kind,mentionIds});
+    for(const [index,card] of cards.entries()) {
       if(!authorized(openId))return;
-      const result=await client.im.v1.message.create({params:{receive_id_type:'chat_id'},data:{receive_id:chatId,msg_type:'interactive',content:JSON.stringify(card)}});
-      if(result.code!==0)throw new Error('飞书卡片发送失败，请检查机器人权限');
+      await writeCard({chatId,openId,card,deliveryId:meta.deliveryId,index});
     }
+    media.forget(meta.deliveryId);
   };
   const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,isAuthorized:authorized,
     reportDeliveryFailure:record=>onStatus({lastDeliveryFailure:record})};

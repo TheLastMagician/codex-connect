@@ -500,7 +500,7 @@ export class Router {
     const marks=this.state.deliveredReplyMarks ||= {};
     if(marks[mark])return;
     if(!this.authorized(watch.openId))return;
-    await this.send(watch.chatId,text,{kind,title:kind==='assistant'?'Codex 回复':'会话状态',thread:watch.thread,openId:watch.openId,
+    await this.send(watch.chatId,text,{kind,deliveryId:mark,title:kind==='assistant'?'Codex 回复':'会话状态',thread:watch.thread,openId:watch.openId,
       session:this.state.sessions[`${watch.openId}:${watch.chatId}`]});
     marks[mark]=this.now();this.state.deliveredReplyMarks=Object.fromEntries(Object.entries(marks).slice(-200));this.saveState();
   }

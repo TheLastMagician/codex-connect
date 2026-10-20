@@ -65,7 +65,7 @@ var init_storage = __esm({
 init_storage();
 
 // src/version.mjs
-var VERSION = "0.8.3";
+var VERSION = "0.9.0";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);
