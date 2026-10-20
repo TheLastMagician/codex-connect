@@ -54,7 +54,7 @@ export class DesktopReader {
   }
   async setModel(threadId,providerId,model,effort='none',{verifiedStoredProvider,settleMs=10000,pollMs=120,now=Date.now,sleep=delay}={}) {
     const before=await this.settings(threadId);
-    if(!before)throw new Error('新会话尚未在桌面加载。');
+    if(!before)throw new Error('会话尚未在桌面加载。');
     const pendingProvider=(before.modelProvider==null||before.modelProvider==='')&&verifiedStoredProvider===providerId&&before.resumeState==='resumed';
     if(before.modelProvider!==providerId&&!pendingProvider)throw new Error('桌面实际供应商与选择不一致，模型未修改。');
     const matches=settings=>settings?.model===model&&settings.modelProvider===providerId&&settings.reasoningEffort===effort;

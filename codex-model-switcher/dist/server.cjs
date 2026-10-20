@@ -17894,7 +17894,7 @@ var AppServer = class {
       if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
       else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.1.7" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.2.0" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }
@@ -18040,7 +18040,7 @@ var DesktopReader = class {
   }
   async setModel(threadId, providerId, model, effort = "none", { verifiedStoredProvider, settleMs = 1e4, pollMs = 120, now = Date.now, sleep = import_promises.setTimeout } = {}) {
     const before = await this.settings(threadId);
-    if (!before) throw new Error("\u65B0\u4F1A\u8BDD\u5C1A\u672A\u5728\u684C\u9762\u52A0\u8F7D\u3002");
+    if (!before) throw new Error("\u4F1A\u8BDD\u5C1A\u672A\u5728\u684C\u9762\u52A0\u8F7D\u3002");
     const pendingProvider = (before.modelProvider == null || before.modelProvider === "") && verifiedStoredProvider === providerId && before.resumeState === "resumed";
     if (before.modelProvider !== providerId && !pendingProvider) throw new Error("\u684C\u9762\u5B9E\u9645\u4F9B\u5E94\u5546\u4E0E\u9009\u62E9\u4E0D\u4E00\u81F4\uFF0C\u6A21\u578B\u672A\u4FEE\u6539\u3002");
     const matches = (settings) => settings?.model === model && settings.modelProvider === providerId && settings.reasoningEffort === effort;
@@ -18107,6 +18107,12 @@ function projectDirectory(project, cwd) {
 
 // src/service.mjs
 var UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+function existingThreadId(reference) {
+  if (typeof reference !== "string") throw new Error("\u8BF7\u9009\u62E9\u5DF2\u6709\u4F1A\u8BDD\uFF0C\u6216\u7C98\u8D34 codex://threads/ \u4F1A\u8BDD\u94FE\u63A5\u3002");
+  const id = reference.trim().replace(/^codex:\/\/threads\//i, "");
+  if (!UUID.test(id)) throw new Error("\u4F1A\u8BDD\u94FE\u63A5\u6216 ID \u65E0\u6548\uFF0C\u8BF7\u7C98\u8D34\u5B8C\u6574\u7684 codex://threads/ \u94FE\u63A5\u3002");
+  return id.toLowerCase();
+}
 function openThread(threadId) {
   if (!UUID.test(threadId)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
   const url = `codex://threads/${threadId}`;
@@ -18140,7 +18146,7 @@ async function confirmDesktop(thread, { open: open2 = openThread, Reader = Deskt
       }
       await sleep(pollMs);
     } while (now() < deadline);
-    throw new Error("\u4F1A\u8BDD\u5DF2\u7ECF\u521B\u5EFA\uFF0C\u684C\u9762\u5C1A\u672A\u5B8C\u6210\u52A0\u8F7D\u3002\u70B9\u51FB\u201C\u6253\u5F00\u5E76\u786E\u8BA4\u201D\u7EE7\u7EED\uFF0C\u4E0D\u4F1A\u91CD\u590D\u521B\u5EFA\u3002");
+    throw new Error("\u684C\u9762\u5C1A\u672A\u5B8C\u6210\u52A0\u8F7D\uFF0C\u8BF7\u91CD\u65B0\u6253\u5F00\u5E76\u786E\u8BA4\u8BE5\u4F1A\u8BDD\u3002");
   } finally {
     reader.close();
   }
@@ -18203,9 +18209,39 @@ var LauncherService = class {
       projects,
       defaultProjectId: thread?.projectId || projects.find((p) => p.roots.includes(thread?.cwd))?.id || null,
       defaultCwd: thread?.cwd || null,
+      currentThread: thread ? { id: thread.id, title: thread.name || thread.title || "\u672A\u547D\u540D\u4F1A\u8BDD", providerId: thread.modelProvider } : null,
       nativeCatalogConfigured: typeof config2.model_catalog_json === "string",
-      note: "\u9009\u62E9\u9879\u76EE\u540E\u5373\u53EF\u65B0\u5EFA\u4F1A\u8BDD\u3002"
+      note: "\u53EF\u4EE5\u65B0\u5EFA\u4F1A\u8BDD\uFF0C\u6216\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u7684\u6A21\u578B\u3002"
     };
+  }
+  async existingThreads({ providerId = "custom", cursor } = {}) {
+    requireSelection(this.read(), providerId, "discovery");
+    if (cursor != null && (typeof cursor !== "string" || cursor.length > 4096)) throw new Error("\u65E0\u6548\u7684\u5206\u9875\u4F4D\u7F6E\uFF0C\u8BF7\u5237\u65B0\u4F1A\u8BDD\u5217\u8868\u3002");
+    return this.rpc(async (c) => {
+      const page = await c.request("thread/list", { limit: 100, archived: false, sortKey: "updated_at", modelProviders: [providerId], ...cursor ? { cursor } : {} });
+      return { threads: (page.data || []).filter((t) => UUID.test(t.id) && t.modelProvider === providerId).map((t) => ({
+        id: t.id,
+        title: t.name || t.title || t.preview?.slice(0, 80) || "\u672A\u547D\u540D\u4F1A\u8BDD",
+        providerId: t.modelProvider,
+        cwd: t.cwd,
+        updatedAt: t.updatedAt
+      })), nextCursor: page.nextCursor || null, providerId };
+    });
+  }
+  async modifyExisting({ threadRef, providerId = "custom", model = "qwen3.8-27b", effort = "xhigh" }) {
+    const threadId = existingThreadId(threadRef), selection = requireSelection(this.read(), providerId, model);
+    if (!["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("\u65E0\u6548\u7684\u601D\u8003\u5F3A\u5EA6\u3002");
+    const readThread = (id) => this.rpc(async (c) => (await c.request("thread/read", { threadId: id, includeTurns: false })).thread);
+    const thread = await readThread(threadId);
+    if (thread?.id !== threadId) throw new Error("\u6CA1\u6709\u627E\u5230\u6240\u9009\u4F1A\u8BDD\u3002");
+    if (thread.modelProvider !== providerId) throw new Error(`\u8BE5\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u662F ${thread.modelProvider || "\u672A\u77E5"}\uFF0C\u4E0E ${providerId} \u4E0D\u4E00\u81F4\u3002\u8BF7\u9009\u62E9\u539F\u4F9B\u5E94\u5546\u7684\u4F1A\u8BDD\uFF1B\u6B64\u64CD\u4F5C\u4E0D\u5207\u6362\u4F9B\u5E94\u5546\u3002`);
+    if (thread.status?.type === "active") throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u7B49\u5F85\u5F53\u524D\u56DE\u590D\u5B8C\u6210\u540E\u518D\u4FEE\u6539\u3002");
+    const record2 = { threadId, providerId, model: selection.model, effort, title: thread.name || thread.title || "\u5DF2\u6709\u4F1A\u8BDD", cwd: thread.cwd, url: `codex://threads/${threadId}` };
+    try {
+      return { ...await this.confirm(record2, { readThread }), action: "modified" };
+    } catch (error2) {
+      return { ...record2, action: "modified", status: "needs_confirmation", note: `\u4FEE\u6539\u7ED3\u679C\u5C1A\u672A\u786E\u8BA4\uFF1A${error2.message} \u8BF7\u5BF9\u540C\u4E00\u4F1A\u8BDD\u91CD\u8BD5\u5E76\u8BFB\u56DE\u8BBE\u7F6E\u3002` };
+    }
   }
   projects() {
     return this.rpc((client) => listProjects(client));
@@ -18407,7 +18443,7 @@ var import_node_fs6 = __toESM(require("node:fs"), 1);
 var import_node_path7 = __toESM(require("node:path"), 1);
 var import_node_crypto2 = require("node:crypto");
 var SETTINGS_READ_OUTPUT = { type: "object", properties: { schema: { type: "object" }, values: { type: "object" }, layout: { type: "array", items: { type: "object" } } }, required: ["schema", "values"] };
-var SETTINGS_UPDATE_INPUT = { type: "object", properties: { set: { type: "object", properties: { providerId: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, project: { type: "string" }, title: { type: "string" } }, minProperties: 1, additionalProperties: false } }, required: ["set"], additionalProperties: false };
+var SETTINGS_UPDATE_INPUT = { type: "object", properties: { set: { type: "object", properties: { providerId: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, project: { type: "string" }, title: { type: "string" }, editThread: { type: "string" }, editProvider: { type: "string" }, editModel: { type: "string" }, editEffort: { type: "string" } }, minProperties: 1, additionalProperties: false } }, required: ["set"], additionalProperties: false };
 var EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 var NativeSettings = class {
   constructor(service, { directory = import_node_path7.default.join(home(), "model-switcher"), read = readConfig } = {}) {
@@ -18427,7 +18463,16 @@ var NativeSettings = class {
   values() {
     const config2 = this.read(), saved = this.stored(), providers = providerList(config2).providers, defaults = launcherDefaults(config2);
     const providerId = providers.some((p) => p.id === saved.providerId) ? saved.providerId : defaults.providerId;
-    return { providerId, model: saved.model || defaults.model, effort: saved.effort || defaults.effort, title: saved.title || "\u65B0\u4F1A\u8BDD" };
+    return {
+      providerId,
+      model: saved.model || defaults.model,
+      effort: saved.effort || defaults.effort,
+      title: saved.title || "\u65B0\u4F1A\u8BDD",
+      editThread: saved.editThread || "",
+      editProvider: saved.editProvider || defaults.providerId,
+      editModel: saved.editModel || "qwen3.8-27b",
+      editEffort: saved.editEffort || "xhigh"
+    };
   }
   async selection() {
     const projects = await this.service.projects(), choices = projectChoices(projects), saved = this.stored();
@@ -18441,16 +18486,34 @@ var NativeSettings = class {
       model: { type: "string", title: "\u6A21\u578B ID", description: "OpenAI \u5217\u8868\u6765\u81EA Codex model/list\uFF1B\u7B2C\u4E09\u65B9\u6765\u81EA\u6240\u9009\u4F9B\u5E94\u5546\u7684 /models\u3002\u53EF\u5728\u6A21\u578B\u9009\u62E9\u9762\u677F\u67E5\u770B\uFF0C\u4E5F\u53EF\u586B\u5199\u5B8C\u6574\u6A21\u578B ID\u3002", minLength: 1, maxLength: 160 },
       effort: { type: "string", title: "\u601D\u8003\u5F3A\u5EA6", description: "\u6309\u6240\u9009\u503C\u4F20\u7ED9\u4F9B\u5E94\u5546\uFF0C\u4F8B\u5982 xhigh\uFF1B\u5B9E\u9645\u652F\u6301\u548C\u9884\u7B97\u7531\u4F9B\u5E94\u5546\u51B3\u5B9A\u3002", enum: EFFORTS },
       project: { type: "string", title: "\u6240\u5C5E\u9879\u76EE", description: "\u5B9E\u65F6\u8BFB\u53D6 Codex \u672C\u673A\u5DF2\u6709\u9879\u76EE\u3002\u65B0\u4F1A\u8BDD\u4FDD\u5B58\u9879\u76EE\u5F52\u5C5E\uFF0C\u5DE5\u4F5C\u76EE\u5F55\u4F7F\u7528\u8BE5\u9879\u76EE\u8DEF\u5F84\u3002", enum: [...!choice ? ["\u8BF7\u9009\u62E9\u9879\u76EE"] : [], ...choices.map((p) => p.label)] },
-      title: { type: "string", title: "\u65B0\u4F1A\u8BDD\u6807\u9898", minLength: 1, maxLength: 100 }
+      title: { type: "string", title: "\u65B0\u4F1A\u8BDD\u6807\u9898", minLength: 1, maxLength: 100 },
+      editThread: { type: "string", title: "\u5DF2\u6709\u4F1A\u8BDD\u94FE\u63A5\u6216 ID", description: "\u7C98\u8D34 codex://threads/ \u94FE\u63A5\uFF1B\u4E5F\u53EF\u6253\u5F00\u6A21\u578B\u9762\u677F\uFF0C\u4ECE\u5DF2\u6709\u4F1A\u8BDD\u5217\u8868\u9009\u62E9\u3002" },
+      editProvider: { type: "string", title: "\u4F1A\u8BDD\u539F\u4F9B\u5E94\u5546", description: "\u5FC5\u987B\u4E0E\u8BE5\u4F1A\u8BDD\u4FDD\u5B58\u7684\u4F9B\u5E94\u5546\u4E00\u81F4\u3002", enum: providerList(config2).providers.map((p) => p.id) },
+      editModel: { type: "string", title: "\u4FEE\u6539\u4E3A\u6A21\u578B", minLength: 1, maxLength: 160 },
+      editEffort: { type: "string", title: "\u4FEE\u6539\u4E3A\u601D\u8003\u5F3A\u5EA6", enum: EFFORTS }
     }, required: ["providerId", "model", "effort", "project", "title"] }, values: { ...this.values(), project: choice?.label || "\u8BF7\u9009\u62E9\u9879\u76EE" }, layout: [
       { kind: "group", title: "\u65B0\u5EFA\u4F1A\u8BDD\u7684\u8FDE\u63A5", items: [{ kind: "property", property: "providerId" }, { kind: "property", property: "model" }, { kind: "property", property: "effort" }, { kind: "tool", tool: "open_model_panel", description: "\u5728 Codex \u5185\u6253\u5F00\u6A21\u578B\u9009\u62E9\u9762\u677F\u3002" }] },
-      { kind: "group", title: "\u65B0\u4F1A\u8BDD", items: [{ kind: "property", property: "project" }, { kind: "property", property: "title" }, { kind: "tool", tool: "launch_from_settings", description: "\u5728\u6240\u9009\u9879\u76EE\u4E2D\u65B0\u5EFA\u771F\u5B9E\u4F1A\u8BDD\u5E76\u6253\u5F00\uFF0C\u4E0D\u53D1\u9001\u9996\u6761\u6D88\u606F\u3002" }] }
+      { kind: "group", title: "\u65B0\u4F1A\u8BDD", items: [{ kind: "property", property: "project" }, { kind: "property", property: "title" }, { kind: "tool", tool: "launch_from_settings", description: "\u5728\u6240\u9009\u9879\u76EE\u4E2D\u65B0\u5EFA\u771F\u5B9E\u4F1A\u8BDD\u5E76\u6253\u5F00\uFF0C\u4E0D\u53D1\u9001\u9996\u6761\u6D88\u606F\u3002" }] },
+      { kind: "group", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", items: [{ kind: "property", property: "editThread" }, { kind: "property", property: "editProvider" }, { kind: "property", property: "editModel" }, { kind: "property", property: "editEffort" }, { kind: "tool", tool: "modify_from_settings", description: "\u4FEE\u6539\u6240\u586B\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\uFF0C\u4FDD\u7559\u4E0A\u4E0B\u6587\uFF1B\u5B9A\u65F6\u4EFB\u52A1\u914D\u7F6E\u4FDD\u6301\u539F\u6837\u3002" }] }
     ] };
   }
   async update(set) {
     if (!set || typeof set !== "object" || Array.isArray(set) || !Object.keys(set).length) throw new Error("\u6CA1\u6709\u53EF\u66F4\u65B0\u7684\u8BBE\u7F6E\u3002");
-    const allowed = ["providerId", "model", "effort", "project", "title"];
+    const editKeys = ["editThread", "editProvider", "editModel", "editEffort"];
+    const allowed = ["providerId", "model", "effort", "project", "title", ...editKeys];
     if (Object.entries(set).some(([key, value]) => !allowed.includes(key) || typeof value !== "string")) throw new Error("\u65E0\u6548\u7684\u63D2\u4EF6\u8BBE\u7F6E\u3002");
+    const editValues = { ...this.values(), ...set };
+    if (Object.keys(set).some((key) => editKeys.includes(key))) {
+      requireSelection(this.read(), editValues.editProvider, editValues.editModel);
+      if (!EFFORTS.includes(editValues.editEffort)) throw new Error("\u65E0\u6548\u7684\u601D\u8003\u5F3A\u5EA6\u3002");
+      if (editValues.editThread) existingThreadId(editValues.editThread);
+    }
+    if (Object.keys(set).every((key) => editKeys.includes(key))) {
+      const saved2 = this.stored(), data2 = { ...saved2, ...Object.fromEntries(editKeys.map((key) => [key, editValues[key]])) };
+      const project = (await this.selection()).choice?.label || "\u8BF7\u9009\u62E9\u9879\u76EE";
+      this.write(data2);
+      return { values: { ...this.values(), project } };
+    }
     const old = this.values(), { projects, choices, choice } = await this.selection(), values = { ...old, ...set }, config2 = this.read(), saved = this.stored();
     const selected = Object.hasOwn(set, "project") ? choices.find((p) => p.label === set.project) : choice;
     if (!selected) throw new Error("\u8BF7\u9009\u62E9 Codex \u5DF2\u6709\u7684\u672C\u673A\u9879\u76EE\uFF0C\u6216\u5237\u65B0\u9879\u76EE\u5217\u8868\u3002");
@@ -18464,12 +18527,20 @@ var NativeSettings = class {
     requireSelection(config2, values.providerId, values.model);
     if (!EFFORTS.includes(values.effort)) throw new Error("\u65E0\u6548\u7684\u601D\u8003\u5F3A\u5EA6\u3002");
     if (!values.title.trim() || values.title.length > 100) throw new Error("\u6807\u9898\u9700\u8981 1\u2013100 \u4E2A\u5B57\u7B26\u3002");
-    import_node_fs6.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
     values.project = selected.label;
-    const data = { ...values, projectId: selected.projectId, cwd: selected.cwd, modelsByProvider: { ...saved.modelsByProvider, [values.providerId]: values.model }, effortsByProvider: { ...saved.effortsByProvider, [values.providerId]: values.effort } }, tmp = this.file() + "." + (0, import_node_crypto2.randomUUID)() + ".tmp";
+    const data = { ...values, projectId: selected.projectId, cwd: selected.cwd, modelsByProvider: { ...saved.modelsByProvider, [values.providerId]: values.model }, effortsByProvider: { ...saved.effortsByProvider, [values.providerId]: values.effort } };
+    this.write(data);
+    return { values };
+  }
+  write(data) {
+    import_node_fs6.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
+    const tmp = this.file() + "." + (0, import_node_crypto2.randomUUID)() + ".tmp";
     import_node_fs6.default.writeFileSync(tmp, JSON.stringify(data), { mode: 384 });
     import_node_fs6.default.renameSync(tmp, this.file());
-    return { values };
+  }
+  modify() {
+    const values = this.values();
+    return this.service.modifyExisting({ threadRef: values.editThread, providerId: values.editProvider, model: values.editModel, effort: values.editEffort });
   }
   async launch() {
     const { choice } = await this.selection();
@@ -18495,6 +18566,9 @@ async function main() {
     { name: "read_launcher_settings", description: "\u8BFB\u53D6\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u539F\u751F\u914D\u7F6E\u63A7\u4EF6\u3001\u5F53\u524D\u8BBE\u7F6E\u548C\u64CD\u4F5C\u6309\u94AE\u3002", inputSchema: empty, outputSchema: SETTINGS_READ_OUTPUT, annotations: { readOnlyHint: true } },
     { name: "update_launcher_settings", description: "\u4FDD\u5B58\u63D2\u4EF6\u539F\u751F\u914D\u7F6E\u9875\u4E2D\u6539\u53D8\u7684\u5B57\u6BB5\uFF1B\u4E0D\u4FEE\u6539 Codex \u9ED8\u8BA4\u914D\u7F6E\uFF0C\u4E0D\u521B\u5EFA\u4F1A\u8BDD\u3002", inputSchema: SETTINGS_UPDATE_INPUT, outputSchema: { type: "object", properties: { values: { type: "object" } }, required: ["values"] }, annotations: { readOnlyHint: false } },
     { name: "launch_from_settings", title: "\u6309\u4EE5\u4E0A\u914D\u7F6E\u65B0\u5EFA\u4F1A\u8BDD", description: "\u7528\u6237\u70B9\u51FB\u539F\u751F\u8BBE\u7F6E\u9875\u7684\u65B0\u5EFA\u6309\u94AE\u6216\u660E\u786E\u8981\u6C42\u65F6\uFF0C\u4F7F\u7528\u5DF2\u4FDD\u5B58\u7684\u63D2\u4EF6\u8BBE\u7F6E\u65B0\u5EFA\u5E76\u6253\u5F00\u4F1A\u8BDD\uFF1B\u4E0D\u53D1\u9001\u6D88\u606F\u3002", inputSchema: empty, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false } },
+    { name: "modify_from_settings", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", description: "\u7528\u6237\u70B9\u51FB\u4FEE\u6539\u6309\u94AE\u6216\u660E\u786E\u8981\u6C42\u65F6\uFF0C\u6309\u63D2\u4EF6\u8BBE\u7F6E\u4FEE\u6539\u6307\u5B9A\u5DF2\u6709\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\u3002\u9ED8\u8BA4 custom / qwen3.8-27b / xhigh\uFF1B\u4FDD\u7559\u4E0A\u4E0B\u6587\uFF0C\u4E0D\u53D1\u9001\u6D88\u606F\u3001\u4E0D\u6539\u4F9B\u5E94\u5546\u6216\u5B9A\u65F6\u4EFB\u52A1\u3002", inputSchema: empty, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
+    { name: "list_existing_threads", description: "\u5206\u9875\u8BFB\u53D6\u6307\u5B9A\u4F9B\u5E94\u5546\u7684\u672C\u673A\u5DF2\u6709\u4F1A\u8BDD\uFF0C\u4F9B\u7528\u6237\u9009\u62E9\u3002", inputSchema: { type: "object", properties: { providerId: { type: "string", default: "custom" }, cursor: { type: "string" } }, additionalProperties: false }, annotations: { readOnlyHint: true } },
+    { name: "modify_existing_thread", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\u4FEE\u6539\u6307\u5B9A\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\uFF0C\u9ED8\u8BA4 custom / qwen3.8-27b / xhigh\u3002\u5148\u6838\u5BF9\u6301\u4E45\u5316\u4F9B\u5E94\u5546\uFF0C\u518D\u7B49\u5F85\u684C\u9762\u8BBE\u7F6E\u8BFB\u56DE\uFF1B\u4E0D\u65B0\u5EFA\u4F1A\u8BDD\u3001\u4E0D\u53D1\u9001\u6D88\u606F\u3001\u4E0D\u5207\u6362\u4F9B\u5E94\u5546\u3001\u4E0D\u6539\u5B9A\u65F6\u4EFB\u52A1\u3002", inputSchema: { type: "object", properties: { threadRef: { type: "string", description: "\u7528\u6237\u9009\u62E9\u6216\u63D0\u4F9B\u7684\u4F1A\u8BDD ID / codex://threads/ \u94FE\u63A5" }, providerId: { type: "string", default: "custom" }, model: { type: "string", default: "qwen3.8-27b" }, effort: { type: "string", enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"], default: "xhigh" } }, required: ["threadRef"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
     {
       name: "open_model_panel",
       title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B",
@@ -18506,8 +18580,8 @@ async function main() {
     },
     {
       name: "open_thread_model_panel",
-      title: "\u65B0\u5EFA\u4F9B\u5E94\u5546\u4F1A\u8BDD",
-      description: "\u5728\u5F53\u524D\u4F1A\u8BDD\u65C1\u6253\u5F00\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B\u9762\u677F\u3002",
+      title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B",
+      description: "\u5728\u5F53\u524D\u4F1A\u8BDD\u65C1\u6253\u5F00\u9762\u677F\uFF0C\u65B0\u5EFA\u4F1A\u8BDD\u6216\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B\u3002",
       inputSchema: empty,
       icons,
       annotations: { readOnlyHint: true },
@@ -18549,6 +18623,12 @@ async function main() {
         return settings.update(args.set);
       case "launch_from_settings":
         return settings.launch();
+      case "modify_from_settings":
+        return settings.modify();
+      case "list_existing_threads":
+        return service.existingThreads(args);
+      case "modify_existing_thread":
+        return service.modifyExisting(args);
       case "open_model_panel":
       case "open_thread_model_panel":
         return service.catalog(extra);
@@ -18618,7 +18698,7 @@ async function main() {
     import_node_fs7.default.writeFileSync(import_node_path8.default.join(folder, "launcher.json"), JSON.stringify({ pid: process.pid, url: browserLink }), { mode: 384 });
     console.error("\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B\u542F\u52A8\u5668\u5DF2\u5728\u672C\u673A\u8FD0\u884C\u3002");
   } else {
-    const server = new Server({ name: "codex-model-switcher", version: "0.1.7", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
+    const server = new Server({ name: "codex-model-switcher", version: "0.2.0", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
     server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: URI, name: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", mimeType: "text/html;profile=mcp-app" }] }));
     server.setRequestHandler(ReadResourceRequestSchema, async (request) => {

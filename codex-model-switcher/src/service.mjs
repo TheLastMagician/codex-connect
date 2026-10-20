@@ -8,6 +8,12 @@ import {DesktopReader} from './desktop-ipc.mjs';
 import {listProjects,projectDirectory} from './projects.mjs';
 
 export const UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+export function existingThreadId(reference) {
+  if(typeof reference!=='string')throw new Error('请选择已有会话，或粘贴 codex://threads/ 会话链接。');
+  const id=reference.trim().replace(/^codex:\/\/threads\//i,'');
+  if(!UUID.test(id))throw new Error('会话链接或 ID 无效，请粘贴完整的 codex://threads/ 链接。');
+  return id.toLowerCase();
+}
 export function openThread(threadId) {
   if(!UUID.test(threadId))throw new Error('无效的会话 ID。');
   const url=`codex://threads/${threadId}`;
@@ -37,7 +43,7 @@ export async function confirmDesktop(thread,{open=openThread,Reader=DesktopReade
       }
       await sleep(pollMs);
     }while(now()<deadline);
-    throw new Error('会话已经创建，桌面尚未完成加载。点击“打开并确认”继续，不会重复创建。');
+    throw new Error('桌面尚未完成加载，请重新打开并确认该会话。');
   }finally{reader.close();}
 }
 
@@ -60,8 +66,31 @@ export class LauncherService {
       return {projects,thread};
     });
     return {...providerList(config),launcherDefaults:launcherDefaults(config),projects,defaultProjectId:thread?.projectId||projects.find(p=>p.roots.includes(thread?.cwd))?.id||null,defaultCwd:thread?.cwd||null,
+      currentThread:thread?{id:thread.id,title:thread.name||thread.title||'未命名会话',providerId:thread.modelProvider}:null,
       nativeCatalogConfigured:typeof config.model_catalog_json==='string',
-      note:'选择项目后即可新建会话。'};
+      note:'可以新建会话，或修改已有会话的模型。'};
+  }
+  async existingThreads({providerId='custom',cursor}={}) {
+    requireSelection(this.read(),providerId,'discovery');
+    if(cursor!=null&&(typeof cursor!=='string'||cursor.length>4096))throw new Error('无效的分页位置，请刷新会话列表。');
+    return this.rpc(async c=>{
+      const page=await c.request('thread/list',{limit:100,archived:false,sortKey:'updated_at',modelProviders:[providerId],...(cursor?{cursor}:{})});
+      return {threads:(page.data||[]).filter(t=>UUID.test(t.id)&&t.modelProvider===providerId).map(t=>({
+        id:t.id,title:t.name||t.title||t.preview?.slice(0,80)||'未命名会话',providerId:t.modelProvider,cwd:t.cwd,updatedAt:t.updatedAt
+      })),nextCursor:page.nextCursor||null,providerId};
+    });
+  }
+  async modifyExisting({threadRef,providerId='custom',model='qwen3.8-27b',effort='xhigh'}) {
+    const threadId=existingThreadId(threadRef),selection=requireSelection(this.read(),providerId,model);
+    if(!['none','minimal','low','medium','high','xhigh','max','ultra'].includes(effort))throw new Error('无效的思考强度。');
+    const readThread=id=>this.rpc(async c=>(await c.request('thread/read',{threadId:id,includeTurns:false})).thread);
+    const thread=await readThread(threadId);
+    if(thread?.id!==threadId)throw new Error('没有找到所选会话。');
+    if(thread.modelProvider!==providerId)throw new Error(`该会话的供应商是 ${thread.modelProvider||'未知'}，与 ${providerId} 不一致。请选择原供应商的会话；此操作不切换供应商。`);
+    if(thread.status?.type==='active')throw new Error('该会话正在运行，请等待当前回复完成后再修改。');
+    const record={threadId,providerId,model:selection.model,effort,title:thread.name||thread.title||'已有会话',cwd:thread.cwd,url:`codex://threads/${threadId}`};
+    try{return {...await this.confirm(record,{readThread}),action:'modified'};}
+    catch(error){return {...record,action:'modified',status:'needs_confirmation',note:`修改结果尚未确认：${error.message} 请对同一会话重试并读回设置。`};}
   }
   projects(){return this.rpc(client=>listProjects(client));}
   async models(providerId) {

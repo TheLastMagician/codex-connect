@@ -2,6 +2,7 @@ import {App,applyDocumentTheme,applyHostStyleVariables} from '@modelcontextproto
 const $=id=>document.getElementById(id);
 let catalog,models=[],currentResult,loading=false,modelGeneration=0,call;
 let currentOperation=null;
+let editing=false,existing=[],threadCursor=null,threadGeneration=0;
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function unpack(result){if(result.isError)throw new Error(result.content?.map(i=>i.text||'').join('\n')||'操作失败');return result.structuredContent||JSON.parse(result.content?.find(i=>i.type==='text')?.text||'{}');}
 function option(value,label){const node=document.createElement('option');node.value=value;node.textContent=label;return node;}
@@ -11,6 +12,31 @@ function update(){
   $('selection').textContent=provider&&model?`${provider.name} (${provider.id}) → ${model}`:'请选择供应商和模型';
   $('create').disabled=loading||!provider||!model||!$('project').value||!$('cwd').value||!$('title').value.trim();
   $('native').disabled=loading||!model||$('provider').value==='openai';
+  $('edit-submit').disabled=loading||!catalog||!$('edit-provider').value||!$('edit-ref').value.trim()||!$('edit-model').value.trim();
+  for(const id of ['mode-create','mode-edit'])$(id).disabled=loading||!catalog;
+  $('refresh').disabled=loading;
+}
+async function loadExisting(reset=true){
+  const providerId=$('edit-provider').value;if(!providerId)return;
+  const generation=++threadGeneration;if(reset){existing=[];threadCursor=null;}
+  $('edit-thread').disabled=true;$('more-threads').disabled=true;$('thread-source').textContent='正在读取已有会话…';
+  try{
+    const result=await call('list_existing_threads',{providerId,...(threadCursor?{cursor:threadCursor}:{})});
+    if(generation!==threadGeneration)return;
+    existing=[...new Map([...existing,...result.threads].map(t=>[t.id,t])).values()];threadCursor=result.nextCursor;
+    $('edit-thread').replaceChildren(option('','请选择会话'),...existing.map(t=>option(t.id,`${t.title} · ${t.id.slice(-8)}`)));
+    const id=$('edit-ref').value.trim().replace(/^codex:\/\/threads\//i,'');
+    if(existing.some(t=>t.id===id))$('edit-thread').value=id;
+    $('edit-thread').disabled=!existing.length;$('more-threads').hidden=!threadCursor;
+    $('thread-source').textContent=`${existing.length} 个 ${providerId} 会话，按最近更新排序。未列出的会话可直接粘贴链接。`;
+  }catch(error){if(generation===threadGeneration)$('thread-source').textContent=error.message+' 仍可粘贴会话链接。';}
+  finally{if(generation===threadGeneration)$('more-threads').disabled=false;}
+}
+function switchMode(value){
+  editing=value;$('create-section').hidden=value;$('edit-section').hidden=!value;$('advanced').hidden=value;
+  $('result').hidden=value||!currentResult;
+  $('mode-create').setAttribute('aria-pressed',String(!value));$('mode-edit').setAttribute('aria-pressed',String(value));
+  status('');if(value)loadExisting();
 }
 function updateEffort(){
   const selected=models.find(m=>m.id===modelId());
@@ -46,6 +72,10 @@ async function refresh(){
   status('正在读取本机配置…');
   try{
     catalog=await call('open_model_panel',{});
+    const priorProvider=$('edit-provider').value;
+    $('edit-provider').replaceChildren(...catalog.providers.map(p=>option(p.id,`${p.name} · ${p.id}`)));$('edit-provider').disabled=false;
+    $('edit-provider').value=catalog.providers.some(p=>p.id===(priorProvider||'custom'))?(priorProvider||'custom'):catalog.launcherDefaults.providerId;
+    if(!$('edit-ref').value&&catalog.currentThread?.providerId===$('edit-provider').value)$('edit-ref').value=`codex://threads/${catalog.currentThread.id}`;
     $('provider').replaceChildren(...catalog.providers.map(p=>option(p.id,`${p.name} · ${p.id}`)));$('provider').disabled=false;
     const preferred=catalog.launcherDefaults?.providerId||catalog.defaultProvider;
     $('provider').value=catalog.providers.some(p=>p.id===preferred)?preferred:catalog.providers[0]?.id||'';
@@ -55,7 +85,7 @@ async function refresh(){
     $('project').value=catalog.projects.some(p=>p.id===projectId)?projectId:catalog.defaultProjectId||catalog.projects[0]?.id||'';
     updateProject(catalog.defaultCwd);
     if(!$('title').value)$('title').value='新会话';
-    await loadModels();status(catalog.note);
+    await loadModels();if(editing&&!loading)await loadExisting();if(!editing&&!loading)status(catalog.note);
   }catch(error){status(error.message,true);}
 }
 function displayResult(result){
@@ -65,7 +95,21 @@ function displayResult(result){
   $('result-note').textContent=result.note||'已保存所选设置。发送前请核对会话输入框显示的模型。';
   localStorage.setItem('model-switcher:last-result',JSON.stringify(result));
 }
-async function busy(action){if(loading)return;loading=true;$('create-form').inert=true;update();$('complete').disabled=true;try{await action();}catch(error){status(error.message,true);}finally{loading=false;$('create-form').inert=false;$('complete').disabled=false;update();}}
+async function busy(action){if(loading)return;loading=true;$('create-form').inert=true;$('edit-form').inert=true;update();$('complete').disabled=true;try{await action();}catch(error){status(error.message,true);}finally{loading=false;$('create-form').inert=false;$('edit-form').inert=false;$('complete').disabled=false;update();}}
+$('edit-effort').replaceChildren(...['none','minimal','low','medium','high','xhigh','max','ultra'].map(e=>option(e,e)));$('edit-effort').value='xhigh';
+$('mode-create').onclick=()=>switchMode(false);$('mode-edit').onclick=()=>switchMode(true);
+$('edit-provider').onchange=()=>{$('edit-ref').value='';$('edit-result').hidden=true;loadExisting();update();};
+$('edit-thread').onchange=()=>{$('edit-ref').value=$('edit-thread').value?`codex://threads/${$('edit-thread').value}`:'';$('edit-result').hidden=true;update();};
+for(const id of ['edit-ref','edit-model','edit-effort'])$(id).addEventListener('input',()=>{$('edit-result').hidden=true;update();});
+$('reload-threads').onclick=()=>loadExisting();$('more-threads').onclick=()=>loadExisting(false);
+$('edit-form').onsubmit=event=>{event.preventDefault();busy(async()=>{
+  $('edit-result').hidden=true;status('正在打开所选会话、修改模型并等待设置读回…');
+  const result=await call('modify_existing_thread',{threadRef:$('edit-ref').value.trim(),providerId:$('edit-provider').value,model:$('edit-model').value.trim(),effort:$('edit-effort').value});
+  const verified=result.status==='settings_verified';
+  $('edit-result').hidden=false;$('edit-result-text').textContent=`${result.title} · ${result.providerId} / ${result.model} / ${result.effort}。${verified?'设置已读回核对，上下文保留。':result.note}`;
+  $('edit-result-link').href=result.url;
+  status(verified?'已有会话的模型和强度已修改并读回确认。':result.note,!verified);
+});};
 $('provider').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:provider',$('provider').value);$('manual').checked=false;$('manual-model').hidden=true;loadModels();};
 $('model').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:model:'+$('provider').value,modelId());updateEffort();update();};
 $('project').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:project',$('project').value);updateProject();};
@@ -87,7 +131,7 @@ if(window.parent===window){
   call=async(name,args)=>{const response=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({name,arguments:args})});return unpack(await response.json());};
   refresh();
 }else{
-  const app=new App({name:'供应商与模型',version:'0.1.7'});
+  const app=new App({name:'供应商与模型',version:'0.2.0'});
   function apply(ctx){if(ctx.theme)applyDocumentTheme(ctx.theme);if(ctx.styles?.variables)applyHostStyleVariables(ctx.styles.variables);if(ctx.safeAreaInsets){const s=ctx.safeAreaInsets;document.body.style.padding=`${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`;}}
   app.onhostcontextchanged=apply;app.ontoolresult=()=>{};app.onerror=()=>status('面板与 Codex 的连接暂不可用，请重新打开。',true);
   call=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));

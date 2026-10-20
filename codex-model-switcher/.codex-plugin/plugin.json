@@ -1,19 +1,12 @@
 {
-  "name": "codex-model-switcher",
-  "version": "0.1.7",
-  "description": "在本机面板选择供应商和模型，新建并打开真实 Codex 桌面会话。",
-  "author": {
-    "name": "Local Workspace"
-  },
-  "license": "MIT",
   "requires_local_executor": true,
   "mcpServers": "./.mcp.json",
   "skills": "./skills/",
   "interface": {
     "displayName": "供应商与模型",
-    "shortDescription": "选择供应商和模型，新建 Codex 会话",
-    "longDescription": "通过本机 MCP App 面板选择已配置的供应商、模型和工作目录，新建真实 Codex 会话并打开。密钥只在本机后端使用。原生模型菜单首次接入可能需要重新启动桌面一次；不修改默认账号、供应商或模型。跨供应商切换当前会话尚未实现。",
-    "developerName": "Local Workspace",
+    "shortDescription": "新建会话或修改已有会话模型",
+    "longDescription": "通过本机面板选择供应商、模型和项目新建会话，或修改同一供应商已有会话的模型与思考强度。默认 custom / qwen3.8-27b / xhigh。保留原会话上下文，不发送消息，不修改定时任务或全局模型目录；不支持跨供应商修改已有会话。密钥只在本机后端使用。",
+    "developerName": "zeng ge",
     "category": "Productivity",
     "capabilities": [
       "Interactive",
@@ -23,5 +16,15 @@
     "logo": "./assets/icon.svg",
     "composerIcon": "./assets/icon.svg",
     "defaultPrompt": "打开供应商与模型面板，选择供应商和模型新建会话"
-  }
+  },
+  "name": "codex-model-switcher",
+  "version": "0.2.0",
+  "description": "选择供应商和模型，新建 Codex 会话或修改已有会话的模型。",
+  "author": {
+    "name": "zeng ge",
+    "email": "675324311@qq.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/TheLastMagician/codex-connect/tree/main/codex-model-switcher",
+  "repository": "https://github.com/TheLastMagician/codex-connect"
 }

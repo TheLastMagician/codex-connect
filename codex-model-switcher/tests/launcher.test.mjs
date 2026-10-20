@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {providerList,discoverModels,requireSelection,launcherDefaults} from '../src/providers.mjs';
-import {LauncherService,confirmDesktop} from '../src/service.mjs';
+import {LauncherService,confirmDesktop,existingThreadId} from '../src/service.mjs';
 import {DesktopReader} from '../src/desktop-ipc.mjs';
 import {buildCatalog} from '../src/catalog.mjs';
 import {NativeSettings} from '../src/settings.mjs';
@@ -173,4 +173,70 @@ test('confirmation waits for resume and verifies the persisted identity before m
   assert.equal((await confirmDesktop(thread,options)).status,'settings_verified');assert.equal(reads,2);assert.equal(verified,'custom');assert.equal(closed,1);
   await assert.rejects(confirmDesktop(thread,{...options,readThread:async id=>({id,modelProvider:'openai'})}),/保存的供应商/);
   assert.equal(opens,1);
+});
+
+test('existing thread references accept only a local thread ID or exact Codex thread link',()=>{
+  const id=randomUUID();
+  assert.equal(existingThreadId(id),id);assert.equal(existingThreadId(` codex://threads/${id} `),id);
+  for(const ref of ['',`https://example.com/${id}`,`codex://threads/${id}?other=1`,null])assert.throws(()=>existingThreadId(ref));
+});
+
+test('modifying an existing thread defaults to Qwen xhigh and never creates or renames a thread',async()=>{
+  const id=randomUUID(),calls=[];let confirmed;
+  const thread={id,name:'日报',modelProvider:'custom',cwd:os.tmpdir(),projectId:randomUUID()};
+  const service=new LauncherService({read:()=>config,rpc:async action=>action({request:async(method,args)=>{
+    calls.push(method);assert.equal(method,'thread/read');assert.equal(args.threadId,id);return {thread};
+  }}),confirm:async(record,{readThread})=>{
+    confirmed=record;assert.deepEqual(await readThread(record.threadId),thread);
+    return {...record,status:'settings_verified',observed:{model:record.model,modelProvider:record.providerId,reasoningEffort:record.effort}};
+  }});
+  const result=await service.modifyExisting({threadRef:`codex://threads/${id}`});
+  assert.equal(result.threadId,id);assert.equal(result.model,'qwen3.8-27b');assert.equal(result.effort,'xhigh');
+  assert.equal(result.title,'日报');assert.equal(result.cwd,thread.cwd);assert.equal(confirmed.providerId,'custom');
+  assert.equal(result.status,'settings_verified');assert.deepEqual(calls,['thread/read','thread/read']);
+});
+
+test('existing thread provider mismatch and invalid input cannot reach desktop mutation',async()=>{
+  const id=randomUUID();let confirms=0,reads=0;
+  const service=new LauncherService({read:()=>config,rpc:async action=>action({request:async()=>{reads++;return {thread:{id,modelProvider:'openai'}};}}),confirm:async()=>{confirms++;}});
+  await assert.rejects(service.modifyExisting({threadRef:id}),/供应商是 openai/);
+  await assert.rejects(service.modifyExisting({threadRef:'not-a-thread'}));
+  await assert.rejects(service.modifyExisting({threadRef:id,model:'\ninvalid'}));
+  await assert.rejects(service.modifyExisting({threadRef:id,effort:'unknown'}));
+  assert.equal(reads,1);assert.equal(confirms,0);
+});
+
+test('existing thread failed readback stays unconfirmed and retries target the same ID',async()=>{
+  const id=randomUUID();let confirmations=0;
+  const service=new LauncherService({read:()=>config,rpc:async action=>action({request:async(method)=>{
+    assert.equal(method,'thread/read');return {thread:{id,modelProvider:'custom'}};
+  }}),confirm:async record=>{confirmations++;assert.equal(record.threadId,id);throw new Error('desktop timeout');}});
+  for(let i=0;i<2;i++){
+    const result=await service.modifyExisting({threadRef:id});
+    assert.equal(result.status,'needs_confirmation');assert.equal(result.threadId,id);assert.match(result.note,/尚未确认/);
+  }
+  assert.equal(confirmations,2);
+});
+
+test('existing thread picker preserves pagination and filters out other providers',async()=>{
+  const id=randomUUID(),other=randomUUID();let requested;
+  const service=new LauncherService({read:()=>config,rpc:async action=>action({request:async(method,args)=>{
+    assert.equal(method,'thread/list');requested=args;return {data:[{id,name:'已有日报',modelProvider:'custom'},{id:other,modelProvider:'openai'}],nextCursor:'page-2'};
+  }})});
+  const page=await service.existingThreads({cursor:'page-1'});
+  assert.deepEqual(requested.modelProviders,['custom']);assert.equal(requested.cursor,'page-1');
+  assert.deepEqual(page.threads.map(t=>t.id),[id]);assert.equal(page.nextCursor,'page-2');
+});
+
+test('native existing-thread settings work without any project and preserve creation settings',async t=>{
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'codex-launcher-test-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const id=randomUUID();let modified;
+  const settings=new NativeSettings({projects:async()=>[],modifyExisting:async args=>{modified=args;return args;}},{directory,read:()=>config});
+  const initial=await settings.get();
+  assert.equal(initial.values.editModel,'qwen3.8-27b');assert.equal(initial.values.editEffort,'xhigh');
+  assert.ok(initial.layout.some(g=>g.items.some(i=>i.tool==='modify_from_settings')));
+  await settings.update({editThread:`codex://threads/${id}`});
+  await new NativeSettings(settings.service,{directory,read:()=>config}).modify();
+  assert.equal(modified.providerId,'custom');assert.equal(modified.model,'qwen3.8-27b');assert.equal(modified.effort,'xhigh');
+  assert.equal(settings.values().title,'新会话');assert.equal(modified.threadRef,`codex://threads/${id}`);
 });
