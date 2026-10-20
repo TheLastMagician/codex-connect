@@ -3261,8 +3261,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path9) {
-      let input = path9;
+    function removeDotSegments(path11) {
+      let input = path11;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3671,8 +3671,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path9 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
+        const path11 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path11 && path11 !== "/" ? path11 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7185,12 +7185,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs8, exportName) {
+    function addFormats(ajv, list, fs10, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs8[f]);
+        ajv.addFormat(f, fs10[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -7199,11 +7199,11 @@ var require_dist = __commonJS({
 });
 
 // src/server.mjs
-var import_node_fs7 = __toESM(require("node:fs"), 1);
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_fs9 = __toESM(require("node:fs"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 var import_node_url = require("node:url");
 var import_node_http = __toESM(require("node:http"), 1);
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 
 // node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -7442,10 +7442,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path9) {
-  if (!path9)
+function getElementAtPath(obj, path11) {
+  if (!path11)
     return obj;
-  return path9.reduce((acc, key) => acc?.[key], obj);
+  return path11.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -7785,11 +7785,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path9, issues) {
+function prefixIssues(path11, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path9);
+    iss.path.unshift(path11);
     return iss;
   });
 }
@@ -8247,16 +8247,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path9 = []) => {
+  const processError = (error3, path11 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else {
-        const fullpath = [...path9, ...issue2.path];
+        const fullpath = [...path11, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -17895,7 +17895,7 @@ var AppServer = class {
       if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
       else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.2.1" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.3.0" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }
@@ -17950,7 +17950,7 @@ var import_node_crypto = require("node:crypto");
 var import_node_path3 = __toESM(require("node:path"), 1);
 var import_node_os3 = __toESM(require("node:os"), 1);
 var import_promises = require("node:timers/promises");
-var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-read-model-settings": 1, "thread-follower-update-thread-settings": 2 };
+var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-read-model-settings": 1, "thread-follower-update-thread-settings": 2, "thread-follower-start-turn": 2 };
 var DesktopReader = class {
   constructor({ pipePath = process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path3.default.join(process.env.CODEX_HOME || import_node_path3.default.join(import_node_os3.default.homedir(), ".codex"), "ipc", "ipc.sock"), timeoutMs = 8e3 } = {}) {
     Object.assign(this, { pipePath, timeoutMs });
@@ -18529,7 +18529,8 @@ var NativeSettings = class {
     }, required: ["providerId", "model", "effort", "project", "title"] }, values: { ...this.values(), project: choice?.label || "\u8BF7\u9009\u62E9\u9879\u76EE" }, layout: [
       { kind: "group", title: "\u65B0\u5EFA\u4F1A\u8BDD\u7684\u8FDE\u63A5", items: [{ kind: "property", property: "providerId" }, { kind: "property", property: "model" }, { kind: "property", property: "effort" }, { kind: "tool", tool: "open_model_panel", description: "\u5728 Codex \u5185\u6253\u5F00\u6A21\u578B\u9009\u62E9\u9762\u677F\u3002" }] },
       { kind: "group", title: "\u65B0\u4F1A\u8BDD", items: [{ kind: "property", property: "project" }, { kind: "property", property: "title" }, { kind: "tool", tool: "launch_from_settings", description: "\u5728\u6240\u9009\u9879\u76EE\u4E2D\u65B0\u5EFA\u771F\u5B9E\u4F1A\u8BDD\u5E76\u6253\u5F00\uFF0C\u4E0D\u53D1\u9001\u9996\u6761\u6D88\u606F\u3002" }] },
-      { kind: "group", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", items: [{ kind: "property", property: "editThread" }, { kind: "property", property: "editProvider" }, { kind: "property", property: "editModel" }, { kind: "property", property: "editEffort" }, { kind: "tool", tool: "modify_from_settings", description: "\u4FEE\u6539\u6A21\u578B\u5E76\u6838\u5BF9\u5386\u53F2\u6A21\u578B\u8BB0\u5F55\uFF1B\u4EC5\u9A8C\u8BC1\u8BBE\u7F6E\u3002\u65E7\u6A21\u578B\u538B\u7F29\u5931\u8D25\u65F6\u9700\u5728\u539F\u4F1A\u8BDD\u6267\u884C /compact\uFF0C\u672C\u64CD\u4F5C\u4E0D\u81EA\u52A8\u538B\u7F29\u6216\u53D1\u9001\u6D88\u606F\u3002" }] }
+      { kind: "group", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", items: [{ kind: "property", property: "editThread" }, { kind: "property", property: "editProvider" }, { kind: "property", property: "editModel" }, { kind: "property", property: "editEffort" }, { kind: "tool", tool: "modify_from_settings", description: "\u4FEE\u6539\u6A21\u578B\u5E76\u6838\u5BF9\u5386\u53F2\u6A21\u578B\u8BB0\u5F55\uFF1B\u4EC5\u9A8C\u8BC1\u8BBE\u7F6E\u3002\u65E7\u6A21\u578B\u538B\u7F29\u5931\u8D25\u65F6\u9700\u5728\u539F\u4F1A\u8BDD\u6267\u884C /compact\uFF0C\u672C\u64CD\u4F5C\u4E0D\u81EA\u52A8\u538B\u7F29\u6216\u53D1\u9001\u6D88\u606F\u3002" }] },
+      { kind: "group", title: "\u5343\u95EE\u72EC\u7ACB\u5B9A\u65F6\u4EFB\u52A1", items: [{ kind: "tool", tool: "open_schedule_panel", description: "\u5728\u63D2\u4EF6\u9762\u677F\u9009\u62E9\u4F1A\u8BDD\u548C\u6BCF\u65E5\u6267\u884C\u65F6\u95F4\uFF0C\u56FA\u5B9A\u5343\u95EE\u6A21\u578B\uFF1B\u67E5\u770B\u8FD0\u884C\u8BB0\u5F55\u5E76\u542F\u505C\u4EFB\u52A1\u3002" }] }
     ] };
   }
   async update(set) {
@@ -18584,20 +18585,254 @@ var NativeSettings = class {
   }
 };
 
+// src/schedules.mjs
+var import_node_fs7 = __toESM(require("node:fs"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_crypto3 = require("node:crypto");
+var SCHEDULER_VERSION = "0.3.0";
+var GRACE_MS = 15 * 60 * 1e3;
+var scheduleDirectory = () => import_node_path8.default.join(home(), "model-switcher", "scheduler");
+function localDay(now) {
+  return new Date(now + 8 * 36e5).toISOString().slice(0, 10);
+}
+function scheduledTime(job, day) {
+  return Date.parse(`${day}T${job.time}:00+08:00`);
+}
+function nextRun(job, now = Date.now()) {
+  if (job.status !== "ACTIVE") return null;
+  let at = scheduledTime(job, localDay(now));
+  if (at <= now) at += 864e5;
+  return at;
+}
+function atomicJson(file, value) {
+  import_node_fs7.default.mkdirSync(import_node_path8.default.dirname(file), { recursive: true, mode: 448 });
+  const tmp = `${file}.${(0, import_node_crypto3.randomUUID)()}.tmp`;
+  import_node_fs7.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
+  import_node_fs7.default.renameSync(tmp, file);
+}
+var ScheduleStore = class {
+  constructor({ directory = scheduleDirectory(), read = readConfig, rpc = withAppServer, now = Date.now } = {}) {
+    Object.assign(this, { directory, read, rpc, now });
+  }
+  jobFile(id) {
+    if (!UUID.test(id || "")) throw new Error("\u65E0\u6548\u7684\u5B9A\u65F6\u4EFB\u52A1 ID\u3002");
+    return import_node_path8.default.join(this.directory, "jobs", id + ".json");
+  }
+  readJob(id) {
+    try {
+      return JSON.parse(import_node_fs7.default.readFileSync(this.jobFile(id), "utf8"));
+    } catch (error2) {
+      if (error2.code === "ENOENT") throw new Error("\u5B9A\u65F6\u4EFB\u52A1\u4E0D\u5B58\u5728\uFF0C\u8BF7\u5237\u65B0\u5217\u8868\u3002");
+      throw error2;
+    }
+  }
+  jobs() {
+    const folder = import_node_path8.default.join(this.directory, "jobs");
+    if (!import_node_fs7.default.existsSync(folder)) return [];
+    return import_node_fs7.default.readdirSync(folder).filter((f) => /^[\da-f-]+\.json$/i.test(f)).map((f) => JSON.parse(import_node_fs7.default.readFileSync(import_node_path8.default.join(folder, f), "utf8")));
+  }
+  runFile(id, day) {
+    this.jobFile(id);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("\u65E0\u6548\u7684\u8FD0\u884C\u65E5\u671F\u3002");
+    return import_node_path8.default.join(this.directory, "runs", id, day + ".json");
+  }
+  run(id, day) {
+    try {
+      return JSON.parse(import_node_fs7.default.readFileSync(this.runFile(id, day), "utf8"));
+    } catch (error2) {
+      if (error2.code === "ENOENT") return null;
+      throw error2;
+    }
+  }
+  claim(job, day) {
+    const file = this.runFile(job.id, day);
+    import_node_fs7.default.mkdirSync(import_node_path8.default.dirname(file), { recursive: true, mode: 448 });
+    const run = { jobId: job.id, day, scheduledFor: scheduledTime(job, day), status: "waiting", clientUserMessageId: (0, import_node_crypto3.randomUUID)(), createdAt: this.now(), updatedAt: this.now() };
+    try {
+      import_node_fs7.default.writeFileSync(file, JSON.stringify(run), { flag: "wx", mode: 384 });
+      return run;
+    } catch (e) {
+      if (e.code === "EEXIST") return this.run(job.id, day);
+      throw e;
+    }
+  }
+  saveRun(run) {
+    atomicJson(this.runFile(run.jobId, run.day), { ...run, updatedAt: this.now() });
+  }
+  recent(id) {
+    const folder = import_node_path8.default.join(this.directory, "runs", id);
+    if (!import_node_fs7.default.existsSync(folder)) return [];
+    return import_node_fs7.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(0, 7).map((f) => JSON.parse(import_node_fs7.default.readFileSync(import_node_path8.default.join(folder, f), "utf8")));
+  }
+  pending(id) {
+    const folder = import_node_path8.default.join(this.directory, "runs", id);
+    if (!import_node_fs7.default.existsSync(folder)) return [];
+    return import_node_fs7.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map((f) => JSON.parse(import_node_fs7.default.readFileSync(import_node_path8.default.join(folder, f), "utf8"))).filter((r) => ["accepted", "submitting", "unknown"].includes(r.status));
+  }
+  acknowledge(id, day) {
+    const run = this.run(id, day);
+    if (!run || !["unknown", "submitting"].includes(run.status) || this.now() - run.updatedAt < 12e4) throw new Error("\u8BE5\u8BB0\u5F55\u6682\u4E0D\u80FD\u89E3\u9664\u963B\u585E\uFF0C\u8BF7\u7B49\u5F85\u5E76\u6838\u5BF9\u539F\u4F1A\u8BDD\u3002");
+    this.saveRun({ ...run, status: "reviewed", note: "\u7528\u6237\u5DF2\u6838\u5BF9\u5E76\u89E3\u9664\u963B\u585E\uFF1B\u672C\u6B21\u4E0D\u4F1A\u91CD\u53D1\u3002" });
+    return { acknowledged: true };
+  }
+  list() {
+    return this.jobs().map((job) => ({ ...job, nextRunAt: nextRun(job, this.now()), runs: [...new Map([...this.pending(job.id), ...this.recent(job.id)].map((r) => [r.day, r])).values()].sort((a, b) => b.day.localeCompare(a.day)) }));
+  }
+  async save(input) {
+    const { id, name, threadRef, prompt, time: time3, status = "ACTIVE", providerId = "custom", model = "qwen3.8-27b", effort = "xhigh" } = input;
+    this.jobFile(id);
+    const threadId = existingThreadId(threadRef), selection = requireSelection(this.read(), providerId, model);
+    if (typeof name !== "string" || !name.trim() || name.length > 100) throw new Error("\u4EFB\u52A1\u540D\u79F0\u9700\u8981 1\u2013100 \u4E2A\u5B57\u7B26\u3002");
+    if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3) throw new Error("\u4EFB\u52A1\u63D0\u793A\u8BCD\u9700\u8981 1\u201312000 \u4E2A\u5B57\u7B26\u3002");
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time3 || "")) throw new Error("\u8BF7\u9009\u62E9\u6709\u6548\u7684\u6BCF\u65E5\u6267\u884C\u65F6\u95F4\u3002");
+    if (!["ACTIVE", "PAUSED"].includes(status) || !["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("\u65E0\u6548\u7684\u4EFB\u52A1\u72B6\u6001\u6216\u601D\u8003\u5F3A\u5EA6\u3002");
+    const thread = await this.rpc(async (c) => (await c.request("thread/read", { threadId, includeTurns: false })).thread);
+    if (thread?.id !== threadId || thread.modelProvider !== providerId) throw new Error("\u4EFB\u52A1\u76EE\u6807\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u4E0D\u4E00\u81F4\uFF0C\u672A\u4FDD\u5B58\u3002");
+    if (status === "ACTIVE" && this.jobs().some((j) => j.id !== id && j.status === "ACTIVE" && j.threadId === threadId && j.time === time3 && j.prompt === prompt.trim())) throw new Error("\u8FD9\u4E2A\u4F1A\u8BDD\u5DF2\u6709\u76F8\u540C\u65F6\u95F4\u548C\u63D0\u793A\u8BCD\u7684\u542F\u7528\u4EFB\u52A1\uFF0C\u8BF7\u7F16\u8F91\u5DF2\u6709\u4EFB\u52A1\u3002");
+    const old = import_node_fs7.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
+    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time: time3, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto3.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
+    atomicJson(this.jobFile(id), job);
+    return { ...job, nextRunAt: nextRun(job, this.now()) };
+  }
+  setStatus(id, status) {
+    if (!["ACTIVE", "PAUSED"].includes(status)) throw new Error("\u65E0\u6548\u7684\u4EFB\u52A1\u72B6\u6001\u3002");
+    const job = { ...this.readJob(id), status, revision: (0, import_node_crypto3.randomUUID)(), updatedAt: this.now() };
+    atomicJson(this.jobFile(id), job);
+    return job;
+  }
+};
+
+// src/scheduler-runtime.mjs
+var import_node_fs8 = __toESM(require("node:fs"), 1);
+var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_net2 = __toESM(require("node:net"), 1);
+var import_node_crypto4 = require("node:crypto");
+var import_node_child_process4 = require("node:child_process");
+var import_node_util = require("node:util");
+var import_promises3 = require("node:timers/promises");
+var schedulerPipe = () => process.platform === "win32" ? "\\\\.\\pipe\\codex-model-switcher-scheduler-" + (0, import_node_crypto4.createHash)("sha256").update(import_node_path9.default.resolve(scheduleDirectory()).toLowerCase()).digest("hex").slice(0, 16) : import_node_path9.default.join(scheduleDirectory(), "worker.sock");
+function schedulerControl(command = "health", token) {
+  return new Promise((resolve) => {
+    const socket = import_node_net2.default.createConnection(schedulerPipe());
+    let data = "";
+    const done = (value) => {
+      socket.destroy();
+      resolve(value);
+    };
+    socket.setTimeout(1500, () => done(null));
+    socket.on("error", () => done(null));
+    socket.on("connect", () => socket.write(JSON.stringify({ command, token }) + "\n"));
+    socket.on("data", (chunk) => {
+      data += chunk;
+      if (data.length > 8192) return done(null);
+      if (data.includes("\n")) {
+        try {
+          done(JSON.parse(data));
+        } catch {
+          done(null);
+        }
+      }
+    });
+    socket.on("end", () => done(null));
+  });
+}
+var SchedulerRuntime = class {
+  constructor(bundle) {
+    this.bundle = bundle;
+  }
+  async status() {
+    return await schedulerControl() || { running: false, version: null };
+  }
+  async ensure() {
+    if (this.starting) return this.starting;
+    this.starting = this.start().finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+  async stop() {
+    if (process.platform === "win32") await (0, import_node_util.promisify)(import_node_child_process4.execFile)("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "$taskRunKey='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; if(Test-Path $taskRunKey){$taskRunValues=Get-ItemProperty -Path $taskRunKey -ErrorAction Stop; if($null -ne $taskRunValues.PSObject.Properties['CodexModelScheduler']){Remove-ItemProperty -Path $taskRunKey -Name 'CodexModelScheduler' -ErrorAction Stop}}"], { windowsHide: true });
+    const tokenFile = import_node_path9.default.join(scheduleDirectory(), "control.key");
+    if (import_node_fs8.default.existsSync(tokenFile)) await schedulerControl("stop", import_node_fs8.default.readFileSync(tokenFile, "utf8"));
+    for (let i = 0; i < 20 && await schedulerControl(); i++) await (0, import_promises3.setTimeout)(250);
+    return await this.status();
+  }
+  async start() {
+    if (process.platform !== "win32") throw new Error("\u72EC\u7ACB\u5B9A\u65F6\u670D\u52A1\u76EE\u524D\u53EA\u9A8C\u8BC1\u5E76\u652F\u6301 Windows\u3002");
+    const folder = import_node_path9.default.join(scheduleDirectory(), "runtime");
+    import_node_fs8.default.mkdirSync(folder, { recursive: true, mode: 448 });
+    const tokenFile = import_node_path9.default.join(scheduleDirectory(), "control.key");
+    if (!import_node_fs8.default.existsSync(tokenFile)) try {
+      import_node_fs8.default.writeFileSync(tokenFile, (0, import_node_crypto4.randomBytes)(32).toString("hex"), { flag: "wx", mode: 384 });
+    } catch (error2) {
+      if (error2.code !== "EEXIST") throw error2;
+    }
+    const health = await schedulerControl();
+    if (health?.version && health.version !== SCHEDULER_VERSION) {
+      await schedulerControl("stop", import_node_fs8.default.readFileSync(tokenFile, "utf8"));
+      for (let i = 0; i < 20 && await schedulerControl(); i++) await (0, import_promises3.setTimeout)(250);
+      if (await schedulerControl()) throw new Error("\u65E7\u7248\u5B9A\u65F6\u670D\u52A1\u4ECD\u5728\u9000\u51FA\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+    }
+    const target = import_node_path9.default.join(folder, "scheduler.cjs");
+    if (!this.bundle || !import_node_fs8.default.existsSync(this.bundle)) throw new Error("\u5B9A\u65F6\u670D\u52A1\u6784\u5EFA\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
+    const data = import_node_fs8.default.readFileSync(this.bundle), tmp = target + "." + (0, import_node_crypto4.randomUUID)() + ".tmp";
+    import_node_fs8.default.writeFileSync(tmp, data, { mode: 384 });
+    import_node_fs8.default.renameSync(tmp, target);
+    const quoted = (value) => '"' + value.replaceAll('"', '""') + '"';
+    const command = `"${process.execPath}" "${target}"`;
+    const vbs = import_node_path9.default.join(folder, "start.vbs");
+    const codexHome = import_node_path9.default.dirname(import_node_path9.default.dirname(scheduleDirectory()));
+    import_node_fs8.default.writeFileSync(vbs, Buffer.from(`\uFEFFSet taskShell = CreateObject("WScript.Shell")\r
+Set taskEnv = taskShell.Environment("PROCESS")\r
+taskEnv("CODEX_HOME") = ${quoted(codexHome)}\r
+taskShell.Run ${quoted(command)}, 0, False\r
+`, "utf16le"), { mode: 384 });
+    const wscript = import_node_path9.default.join(process.env.WINDIR || "C:\\Windows", "System32", "wscript.exe");
+    if (!import_node_fs8.default.existsSync(wscript)) throw new Error("\u7CFB\u7EDF\u7F3A\u5C11 Windows Script Host\uFF0C\u65E0\u6CD5\u914D\u7F6E\u9690\u85CF\u542F\u52A8\u3002");
+    await (0, import_node_util.promisify)(import_node_child_process4.execFile)("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Force | Out-Null; New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'CodexModelScheduler' -PropertyType String -Value $env:CODEX_SCHEDULER_STARTUP_COMMAND -Force | Out-Null"], { windowsHide: true, env: { ...process.env, CODEX_SCHEDULER_STARTUP_COMMAND: `"${wscript}" "${vbs}"` } });
+    if (!await schedulerControl()) {
+      const child = (0, import_node_child_process4.spawn)(process.execPath, [target], { detached: true, windowsHide: true, stdio: "ignore", env: process.env });
+      await new Promise((resolve, reject) => {
+        child.once("spawn", resolve);
+        child.once("error", reject);
+      });
+      child.unref();
+    }
+    for (let i = 0; i < 30; i++) {
+      const result = await schedulerControl();
+      if (result?.version === SCHEDULER_VERSION) return result;
+      await (0, import_promises3.setTimeout)(200);
+    }
+    throw new Error("\u5B9A\u65F6\u670D\u52A1\u5C1A\u672A\u542F\u52A8\uFF0C\u8BF7\u68C0\u67E5\u672C\u673A Node.js\u3002\u4EFB\u52A1\u5DF2\u4FDD\u5B58\uFF0C\u53EF\u7A0D\u540E\u91CD\u65B0\u542F\u7528\u3002");
+  }
+};
+
 // src/server.mjs
 async function main() {
-  const directory = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url.fileURLToPath)("file:///codex-model-switcher/src/server.mjs"));
+  const directory = typeof __dirname === "string" ? __dirname : import_node_path10.default.dirname((0, import_node_url.fileURLToPath)("file:///codex-model-switcher/src/server.mjs"));
   const icons = [...["light", "dark"].map((theme) => ({
-    src: "data:image/svg+xml;base64," + import_node_fs7.default.readFileSync(import_node_path8.default.join(directory, "..", "assets", `navigation-${theme}.svg`)).toString("base64"),
+    src: "data:image/svg+xml;base64," + import_node_fs9.default.readFileSync(import_node_path10.default.join(directory, "..", "assets", `navigation-${theme}.svg`)).toString("base64"),
     mimeType: "image/svg+xml",
     sizes: ["any"],
     theme
-  })), { src: "data:image/svg+xml;base64," + import_node_fs7.default.readFileSync(import_node_path8.default.join(directory, "..", "assets", "icon.svg")).toString("base64"), mimeType: "image/svg+xml", sizes: ["any"] }];
+  })), { src: "data:image/svg+xml;base64," + import_node_fs9.default.readFileSync(import_node_path10.default.join(directory, "..", "assets", "icon.svg")).toString("base64"), mimeType: "image/svg+xml", sizes: ["any"] }];
   const service = new LauncherService();
   const settings = new NativeSettings(service);
+  const schedules = new ScheduleStore(), scheduler = new SchedulerRuntime(import_node_path10.default.join(directory, "scheduler.cjs"));
+  try {
+    if (schedules.jobs().some((j) => j.status === "ACTIVE")) scheduler.ensure().catch(() => {
+    });
+  } catch {
+  }
   const URI = "ui://codex-model-switcher/panel.html";
   const empty = { type: "object", properties: {}, additionalProperties: false };
   const tools = [
+    { name: "open_schedule_panel", title: "\u5343\u95EE\u72EC\u7ACB\u5B9A\u65F6\u4EFB\u52A1", description: "\u6253\u5F00\u63D2\u4EF6\u72EC\u7ACB\u5B9A\u65F6\u9875\uFF0C\u660E\u786E\u6307\u5B9A\u4F9B\u5E94\u5546\u548C\u6A21\u578B\uFF1B\u4E0D\u4F7F\u7528 Codex \u539F\u751F\u5B9A\u65F6\u5668\u7684\u6A21\u578B\u56DE\u9000\u3002", inputSchema: empty, icons, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: URI } } },
+    { name: "list_model_schedules", description: "\u8BFB\u53D6\u672C\u673A\u63D2\u4EF6\u5B9A\u65F6\u4EFB\u52A1\u3001\u4E0B\u6B21\u6267\u884C\u65F6\u95F4\u548C\u6700\u8FD1\u8FD0\u884C\u8BB0\u5F55\u3002", inputSchema: empty, annotations: { readOnlyHint: true } },
+    { name: "save_model_schedule", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\uFF0C\u5728\u672C\u673A\u521B\u5EFA\u6216\u66F4\u65B0\u72EC\u7ACB\u6BCF\u65E5\u5B9A\u65F6\u4EFB\u52A1\uFF0C\u5411\u6307\u5B9A\u5DF2\u6709\u4F1A\u8BDD\u53D1\u9001\u4EFB\u52A1\u63D0\u793A\u8BCD\u3002\u9ED8\u8BA4 custom / qwen3.8-27b / xhigh\uFF0C\u6309\u5317\u4EAC\u65F6\u95F4\u6267\u884C\u3002\u542F\u7528\u65F6\u5B89\u88C5\u9690\u85CF\u540E\u53F0\u670D\u52A1\u548C\u5F53\u524D\u7528\u6237\u767B\u5F55\u81EA\u542F\u52A8\uFF1B\u4E0D\u4FEE\u6539\u539F\u751F\u5B9A\u65F6\u4EFB\u52A1\u6216\u6A21\u578B\u76EE\u5F55\u3002\u76F8\u540C\u4EFB\u52A1\u7F16\u8F91\u548C\u91CD\u8BD5\u5FC5\u987B\u590D\u7528 ID\u3002", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, threadRef: { type: "string" }, prompt: { type: "string" }, time: { type: "string", description: "\u5317\u4EAC\u65F6\u95F4 HH:mm" }, status: { type: "string", enum: ["ACTIVE", "PAUSED"] }, providerId: { type: "string", default: "custom" }, model: { type: "string", default: "qwen3.8-27b" }, effort: { type: "string", enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"], default: "xhigh" } }, required: ["id", "name", "threadRef", "prompt", "time", "status"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
+    { name: "set_model_schedule_status", description: "\u7528\u6237\u8981\u6C42\u540E\u6682\u505C\u6216\u542F\u7528\u6307\u5B9A\u63D2\u4EF6\u5B9A\u65F6\u4EFB\u52A1\u3002\u542F\u7528\u4F1A\u542F\u52A8\u672C\u673A\u9690\u85CF\u540E\u53F0\u670D\u52A1\u3002", inputSchema: { type: "object", properties: { id: { type: "string" }, status: { type: "string", enum: ["ACTIVE", "PAUSED"] } }, required: ["id", "status"], additionalProperties: false }, annotations: { readOnlyHint: false, idempotentHint: true } },
+    { name: "acknowledge_model_schedule_run", description: "\u4EC5\u5728\u7528\u6237\u5DF2\u68C0\u67E5\u539F\u4F1A\u8BDD\u5E76\u660E\u786E\u786E\u8BA4\u540E\uFF0C\u89E3\u9664\u7ED3\u679C\u672A\u77E5\u7684\u5B9A\u65F6\u8FD0\u884C\u963B\u585E\u3002\u672C\u6B21\u4E0D\u4F1A\u91CD\u53D1\uFF0C\u53EA\u5141\u8BB8\u540E\u7EED\u8BA1\u5212\u7EE7\u7EED\u3002", inputSchema: { type: "object", properties: { id: { type: "string" }, day: { type: "string" } }, required: ["id", "day"], additionalProperties: false }, annotations: { readOnlyHint: false, idempotentHint: true } },
+    { name: "stop_model_scheduler", title: "\u6682\u505C\u5168\u90E8\u5E76\u505C\u6B62\u540E\u53F0\u670D\u52A1", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\uFF0C\u6682\u505C\u5168\u90E8\u63D2\u4EF6\u5B9A\u65F6\u4EFB\u52A1\uFF0C\u505C\u7528\u672C\u673A\u767B\u5F55\u81EA\u542F\u52A8\u5E76\u8BF7\u6C42\u540E\u53F0\u670D\u52A1\u9000\u51FA\u3002\u5DF2\u53D1\u9001\u7684\u4F1A\u8BDD\u56DE\u5408\u7EE7\u7EED\u6267\u884C\uFF0C\u4E0D\u4F1A\u4E2D\u65AD\u3002", inputSchema: empty, annotations: { readOnlyHint: false, idempotentHint: true } },
     { name: "read_launcher_settings", description: "\u8BFB\u53D6\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u539F\u751F\u914D\u7F6E\u63A7\u4EF6\u3001\u5F53\u524D\u8BBE\u7F6E\u548C\u64CD\u4F5C\u6309\u94AE\u3002", inputSchema: empty, outputSchema: SETTINGS_READ_OUTPUT, annotations: { readOnlyHint: true } },
     { name: "update_launcher_settings", description: "\u4FDD\u5B58\u63D2\u4EF6\u539F\u751F\u914D\u7F6E\u9875\u4E2D\u6539\u53D8\u7684\u5B57\u6BB5\uFF1B\u4E0D\u4FEE\u6539 Codex \u9ED8\u8BA4\u914D\u7F6E\uFF0C\u4E0D\u521B\u5EFA\u4F1A\u8BDD\u3002", inputSchema: SETTINGS_UPDATE_INPUT, outputSchema: { type: "object", properties: { values: { type: "object" } }, required: ["values"] }, annotations: { readOnlyHint: false } },
     { name: "launch_from_settings", title: "\u6309\u4EE5\u4E0A\u914D\u7F6E\u65B0\u5EFA\u4F1A\u8BDD", description: "\u7528\u6237\u70B9\u51FB\u539F\u751F\u8BBE\u7F6E\u9875\u7684\u65B0\u5EFA\u6309\u94AE\u6216\u660E\u786E\u8981\u6C42\u65F6\uFF0C\u4F7F\u7528\u5DF2\u4FDD\u5B58\u7684\u63D2\u4EF6\u8BBE\u7F6E\u65B0\u5EFA\u5E76\u6253\u5F00\u4F1A\u8BDD\uFF1B\u4E0D\u53D1\u9001\u6D88\u606F\u3002", inputSchema: empty, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false } },
@@ -18645,13 +18880,44 @@ async function main() {
     const config2 = readConfig();
     const catalog = prepareCatalog(config2, models);
     if (!await compatibleWithInstalledCli(catalog)) return { applied: false, catalog, note: "\u5F53\u524D\u547D\u4EE4\u884C Codex \u4E0D\u80FD\u8BFB\u53D6\u684C\u9762\u7248\u672C\u7684\u6A21\u578B\u76EE\u5F55\u3002\u5DF2\u751F\u6210\u76EE\u5F55\uFF0C\u4F46\u6CA1\u6709\u4FEE\u6539\u5171\u4EAB\u914D\u7F6E\uFF1B\u539F\u751F\u6A21\u578B\u83DC\u5355\u63A5\u5165\u9700\u8981\u5148\u7EDF\u4E00\u7248\u672C\u3002" };
-    const backup = import_node_path8.default.join(home(), "model-switcher", `config-before-catalog-${Date.now()}.toml`);
-    import_node_fs7.default.copyFileSync(import_node_path8.default.join(home(), "config.toml"), backup, import_node_fs7.default.constants.COPYFILE_EXCL);
+    const backup = import_node_path10.default.join(home(), "model-switcher", `config-before-catalog-${Date.now()}.toml`);
+    import_node_fs9.default.copyFileSync(import_node_path10.default.join(home(), "config.toml"), backup, import_node_fs9.default.constants.COPYFILE_EXCL);
     await withAppServer((c) => c.request("config/batchWrite", { edits: [{ keyPath: "model_catalog_json", value: catalog, mergeStrategy: "upsert" }], reloadUserConfig: true }));
     return { applied: true, catalog, backup, note: "\u5DF2\u4FDD\u7559\u539F\u6709\u6A21\u578B\u5E76\u63A5\u5165\u65B0\u6A21\u578B\u76EE\u5F55\u3002\u539F\u751F\u83DC\u5355\u53EF\u80FD\u9700\u8981\u91CD\u65B0\u542F\u52A8\u684C\u9762\u4E00\u6B21\uFF1B\u65E5\u540E\u65B0\u5EFA\u8FD9\u4E9B\u6A21\u578B\u7684\u4F1A\u8BDD\u4E0D\u9700\u8981\u518D\u6539\u914D\u7F6E\u3002" };
   }
   async function action(name, args = {}, extra = {}) {
     switch (name) {
+      case "open_schedule_panel":
+        return { ...await service.catalog(extra), initialMode: "schedule" };
+      case "list_model_schedules":
+        return { jobs: schedules.list(), service: await scheduler.status() };
+      case "save_model_schedule": {
+        const job = await schedules.save(args);
+        let runtime;
+        try {
+          runtime = job.status === "ACTIVE" ? await scheduler.ensure() : await scheduler.status();
+        } catch (error2) {
+          runtime = { running: false, error: error2.message };
+        }
+        return { job, service: runtime };
+      }
+      case "set_model_schedule_status": {
+        if (!["ACTIVE", "PAUSED"].includes(args.status)) throw new Error("\u65E0\u6548\u7684\u4EFB\u52A1\u72B6\u6001\u3002");
+        const job = args.status === "PAUSED" ? schedules.setStatus(args.id, args.status) : await schedules.save({ ...schedules.readJob(args.id), threadRef: schedules.readJob(args.id).threadId, status: args.status });
+        let runtime;
+        try {
+          runtime = job.status === "ACTIVE" ? await scheduler.ensure() : await scheduler.status();
+        } catch (error2) {
+          runtime = { running: false, error: error2.message };
+        }
+        return { job, service: runtime };
+      }
+      case "acknowledge_model_schedule_run":
+        return schedules.acknowledge(args.id, args.day);
+      case "stop_model_scheduler": {
+        for (const job of schedules.jobs()) schedules.setStatus(job.id, "PAUSED");
+        return { service: await scheduler.stop(), paused: true };
+      }
       case "read_launcher_settings":
         return settings.get();
       case "update_launcher_settings":
@@ -18681,13 +18947,13 @@ async function main() {
         throw new Error("\u4E0D\u652F\u6301\u7684\u64CD\u4F5C\u3002");
     }
   }
-  let html = import_node_fs7.default.readFileSync(import_node_path8.default.join(directory, "panel.html"), "utf8");
-  const token = (0, import_node_crypto3.randomBytes)(32).toString("hex");
+  let html = import_node_fs9.default.readFileSync(import_node_path10.default.join(directory, "panel.html"), "utf8");
+  const token = (0, import_node_crypto5.randomBytes)(32).toString("hex");
   let origin, browserLink;
   function authorized(request) {
     const header = request.headers.authorization || "";
     const expected = Buffer.from(`Bearer ${token}`), provided = Buffer.from(header);
-    return provided.length === expected.length && (0, import_node_crypto3.timingSafeEqual)(provided, expected) && (!request.headers.origin || request.headers.origin === origin);
+    return provided.length === expected.length && (0, import_node_crypto5.timingSafeEqual)(provided, expected) && (!request.headers.origin || request.headers.origin === origin);
   }
   const web = import_node_http.default.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -18728,12 +18994,12 @@ async function main() {
   origin = `http://127.0.0.1:${web.address().port}`;
   browserLink = origin + "/#token=" + token;
   if (process.argv.includes("--serve")) {
-    const folder = import_node_path8.default.join(home(), "model-switcher");
-    import_node_fs7.default.mkdirSync(folder, { recursive: true, mode: 448 });
-    import_node_fs7.default.writeFileSync(import_node_path8.default.join(folder, "launcher.json"), JSON.stringify({ pid: process.pid, url: browserLink }), { mode: 384 });
+    const folder = import_node_path10.default.join(home(), "model-switcher");
+    import_node_fs9.default.mkdirSync(folder, { recursive: true, mode: 448 });
+    import_node_fs9.default.writeFileSync(import_node_path10.default.join(folder, "launcher.json"), JSON.stringify({ pid: process.pid, url: browserLink }), { mode: 384 });
     console.error("\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B\u542F\u52A8\u5668\u5DF2\u5728\u672C\u673A\u8FD0\u884C\u3002");
   } else {
-    const server = new Server({ name: "codex-model-switcher", version: "0.2.1", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
+    const server = new Server({ name: "codex-model-switcher", version: "0.3.0", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
     server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: URI, name: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", mimeType: "text/html;profile=mcp-app" }] }));
     server.setRequestHandler(ReadResourceRequestSchema, async (request) => {

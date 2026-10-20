@@ -2,7 +2,7 @@
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>供应商与模型</title><style>/* STYLES */</style></head>
 <body><main>
   <header><div><h1>供应商与模型</h1><p class="subtitle">新建会话，或修改已有会话的模型。</p></div><button id="refresh" class="quiet" type="button">刷新</button></header>
-  <nav class="mode-switch" aria-label="会话操作"><button id="mode-create" type="button" aria-pressed="true" disabled>新建会话</button><button id="mode-edit" type="button" aria-pressed="false" disabled>修改已有会话</button></nav>
+  <nav class="mode-switch" aria-label="会话操作"><button id="mode-create" type="button" aria-pressed="true" disabled>新建会话</button><button id="mode-edit" type="button" aria-pressed="false" disabled>修改已有会话</button><button id="mode-schedule" type="button" aria-pressed="false" disabled>独立定时</button></nav>
   <section id="create-section" aria-labelledby="create-heading">
     <div class="section-heading"><h2 id="create-heading">模型</h2></div>
     <form id="create-form">
@@ -28,6 +28,23 @@
       <div class="actions"><div class="selection" id="selection">正在读取配置…</div><button id="create" class="primary" type="submit" disabled>新建会话</button></div>
       <p class="hint footnote">新会话会保存到所选项目。</p>
     </form>
+  </section>
+  <section id="schedule-section" aria-labelledby="schedule-heading" hidden>
+    <div class="section-heading"><h2 id="schedule-heading">千问独立定时任务</h2></div>
+    <p class="hint">固定 custom / qwen3.8-27b / xhigh，在原会话执行。使用本机后台服务，需电脑开机、已登录且 Codex 正在运行。</p>
+    <form id="schedule-form">
+      <div class="field-row"><label for="schedule-name">任务名称</label><div class="field-control"><input id="schedule-name" required maxlength="100" placeholder="例如：微信与 Git 日报"></div></div>
+      <div class="field-row"><label for="schedule-thread">已有会话</label><div class="field-control"><select id="schedule-thread"><option value="">请选择会话，或直接粘贴链接</option></select></div></div>
+      <div class="field-row"><label for="schedule-ref">会话链接或 ID</label><div class="field-control"><input id="schedule-ref" required maxlength="200" placeholder="codex://threads/…" autocomplete="off"></div></div>
+      <div class="field-row"><label for="schedule-prompt">任务提示词</label><div class="field-control"><textarea id="schedule-prompt" required maxlength="12000" rows="4" placeholder="例如：生成今日日报"></textarea></div></div>
+      <div class="field-row"><label for="schedule-time">每天执行时间</label><div class="field-control"><input id="schedule-time" required type="time" value="23:00"><p class="hint">北京时间（Asia/Shanghai），每天一次。</p></div></div>
+      <div class="field-row"><label for="schedule-status">状态</label><div class="field-control"><select id="schedule-status"><option value="ACTIVE">启用</option><option value="PAUSED">暂停</option></select></div></div>
+      <div class="actions"><div class="selection" id="schedule-service">正在检查后台服务…</div><button id="schedule-save" class="primary" type="submit">保存定时任务</button></div>
+      <p class="hint footnote">启用后配置当前用户登录时隐藏启动。无法运行或会话忙碌时等待最多 15 分钟，超时跳过；结果未知时不自动重发。</p>
+    </form>
+    <div class="actions"><h2>已保存的任务</h2><button id="schedule-new" class="text" type="button">添加新任务</button></div>
+    <div id="schedule-jobs" aria-live="polite"></div>
+    <button id="schedule-stop" class="text" type="button">暂停全部并停止后台服务</button>
   </section>
   <section id="edit-section" aria-labelledby="edit-heading" hidden>
     <div class="section-heading"><h2 id="edit-heading">修改已有会话模型</h2></div>

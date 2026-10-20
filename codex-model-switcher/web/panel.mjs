@@ -2,7 +2,7 @@ import {App,applyDocumentTheme,applyHostStyleVariables} from '@modelcontextproto
 const $=id=>document.getElementById(id);
 let catalog,models=[],currentResult,loading=false,modelGeneration=0,call;
 let currentOperation=null;
-let editing=false,existing=[],threadCursor=null,threadGeneration=0;
+let editing=false,scheduling=false,existing=[],threadCursor=null,threadGeneration=0,scheduleId=crypto.randomUUID();
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function unpack(result){if(result.isError)throw new Error(result.content?.map(i=>i.text||'').join('\n')||'操作失败');return result.structuredContent||JSON.parse(result.content?.find(i=>i.type==='text')?.text||'{}');}
 function option(value,label){const node=document.createElement('option');node.value=value;node.textContent=label;return node;}
@@ -13,7 +13,8 @@ function update(){
   $('create').disabled=loading||!provider||!model||!$('project').value||!$('cwd').value||!$('title').value.trim();
   $('native').disabled=loading||!model||$('provider').value==='openai';
   $('edit-submit').disabled=loading||!catalog||!$('edit-provider').value||!$('edit-ref').value.trim()||!$('edit-model').value.trim();
-  for(const id of ['mode-create','mode-edit'])$(id).disabled=loading||!catalog;
+  for(const id of ['mode-create','mode-edit','mode-schedule'])$(id).disabled=loading||!catalog;
+  for(const id of ['schedule-stop','schedule-new'])$(id).disabled=loading;
   $('refresh').disabled=loading;
 }
 async function loadExisting(reset=true){
@@ -33,10 +34,40 @@ async function loadExisting(reset=true){
   finally{if(generation===threadGeneration)$('more-threads').disabled=false;}
 }
 function switchMode(value){
-  editing=value;$('create-section').hidden=value;$('edit-section').hidden=!value;$('advanced').hidden=value;
-  $('result').hidden=value||!currentResult;
-  $('mode-create').setAttribute('aria-pressed',String(!value));$('mode-edit').setAttribute('aria-pressed',String(value));
-  status('');if(value)loadExisting();
+  editing=value===true;scheduling=value==='schedule';$('create-section').hidden=editing||scheduling;$('edit-section').hidden=!editing;$('schedule-section').hidden=!scheduling;$('advanced').hidden=editing||scheduling;
+  $('result').hidden=editing||scheduling||!currentResult;
+  $('mode-create').setAttribute('aria-pressed',String(!editing&&!scheduling));$('mode-edit').setAttribute('aria-pressed',String(editing));$('mode-schedule').setAttribute('aria-pressed',String(scheduling));
+  status('');if(editing)loadExisting();if(scheduling)loadSchedules();
+}
+const dateLabel=value=>value?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'short',timeStyle:'short'}).format(value):'已暂停';
+function scheduleForm(job){
+  scheduleId=job?.id||crypto.randomUUID();
+  $('schedule-name').value=job?.name||'';$('schedule-ref').value=job?.threadId?`codex://threads/${job.threadId}`:'';
+  $('schedule-prompt').value=job?.prompt||'';$('schedule-time').value=job?.time||'23:00';$('schedule-status').value=job?.status||'ACTIVE';
+}
+async function loadSchedules(){
+  try{
+    const result=await call('list_model_schedules',{});
+    $('schedule-service').textContent=result.service.running?'后台服务已连接':'后台服务未连接；启用任务时会尝试启动';
+    $('schedule-jobs').replaceChildren();
+    const labels={waiting:'等待发送',submitting:'正在提交（结果待确认）',accepted:'已接收，等待完成',unknown:'结果未知，已阻塞后续发送',missed:'已跳过',reviewed:'用户已核对',completed_verified:'已完成，模型已核对',completed_unverified:'已完成，模型未核对',failed:'执行失败',interrupted:'已中断',model_mismatch:'模型不一致'};
+    for(const job of result.jobs){
+      const card=document.createElement('article');card.className='result';
+      const title=document.createElement('h2');title.textContent=job.name;
+      const info=document.createElement('p');info.className='hint';info.textContent=`每天 ${job.time} 北京时间 · ${job.status==='ACTIVE'?'启用':'暂停'} · 下次：${dateLabel(job.nextRunAt)}\n${job.providerId} / ${job.model} / ${job.effort}\n${job.title} · ${job.threadId}`;
+      const edit=document.createElement('button');edit.type='button';edit.textContent='编辑';edit.onclick=()=>scheduleForm(job);
+      const toggle=document.createElement('button');toggle.type='button';toggle.textContent=job.status==='ACTIVE'?'暂停任务':'启用任务';toggle.onclick=()=>busy(async()=>{const r=await call('set_model_schedule_status',{id:job.id,status:job.status==='ACTIVE'?'PAUSED':'ACTIVE'});await loadSchedules();status(r.service?.error||'任务状态已保存。',!!r.service?.error);});
+      card.append(title,info,edit,toggle);
+      for(const run of job.runs||[]){
+        const line=document.createElement('p');line.className='hint';line.textContent=`${run.day}：${labels[run.status]||run.status}。${run.note||''}`;card.append(line);
+        if(['unknown','submitting'].includes(run.status)&&Date.now()-run.updatedAt>=120000){const ack=document.createElement('button');ack.type='button';ack.textContent='已核对原会话，解除阻塞';ack.onclick=()=>busy(async()=>{await call('acknowledge_model_schedule_run',{id:job.id,day:run.day});await loadSchedules();status('阻塞已解除，本次不会重发。');});card.append(ack);}
+      }
+      $('schedule-jobs').append(card);
+    }
+    if(!result.jobs.length)$('schedule-jobs').textContent='还没有插件定时任务。';
+    const threads=await call('list_existing_threads',{providerId:'custom'});
+    $('schedule-thread').replaceChildren(option('','请选择会话，或直接粘贴链接'),...threads.threads.map(t=>option(t.id,`${t.title} · ${t.id.slice(-8)}`)));
+  }catch(error){status(error.message,true);}
 }
 function updateEffort(){
   const selected=models.find(m=>m.id===modelId());
@@ -85,7 +116,7 @@ async function refresh(){
     $('project').value=catalog.projects.some(p=>p.id===projectId)?projectId:catalog.defaultProjectId||catalog.projects[0]?.id||'';
     updateProject(catalog.defaultCwd);
     if(!$('title').value)$('title').value='新会话';
-    await loadModels();if(editing&&!loading)await loadExisting();if(!editing&&!loading)status(catalog.note);
+    await loadModels();if(editing&&!loading)await loadExisting();if(scheduling&&!loading)await loadSchedules();if(!editing&&!scheduling&&!loading)status(catalog.note);
   }catch(error){status(error.message,true);}
 }
 function displayResult(result){
@@ -95,9 +126,16 @@ function displayResult(result){
   $('result-note').textContent=result.note||'已保存所选设置。发送前请核对会话输入框显示的模型。';
   localStorage.setItem('model-switcher:last-result',JSON.stringify(result));
 }
-async function busy(action){if(loading)return;loading=true;$('create-form').inert=true;$('edit-form').inert=true;update();$('complete').disabled=true;try{await action();}catch(error){status(error.message,true);}finally{loading=false;$('create-form').inert=false;$('edit-form').inert=false;$('complete').disabled=false;update();}}
+async function busy(action){if(loading)return;loading=true;for(const id of ['create-form','edit-form','schedule-form','schedule-jobs'])$(id).inert=true;update();$('complete').disabled=true;try{await action();}catch(error){status(error.message,true);}finally{loading=false;for(const id of ['create-form','edit-form','schedule-form','schedule-jobs'])$(id).inert=false;$('complete').disabled=false;update();}}
 $('edit-effort').replaceChildren(...['none','minimal','low','medium','high','xhigh','max','ultra'].map(e=>option(e,e)));$('edit-effort').value='xhigh';
 $('mode-create').onclick=()=>switchMode(false);$('mode-edit').onclick=()=>switchMode(true);
+$('mode-schedule').onclick=()=>switchMode('schedule');$('schedule-new').onclick=()=>scheduleForm();
+$('schedule-stop').onclick=()=>busy(async()=>{const result=await call('stop_model_scheduler',{});await loadSchedules();status(result.service.running?'所有任务已暂停；后台服务正在退出。':'所有任务已暂停，后台服务和登录自启动已停用。');});
+$('schedule-thread').onchange=()=>{if($('schedule-thread').value)$('schedule-ref').value=`codex://threads/${$('schedule-thread').value}`;};
+$('schedule-form').onsubmit=event=>{event.preventDefault();busy(async()=>{
+  const result=await call('save_model_schedule',{id:scheduleId,name:$('schedule-name').value.trim(),threadRef:$('schedule-ref').value.trim(),prompt:$('schedule-prompt').value.trim(),time:$('schedule-time').value,status:$('schedule-status').value});
+  await loadSchedules();status(result.service.error||`任务已保存，下次执行：${dateLabel(result.job.nextRunAt)}。`,!!result.service.error);
+});};
 $('edit-provider').onchange=()=>{$('edit-ref').value='';$('edit-result').hidden=true;loadExisting();update();};
 $('edit-thread').onchange=()=>{$('edit-ref').value=$('edit-thread').value?`codex://threads/${$('edit-thread').value}`:'';$('edit-result').hidden=true;update();};
 for(const id of ['edit-ref','edit-model','edit-effort'])$(id).addEventListener('input',()=>{$('edit-result').hidden=true;update();});
@@ -131,9 +169,9 @@ if(window.parent===window){
   call=async(name,args)=>{const response=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({name,arguments:args})});return unpack(await response.json());};
   refresh();
 }else{
-  const app=new App({name:'供应商与模型',version:'0.2.1'});
+  const app=new App({name:'供应商与模型',version:'0.3.0'});
   function apply(ctx){if(ctx.theme)applyDocumentTheme(ctx.theme);if(ctx.styles?.variables)applyHostStyleVariables(ctx.styles.variables);if(ctx.safeAreaInsets){const s=ctx.safeAreaInsets;document.body.style.padding=`${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`;}}
-  app.onhostcontextchanged=apply;app.ontoolresult=()=>{};app.onerror=()=>status('面板与 Codex 的连接暂不可用，请重新打开。',true);
+  app.onhostcontextchanged=apply;app.ontoolresult=result=>{if(result.structuredContent?.initialMode==='schedule')switchMode('schedule');};app.onerror=()=>status('面板与 Codex 的连接暂不可用，请重新打开。',true);
   call=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));
   app.connect().then(()=>{const ctx=app.getHostContext();if(ctx)apply(ctx);return refresh();}).catch(error=>status(error.message,true));
 }

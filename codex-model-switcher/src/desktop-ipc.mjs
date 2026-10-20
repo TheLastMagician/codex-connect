@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
 
-const VERSIONS={initialize:0,'thread-owner-discovery':1,'thread-follower-read-model-settings':1,'thread-follower-update-thread-settings':2};
+const VERSIONS={initialize:0,'thread-owner-discovery':1,'thread-follower-read-model-settings':1,'thread-follower-update-thread-settings':2,'thread-follower-start-turn':2};
 export class DesktopReader {
   constructor({pipePath=process.platform==='win32'?'\\\\.\\pipe\\codex-ipc':path.join(process.env.CODEX_HOME||path.join(os.homedir(),'.codex'),'ipc','ipc.sock'),timeoutMs=8000}={}) {Object.assign(this,{pipePath,timeoutMs});this.buffer=Buffer.alloc(0);this.pending=new Map();}
   async connect() {

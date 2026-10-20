@@ -10,4 +10,5 @@ const html=fs.readFileSync(path.join(root,'web/panel.html'),'utf8').replace('/* 
 fs.writeFileSync(path.join(dist,'panel.html'),html);
 // Bundled CommonJS uses __dirname; keep the unused ESM fallback independent of the build machine.
 await build({entryPoints:[path.join(root,'src/server.mjs')],outfile:path.join(dist,'server.cjs'),bundle:true,platform:'node',target:'node20',format:'cjs',define:{'import.meta.url':JSON.stringify('file:///codex-model-switcher/src/server.mjs')}});
+await build({entryPoints:[path.join(root,'src/scheduler-worker.mjs')],outfile:path.join(dist,'scheduler.cjs'),bundle:true,platform:'node',target:'node20',format:'cjs',define:{'import.meta.url':JSON.stringify('file:///codex-model-switcher/src/scheduler-worker.mjs')}});
 console.log('已构建 MCP 服务与供应商面板。');

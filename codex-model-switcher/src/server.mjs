@@ -11,6 +11,8 @@ import {readConfig,home} from './providers.mjs';
 import {prepareCatalog,compatibleWithInstalledCli} from './catalog.mjs';
 import {withAppServer} from './app-server.mjs';
 import {NativeSettings,SETTINGS_READ_OUTPUT,SETTINGS_UPDATE_INPUT} from './settings.mjs';
+import {ScheduleStore} from './schedules.mjs';
+import {SchedulerRuntime} from './scheduler-runtime.mjs';
 
 async function main() {
 const directory=typeof __dirname==='string'?__dirname:path.dirname(fileURLToPath(import.meta.url));
@@ -20,9 +22,17 @@ const icons=[...['light','dark'].map(theme=>({
 })),{src:'data:image/svg+xml;base64,'+fs.readFileSync(path.join(directory,'..','assets','icon.svg')).toString('base64'),mimeType:'image/svg+xml',sizes:['any']}];
 const service=new LauncherService();
 const settings=new NativeSettings(service);
+const schedules=new ScheduleStore(),scheduler=new SchedulerRuntime(path.join(directory,'scheduler.cjs'));
+try{if(schedules.jobs().some(j=>j.status==='ACTIVE'))scheduler.ensure().catch(()=>{});}catch{/* Schedule errors must not disable model tools. */}
 const URI='ui://codex-model-switcher/panel.html';
 const empty={type:'object',properties:{},additionalProperties:false};
 const tools=[
+  {name:'open_schedule_panel',title:'千问独立定时任务',description:'打开插件独立定时页，明确指定供应商和模型；不使用 Codex 原生定时器的模型回退。',inputSchema:empty,icons,annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:URI}}},
+  {name:'list_model_schedules',description:'读取本机插件定时任务、下次执行时间和最近运行记录。',inputSchema:empty,annotations:{readOnlyHint:true}},
+  {name:'save_model_schedule',description:'用户明确要求后，在本机创建或更新独立每日定时任务，向指定已有会话发送任务提示词。默认 custom / qwen3.8-27b / xhigh，按北京时间执行。启用时安装隐藏后台服务和当前用户登录自启动；不修改原生定时任务或模型目录。相同任务编辑和重试必须复用 ID。',inputSchema:{type:'object',properties:{id:{type:'string'},name:{type:'string'},threadRef:{type:'string'},prompt:{type:'string'},time:{type:'string',description:'北京时间 HH:mm'},status:{type:'string',enum:['ACTIVE','PAUSED']},providerId:{type:'string',default:'custom'},model:{type:'string',default:'qwen3.8-27b'},effort:{type:'string',enum:['none','minimal','low','medium','high','xhigh','max','ultra'],default:'xhigh'}},required:['id','name','threadRef','prompt','time','status'],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
+  {name:'set_model_schedule_status',description:'用户要求后暂停或启用指定插件定时任务。启用会启动本机隐藏后台服务。',inputSchema:{type:'object',properties:{id:{type:'string'},status:{type:'string',enum:['ACTIVE','PAUSED']}},required:['id','status'],additionalProperties:false},annotations:{readOnlyHint:false,idempotentHint:true}},
+  {name:'acknowledge_model_schedule_run',description:'仅在用户已检查原会话并明确确认后，解除结果未知的定时运行阻塞。本次不会重发，只允许后续计划继续。',inputSchema:{type:'object',properties:{id:{type:'string'},day:{type:'string'}},required:['id','day'],additionalProperties:false},annotations:{readOnlyHint:false,idempotentHint:true}},
+  {name:'stop_model_scheduler',title:'暂停全部并停止后台服务',description:'用户明确要求后，暂停全部插件定时任务，停用本机登录自启动并请求后台服务退出。已发送的会话回合继续执行，不会中断。',inputSchema:empty,annotations:{readOnlyHint:false,idempotentHint:true}},
   {name:'read_launcher_settings',description:'读取插件详情页的原生配置控件、当前设置和操作按钮。',inputSchema:empty,outputSchema:SETTINGS_READ_OUTPUT,annotations:{readOnlyHint:true}},
   {name:'update_launcher_settings',description:'保存插件原生配置页中改变的字段；不修改 Codex 默认配置，不创建会话。',inputSchema:SETTINGS_UPDATE_INPUT,outputSchema:{type:'object',properties:{values:{type:'object'}},required:['values']},annotations:{readOnlyHint:false}},
   {name:'launch_from_settings',title:'按以上配置新建会话',description:'用户点击原生设置页的新建按钮或明确要求时，使用已保存的插件设置新建并打开会话；不发送消息。',inputSchema:empty,annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false}},
@@ -54,6 +64,12 @@ async function nativeModels(models) {
 }
 async function action(name,args={},extra={}) {
   switch(name) {
+    case 'open_schedule_panel':return {...await service.catalog(extra),initialMode:'schedule'};
+    case 'list_model_schedules':return {jobs:schedules.list(),service:await scheduler.status()};
+    case 'save_model_schedule':{const job=await schedules.save(args);let runtime;try{runtime=job.status==='ACTIVE'?await scheduler.ensure():await scheduler.status();}catch(error){runtime={running:false,error:error.message};}return {job,service:runtime};}
+    case 'set_model_schedule_status':{if(!['ACTIVE','PAUSED'].includes(args.status))throw new Error('无效的任务状态。');const job=args.status==='PAUSED'?schedules.setStatus(args.id,args.status):await schedules.save({...schedules.readJob(args.id),threadRef:schedules.readJob(args.id).threadId,status:args.status});let runtime;try{runtime=job.status==='ACTIVE'?await scheduler.ensure():await scheduler.status();}catch(error){runtime={running:false,error:error.message};}return {job,service:runtime};}
+    case 'acknowledge_model_schedule_run':return schedules.acknowledge(args.id,args.day);
+    case 'stop_model_scheduler':{for(const job of schedules.jobs())schedules.setStatus(job.id,'PAUSED');return {service:await scheduler.stop(),paused:true};}
     case 'read_launcher_settings':return settings.get();
     case 'update_launcher_settings':return settings.update(args.set);
     case 'launch_from_settings':return settings.launch();
@@ -98,7 +114,7 @@ if(process.argv.includes('--serve')) {
   fs.writeFileSync(path.join(folder,'launcher.json'),JSON.stringify({pid:process.pid,url:browserLink}),{mode:0o600});
   console.error('供应商与模型启动器已在本机运行。');
 }else{
-  const server=new Server({name:'codex-model-switcher',version:'0.2.1',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
+  const server=new Server({name:'codex-model-switcher',version:'0.3.0',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
   server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
   server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:URI,name:'供应商与模型',mimeType:'text/html;profile=mcp-app'}]}));
   server.setRequestHandler(ReadResourceRequestSchema,async request=>{
