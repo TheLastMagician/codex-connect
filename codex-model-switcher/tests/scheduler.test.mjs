@@ -25,6 +25,26 @@ test('daily schedule uses Beijing time independently of host timezone',()=>{
   assert.equal(nextRun(job,due-1),due);assert.equal(nextRun(job,due),due+86400000);
   assert.equal(nextRun({...job,status:'PAUSED'},due),null);
 });
+
+test('each task retains its chosen provider, model and effort through edits and dispatch',async t=>{
+  const f=await fixture(t);
+  f.store.read=()=>({model_providers:{other:{base_url:'https://other.example/v1',wire_api:'responses'}}});
+  f.thread.modelProvider='other';
+  const input={id:randomUUID(),name:'其他供应商任务',threadRef:f.thread.id,prompt:'执行任务',time:'22:00',status:'PAUSED',providerId:'other',model:'other-model',effort:'high'};
+  const saved=await f.store.save(input);
+  assert.equal(saved.providerId,'other');assert.equal(saved.model,'other-model');assert.equal(saved.effort,'high');
+  await f.store.save({...input,name:'编辑后的任务',time:'21:00'});
+  const restored=f.store.readJob(input.id),request=scheduledTurnRequest(restored,{day:'2026-10-20',clientUserMessageId:randomUUID()});
+  assert.equal(restored.providerId,'other');assert.equal(request.model,'other-model');assert.equal(request.effort,'high');
+  assert.equal(request.collaborationMode.settings.model,'other-model');assert.equal(request.collaborationMode.settings.reasoning_effort,'high');
+  await assert.rejects(f.store.save({...input,providerId:'custom'}),/供应商/);
+});
+
+test('account provider schedules store the selected account model instead of Qwen defaults',async t=>{
+  const f=await fixture(t);f.thread.modelProvider='openai';
+  const saved=await f.store.save({id:randomUUID(),name:'账号模型任务',threadRef:f.thread.id,prompt:'执行任务',time:'21:00',status:'PAUSED',providerId:'openai',model:'gpt-6.1-sol',effort:'medium'});
+  assert.equal(saved.providerId,'openai');assert.equal(saved.model,'gpt-6.1-sol');assert.equal(saved.effort,'medium');
+});
 test('schedule sends one explicit Qwen collaboration mode per daily slot, including after restart',async t=>{
   const f=await fixture(t);f.setNow(due);let sends=0;
   const dispatch=async(job,run,mark)=>{assert.equal(job.providerId,'custom');const request=scheduledTurnRequest(job,run);assert.equal(request.model,'qwen3.8-27b');assert.equal(request.effort,'xhigh');assert.equal(request.collaborationMode.settings.model,'qwen3.8-27b');assert.equal(request.collaborationMode.settings.reasoning_effort,'xhigh');mark();assert.equal(f.store.run(job.id,run.day).status,'submitting');sends++;return{turnId:randomUUID()};};

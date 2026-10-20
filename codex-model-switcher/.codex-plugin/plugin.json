@@ -4,8 +4,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "供应商与模型",
-    "shortDescription": "模型切换与千问独立定时任务",
-    "longDescription": "选择供应商、模型和项目新建会话，修改同一供应商已有会话的模型与强度，或设置本机独立每日定时任务。默认 custom / qwen3.8-27b / xhigh。独立定时直接指定模型和协作模式，不使用原生定时器的模型回退；启用后安装本机隐藏后台服务和当前用户登录自启动。运行前核对供应商、空闲状态和历史模型；结果未知不自动重发。不修改原生模型目录或原生定时任务。密钥和任务记录保留本机。",
+    "shortDescription": "供应商、模型与定时任务管理",
+    "longDescription": "选择供应商、模型和项目新建会话，修改同一供应商已有会话的模型与强度，或为每个本机每日定时任务选择供应商、模型和思考强度。新任务默认 custom / qwen3.8-27b / xhigh。独立定时直接指定模型和协作模式，不使用原生定时器的模型回退；启用后安装本机隐藏后台服务和当前用户登录自启动。运行前核对供应商、空闲状态和历史模型；结果未知不自动重发。不修改原生模型目录或原生定时任务。密钥和任务记录保留本机。",
     "developerName": "zeng ge",
     "category": "Productivity",
     "capabilities": [
@@ -18,8 +18,8 @@
     "defaultPrompt": "打开供应商与模型面板，选择供应商和模型新建会话"
   },
   "name": "codex-model-switcher",
-  "version": "0.3.0",
-  "description": "新建或修改 Codex 会话模型，并用指定千问模型独立定时执行任务。",
+  "version": "0.3.1",
+  "description": "新建或修改 Codex 会话模型，并按所选供应商和模型定时执行任务。",
   "author": {
     "name": "zeng ge",
     "email": "675324311@qq.com"

@@ -894,7 +894,7 @@ var AppServer = class {
       if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
       else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.3.0" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.3.1" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }

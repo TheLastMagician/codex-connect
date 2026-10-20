@@ -27,7 +27,7 @@ try{if(schedules.jobs().some(j=>j.status==='ACTIVE'))scheduler.ensure().catch(()
 const URI='ui://codex-model-switcher/panel.html';
 const empty={type:'object',properties:{},additionalProperties:false};
 const tools=[
-  {name:'open_schedule_panel',title:'千问独立定时任务',description:'打开插件独立定时页，明确指定供应商和模型；不使用 Codex 原生定时器的模型回退。',inputSchema:empty,icons,annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:URI}}},
+  {name:'open_schedule_panel',title:'定时任务管理',description:'打开插件定时任务管理页，为每个任务选择供应商、模型和思考强度。默认填入千问，支持其他已配置供应商。',inputSchema:empty,icons,annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:URI}}},
   {name:'list_model_schedules',description:'读取本机插件定时任务、下次执行时间和最近运行记录。',inputSchema:empty,annotations:{readOnlyHint:true}},
   {name:'save_model_schedule',description:'用户明确要求后，在本机创建或更新独立每日定时任务，向指定已有会话发送任务提示词。默认 custom / qwen3.8-27b / xhigh，按北京时间执行。启用时安装隐藏后台服务和当前用户登录自启动；不修改原生定时任务或模型目录。相同任务编辑和重试必须复用 ID。',inputSchema:{type:'object',properties:{id:{type:'string'},name:{type:'string'},threadRef:{type:'string'},prompt:{type:'string'},time:{type:'string',description:'北京时间 HH:mm'},status:{type:'string',enum:['ACTIVE','PAUSED']},providerId:{type:'string',default:'custom'},model:{type:'string',default:'qwen3.8-27b'},effort:{type:'string',enum:['none','minimal','low','medium','high','xhigh','max','ultra'],default:'xhigh'}},required:['id','name','threadRef','prompt','time','status'],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
   {name:'set_model_schedule_status',description:'用户要求后暂停或启用指定插件定时任务。启用会启动本机隐藏后台服务。',inputSchema:{type:'object',properties:{id:{type:'string'},status:{type:'string',enum:['ACTIVE','PAUSED']}},required:['id','status'],additionalProperties:false},annotations:{readOnlyHint:false,idempotentHint:true}},
@@ -114,7 +114,7 @@ if(process.argv.includes('--serve')) {
   fs.writeFileSync(path.join(folder,'launcher.json'),JSON.stringify({pid:process.pid,url:browserLink}),{mode:0o600});
   console.error('供应商与模型启动器已在本机运行。');
 }else{
-  const server=new Server({name:'codex-model-switcher',version:'0.3.0',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
+  const server=new Server({name:'codex-model-switcher',version:'0.3.1',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
   server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
   server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:URI,name:'供应商与模型',mimeType:'text/html;profile=mcp-app'}]}));
   server.setRequestHandler(ReadResourceRequestSchema,async request=>{

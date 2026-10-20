@@ -30,11 +30,14 @@
     </form>
   </section>
   <section id="schedule-section" aria-labelledby="schedule-heading" hidden>
-    <div class="section-heading"><h2 id="schedule-heading">千问独立定时任务</h2></div>
-    <p class="hint">固定 custom / qwen3.8-27b / xhigh，在原会话执行。使用本机后台服务，需电脑开机、已登录且 Codex 正在运行。</p>
+    <div class="section-heading"><h2 id="schedule-heading">定时任务管理</h2></div>
+    <p class="hint">每个任务可分别配置供应商、模型和思考强度，默认 custom / qwen3.8-27b / xhigh。使用本机后台服务，需电脑开机、已登录且 Codex 正在运行。</p>
     <form id="schedule-form">
       <div class="field-row"><label for="schedule-name">任务名称</label><div class="field-control"><input id="schedule-name" required maxlength="100" placeholder="例如：微信与 Git 日报"></div></div>
-      <div class="field-row"><label for="schedule-thread">已有会话</label><div class="field-control"><select id="schedule-thread"><option value="">请选择会话，或直接粘贴链接</option></select></div></div>
+      <div class="field-row"><label for="schedule-provider">供应商</label><div class="field-control"><select id="schedule-provider" required disabled></select><p id="schedule-endpoint" class="hint"></p></div></div>
+      <div class="field-row"><label for="schedule-model">模型</label><div class="field-control"><div class="inline-controls"><select id="schedule-model" disabled></select><button id="schedule-reload-models" class="text" type="button">刷新</button></div><label class="check"><input type="checkbox" id="schedule-manual">手动填写模型 ID</label><input id="schedule-manual-model" aria-label="定时任务模型 ID" maxlength="160" placeholder="完整模型 ID" hidden><p id="schedule-model-source" class="hint"></p></div></div>
+      <div class="field-row"><label for="schedule-effort">思考强度</label><div class="field-control"><select id="schedule-effort"><option value="xhigh">xhigh</option></select><p id="schedule-effort-note" class="hint"></p></div></div>
+      <div class="field-row"><label for="schedule-thread">已有会话</label><div class="field-control"><select id="schedule-thread"><option value="">请选择会话，或直接粘贴链接</option></select><div class="inline-controls"><button id="schedule-reload-threads" class="text" type="button">刷新列表</button><button id="schedule-more-threads" class="text" type="button" hidden>加载更多</button></div><p id="schedule-thread-source" class="hint">选择同一供应商的已有会话；任务沿用该会话的项目和工作目录。</p></div></div>
       <div class="field-row"><label for="schedule-ref">会话链接或 ID</label><div class="field-control"><input id="schedule-ref" required maxlength="200" placeholder="codex://threads/…" autocomplete="off"></div></div>
       <div class="field-row"><label for="schedule-prompt">任务提示词</label><div class="field-control"><textarea id="schedule-prompt" required maxlength="12000" rows="4" placeholder="例如：生成今日日报"></textarea></div></div>
       <div class="field-row"><label for="schedule-time">每天执行时间</label><div class="field-control"><input id="schedule-time" required type="time" value="23:00"><p class="hint">北京时间（Asia/Shanghai），每天一次。</p></div></div>
