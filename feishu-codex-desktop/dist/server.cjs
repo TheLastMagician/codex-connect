@@ -22163,7 +22163,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.0";
+var VERSION = "0.9.1";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);

@@ -71,7 +71,15 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},
   const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new ManagedChatRouter({...options,isActive:active});
   const receive=event=>{
     const message=parseMessage(event,{botOpenId,appId:settings.appId});
-    if(!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now()-message.timestamp)>600000)return;
+    if(!active())return;
+    if(!message){
+      const raw=event?.message,openId=event?.sender?.sender_id?.open_id;
+      const age=Date.now()-Number(raw?.create_time);
+      if(event?.sender?.sender_type==='user' && raw?.chat_type==='p2p' && Number.isFinite(age) && Math.abs(age)<=600000 && authorized(openId) &&
+        (!event.app_id || event.app_id===settings.appId))onStatus({lastIgnoredInput:{at:Date.now(),messageType:['text','post','audio','image','file','media','sticker','interactive'].includes(raw.message_type)?raw.message_type:'other',reason:'no_supported_text'}});
+      return;
+    }
+    if(!Number.isFinite(message.timestamp) || Math.abs(Date.now()-message.timestamp)>600000)return;
     const current=getConfig(),pair=message.text.match(/^\/pair\s+(\S+)$/);
     const canPair=settings.mode!=='fixed' && message.chatType!=='group' && pair && current.pairing?.expiresAt>Date.now() && equalSecret(pair[1],current.pairing.code);
     if(!authorized(message.openId) && !canPair){state.seen[fingerprint(message)]=Date.now();saveState();rememberRequest(message);onStatus({lastAccessRequestAt:Date.now()});return;}

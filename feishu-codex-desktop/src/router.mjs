@@ -6,6 +6,7 @@ import {CARD_TITLES} from './cards.mjs';
 import {EFFORTS,threadKey,modelSettings,modelSummary,taskModelArgs,loadModels} from './models.mjs';
 import {conversationMessages,renderConversation} from './conversation.mjs';
 import {nativeTurnId,receiptEvidence,receiptCandidates,receiptHistoryComplete} from './receipt-evidence.mjs';
+import {feishuText} from './feishu-input.mjs';
 
 export const HELP = `Codex 桌面会话
 继续已有会话：
@@ -36,10 +37,10 @@ export const HELP = `Codex 桌面会话
 export function parseMessage(event,{botOpenId,appId}={}) {
   const message = event?.message;
   const openId = event?.sender?.sender_id?.open_id;
-  if(!openId || event.sender.sender_type !== 'user' || !['p2p','group'].includes(message?.chat_type) || message.message_type !== 'text') return null;
+  if(!openId || event.sender.sender_type !== 'user' || !['p2p','group'].includes(message?.chat_type)) return null;
   if(appId && event.app_id && event.app_id!==appId)return null;
   if(!message.message_id || !message.chat_id || !message.create_time) return null;
-  let text;try {text=JSON.parse(message.content).text;} catch{return null;}
+  let text=feishuText(message);
   if(typeof text!=='string' || !text.trim() || text.length>12000) return null;
   const group=message.chat_type==='group';
   if(group) {

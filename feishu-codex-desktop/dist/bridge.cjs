@@ -18180,7 +18180,7 @@ var require_utils = __commonJS({
         return acc;
       }, target);
     };
-    var decode = function(str, defaultDecoder, charset) {
+    var decode2 = function(str, defaultDecoder, charset) {
       var strWithoutPlus = str.replace(/\+/g, " ");
       if (charset === "iso-8859-1") {
         return strWithoutPlus.replace(/%[0-9a-f]{2}/gi, unescape);
@@ -18310,7 +18310,7 @@ var require_utils = __commonJS({
       assign,
       combine,
       compact,
-      decode,
+      decode: decode2,
       encode,
       isBuffer,
       isOverflow,
@@ -24372,7 +24372,7 @@ var require_base64 = __commonJS({
       return String.fromCharCode.apply(String, chunk.slice(0, i2));
     };
     var invalidEncoding = "invalid encoding";
-    base64.decode = function decode(string, buffer, offset) {
+    base64.decode = function decode2(string, buffer, offset) {
       var start = offset;
       var j = 0, t;
       for (var i2 = 0; i2 < string.length; ) {
@@ -120970,7 +120970,7 @@ var require_lib2 = __commonJS({
         Header.encodeDelimited = function encodeDelimited(message, writer) {
           return this.encode(message, writer).ldelim();
         };
-        Header.decode = function decode2(reader, length) {
+        Header.decode = function decode3(reader, length) {
           if (!(reader instanceof $Reader))
             reader = $Reader.create(reader);
           let end = length === void 0 ? reader.len : reader.pos + length, message = new $root.pbbp2.Header();
@@ -121116,7 +121116,7 @@ var require_lib2 = __commonJS({
         Frame.encodeDelimited = function encodeDelimited(message, writer) {
           return this.encode(message, writer).ldelim();
         };
-        Frame.decode = function decode2(reader, length) {
+        Frame.decode = function decode3(reader, length) {
           if (!(reader instanceof $Reader))
             reader = $Reader.create(reader);
           let end = length === void 0 ? reader.len : reader.pos + length, message = new $root.pbbp2.Frame();
@@ -121343,7 +121343,7 @@ var require_lib2 = __commonJS({
       })();
       return pbbp22;
     })();
-    var decode = (buffer) => {
+    var decode2 = (buffer) => {
       return pbbp2.Frame.decode(buffer);
     };
     var WSConfig = class {
@@ -121912,7 +121912,7 @@ var require_lib2 = __commonJS({
         wsInstance === null || wsInstance === void 0 ? void 0 : wsInstance.on("message", (buffer) => __awaiter(this, void 0, void 0, function* () {
           this.clearLiveness();
           try {
-            const data = decode(buffer);
+            const data = decode2(buffer);
             const { method } = data;
             if (method === FrameType.control) {
               yield this.handleControlData(data);
@@ -131384,6 +131384,97 @@ function receiptHistoryComplete(result, watch) {
   return (result.turns || []).some((t) => watch.evidence?.baselineTurnIds?.includes(t.id) || milliseconds(t.startedAt) !== null && milliseconds(t.startedAt) < submittedAt - 1e3);
 }
 
+// src/feishu-input.mjs
+var LIMIT = 12e3;
+var decode = (value) => {
+  if (typeof value === "string") {
+    if (value.length > 256e3) return;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return;
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value) ? value : void 0;
+};
+function mentionText(id, name, mentions) {
+  const mention = mentions.find((item) => item.id?.open_id === id || item.key === id);
+  if (mention) return mention.key;
+  return "@" + (typeof name === "string" && name ? name : id || "\u7528\u6237");
+}
+function markdownText(text, mentions) {
+  return text.replace(
+    /<at\s+user_id\s*=\s*(?:"([^"]*)"|'([^']*)'|([A-Za-z0-9_-]+))\s*>[\s\S]*?<\/at>/g,
+    (tag, a, b, c) => mentionText(a || b || c, "", mentions)
+  );
+}
+function postText(body2, mentions) {
+  if (!body2 || typeof body2 !== "object" || Array.isArray(body2)) return;
+  if (!Array.isArray(body2.content) && !Array.isArray(body2.content_v2)) body2 = body2.zh_cn || body2.en_us || body2.ja_jp;
+  if (!body2) return;
+  for (const rows of [body2.content_v2, body2.content]) {
+    const text = postRows(rows, body2.title, mentions);
+    if (typeof text === "string" && text.trim() && text.length <= LIMIT) return text;
+  }
+}
+function postRows(rows, title, mentions) {
+  if (!Array.isArray(rows) || rows.length > 400) return;
+  const paragraphs = [];
+  let length = 0, nodes = 0, hasText = false;
+  if (typeof title === "string" && title) {
+    if (title.length > LIMIT) return;
+    paragraphs.push(title);
+    length += title.length;
+    hasText = true;
+  }
+  for (const row2 of rows) {
+    if (!Array.isArray(row2)) return;
+    let line = "";
+    for (const node of row2) {
+      if (!node || typeof node !== "object" || ++nodes > 1e3) return;
+      let text = "";
+      if (["text", "md", "code_block"].includes(node.tag) && typeof node.text === "string") {
+        if (node.text.length > LIMIT) return;
+        text = node.tag === "md" ? markdownText(node.text, mentions) : node.text;
+        if (node.tag === "code_block") {
+          const fence = "`".repeat(Math.max(3, ...[...node.text.matchAll(/`+/g)].map((m) => m[0].length + 1)));
+          const language = typeof node.language === "string" ? node.language.replace(/[^A-Za-z0-9_+-]/g, "").slice(0, 30) : "";
+          text = `${fence}${language}
+${node.text}
+${fence}`;
+        }
+        hasText ||= !!text.trim();
+      } else if (node.tag === "a") {
+        const label = typeof node.text === "string" ? node.text : "";
+        const href = typeof node.href === "string" ? node.href : "";
+        text = label && label !== href ? `[${label}]${href ? `(${href})` : ""}` : href;
+        hasText ||= !!text.trim();
+      } else if (node.tag === "at") text = mentionText(node.user_id, node.user_name, mentions);
+      else if (node.tag === "hr") text = "\n";
+      else if (node.tag === "emotion" && typeof node.emoji_type === "string") text = `:${node.emoji_type}:`;
+      else if (node.tag === "img") text = "[\u56FE\u7247\u9644\u4EF6\u672A\u4F20\u5165 Codex]";
+      else if (node.tag === "media") text = "[\u5A92\u4F53\u9644\u4EF6\u672A\u4F20\u5165 Codex]";
+      else return;
+      line += text;
+      length += text.length;
+      if (length + paragraphs.length > LIMIT) return;
+    }
+    paragraphs.push(line);
+  }
+  const result = paragraphs.join("\n");
+  return hasText || mentions.some((m) => result.includes(m.key)) ? result : void 0;
+}
+function feishuText(message) {
+  if (!["text", "post"].includes(message?.message_type)) return;
+  const mentions = (Array.isArray(message.mentions) ? message.mentions : []).filter((m) => typeof m?.key === "string" && /^@_[A-Za-z0-9_]{1,80}$/.test(m.key));
+  for (const value of [message.content_v2, message.content]) {
+    const body2 = decode(value);
+    if (!body2) continue;
+    const text = message.message_type === "text" ? body2.text : postText(body2, mentions);
+    if (typeof text === "string" && text.trim() && text.length <= LIMIT) return text;
+  }
+}
+
 // src/router.mjs
 var HELP = `Codex \u684C\u9762\u4F1A\u8BDD
 \u7EE7\u7EED\u5DF2\u6709\u4F1A\u8BDD\uFF1A
@@ -131413,15 +131504,10 @@ var HELP = `Codex \u684C\u9762\u4F1A\u8BDD
 function parseMessage(event, { botOpenId, appId } = {}) {
   const message = event?.message;
   const openId = event?.sender?.sender_id?.open_id;
-  if (!openId || event.sender.sender_type !== "user" || !["p2p", "group"].includes(message?.chat_type) || message.message_type !== "text") return null;
+  if (!openId || event.sender.sender_type !== "user" || !["p2p", "group"].includes(message?.chat_type)) return null;
   if (appId && event.app_id && event.app_id !== appId) return null;
   if (!message.message_id || !message.chat_id || !message.create_time) return null;
-  let text;
-  try {
-    text = JSON.parse(message.content).text;
-  } catch {
-    return null;
-  }
+  let text = feishuText(message);
   if (typeof text !== "string" || !text.trim() || text.length > 12e3) return null;
   const group = message.chat_type === "group";
   if (group) {
@@ -133509,7 +133595,14 @@ function createFeishuChannel({
   const router = settings.mode === "fixed" ? new FixedChatRouter({ ...options, thread: settings.thread, isActive: active }) : new ManagedChatRouter({ ...options, isActive: active });
   const receive = (event) => {
     const message = parseMessage(event, { botOpenId, appId: settings.appId });
-    if (!active() || !message || !Number.isFinite(message.timestamp) || Math.abs(Date.now() - message.timestamp) > 6e5) return;
+    if (!active()) return;
+    if (!message) {
+      const raw = event?.message, openId = event?.sender?.sender_id?.open_id;
+      const age = Date.now() - Number(raw?.create_time);
+      if (event?.sender?.sender_type === "user" && raw?.chat_type === "p2p" && Number.isFinite(age) && Math.abs(age) <= 6e5 && authorized(openId) && (!event.app_id || event.app_id === settings.appId)) onStatus({ lastIgnoredInput: { at: Date.now(), messageType: ["text", "post", "audio", "image", "file", "media", "sticker", "interactive"].includes(raw.message_type) ? raw.message_type : "other", reason: "no_supported_text" } });
+      return;
+    }
+    if (!Number.isFinite(message.timestamp) || Math.abs(Date.now() - message.timestamp) > 6e5) return;
     const current = getConfig(), pair = message.text.match(/^\/pair\s+(\S+)$/);
     const canPair = settings.mode !== "fixed" && message.chatType !== "group" && pair && current.pairing?.expiresAt > Date.now() && equalSecret(pair[1], current.pairing.code);
     if (!authorized(message.openId) && !canPair) {
@@ -133604,7 +133697,7 @@ var import_promises4 = require("node:timers/promises");
 var import_node_crypto12 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.0";
+var VERSION = "0.9.1";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

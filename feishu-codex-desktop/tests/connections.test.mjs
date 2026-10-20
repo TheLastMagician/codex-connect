@@ -89,6 +89,35 @@ async function complete(f,text='完成',id=Math.random().toString()) {
   await f.channel.poll();
 }
 const answerCards=f=>f.sent.filter(s=>JSON.parse(s.data.content).header.subtitle.content==='回复');
+
+test('converted-text posts reach both private bot modes unchanged and redelivery does not duplicate a task',async()=>{
+  for(const mode of ['fixed','full']) {
+    const state=mode==='full'?{sessions:{'owner:private-chat':{openId:'owner',chatId:'private-chat',selected:binding,mode:'chat',routingVersion:3}}}:{};
+    const f=channelFixture(binding,{mode,state});await f.channel.start();
+    try {
+      const text='检查这个模块，保留 Python 代码。\n\u00a0\n放到本机目录里，好吗？';
+      const content=text.split('\n').map(text=>[{tag:'text',text,style:[]}]);
+      const event=f.event('unused','owner',`converted-${mode}`);event.message.message_type='post';event.message.content=JSON.stringify({title:'',content,content_v2:structuredClone(content)});
+      await receive(f,event);await receive(f,event);
+      const sends=f.calls.filter(c=>c.name==='send_message_to_thread');assert.equal(sends.length,1);
+      assert.equal(sends[0].args.threadId,binding.id);assert.equal(sends[0].args.prompt,text);
+      assert.equal(f.statuses.some(s=>s.lastIgnoredInput),false);
+    }finally{f.channel.stop();}
+  }
+});
+
+test('unsupported private inputs record only redacted type metadata for current authorized messages',async()=>{
+  const f=channelFixture();await f.channel.start();
+  try {
+    const event=f.event('sensitive transcription');event.message.message_type='audio';event.message.content=JSON.stringify({file_key:'sensitive-file'});
+    await receive(f,event);assert.equal(f.calls.length,0);
+    const ignored=f.statuses.find(s=>s.lastIgnoredInput).lastIgnoredInput;
+    assert.deepEqual(Object.keys(ignored).sort(),['at','messageType','reason']);assert.equal(ignored.messageType,'audio');
+    assert.doesNotMatch(JSON.stringify(ignored),/sensitive/);
+    event.sender.sender_id.open_id='stranger';await receive(f,event);
+    assert.equal(f.statuses.filter(s=>s.lastIgnoredInput).length,1);
+  }finally{f.channel.stop();}
+});
 test('a fixed bot treats commands, selection numbers and natural aliases as literal text for only its bound chat',async()=>{
   const f=channelFixture();await f.channel.start();
   const inputs=['你好，世界','/chats','/assistant 删除项目','/pair pretend','/new 1 | task','1','选择 2','会话列表'];
