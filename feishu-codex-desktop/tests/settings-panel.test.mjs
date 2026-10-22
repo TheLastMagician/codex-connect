@@ -6,6 +6,7 @@ import os from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StdioClientTransport} from '@modelcontextprotocol/sdk/client/stdio.js';
+import {setTimeout as delay} from 'node:timers/promises';
 import {connectionSettings,SETTINGS_URI} from '../src/settings-panel.mjs';
 
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -39,9 +40,12 @@ test('packaged MCP exposes global and thread entrypoints, structured settings an
     const opened=await client.callTool({name:'open_settings',arguments:{}});assert.equal(opened.structuredContent.ready,true);
     assert.ok(!opened.structuredContent.url);
   }finally {
-    try {const lock=JSON.parse(fs.readFileSync(path.join(folder,'bridge.lock'),'utf8'));process.kill(lock.pid);}catch{}
+    let pid;try {pid=JSON.parse(fs.readFileSync(path.join(folder,'bridge.lock'),'utf8')).pid;process.kill(pid);}catch{}
     await client.close();
+    const alive=()=>{if(!pid)return false;try{process.kill(pid,0);return true;}catch{return false;}};
+    for(let i=0;i<100 && alive();i++)await delay(50);
+    assert.equal(alive(),false,'Fixture bridge must exit before deleting its files');
     assert.ok(path.resolve(folder).startsWith(path.resolve(os.tmpdir())+path.sep+'codex-panel-test-'));
-    fs.rmSync(folder,{recursive:true,force:true,maxRetries:15,retryDelay:50});
+    await fs.promises.rm(folder,{recursive:true,force:true,maxRetries:50,retryDelay:100});
   }
 });

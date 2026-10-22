@@ -26,17 +26,38 @@ export async function discoverDesktopEndpoints({platform=process.platform,script
     child.stdin.on('error',()=>{});child.stdin.end('& {\n'+source+'\n}\n\n');
   });
 }
-export async function recoverDesktopContext(current,{probe,discover=discoverDesktopEndpoints,read,publish}={}) {
+export async function recoverDesktopContext(current,{probe,discover=discoverDesktopEndpoints,read,readBindings,publish}={}) {
   // Resolve storage only when recovery is actually needed. Importing the native
   // transport must not capture a data directory before its host config is set.
   if(!read || !publish) {
     const storage=await import('./storage.mjs');
+    if(!read)readBindings ||= ()=>storage.readJson('desktop-contexts.json',{bindings:[]}).bindings;
     read ||= ()=>storage.readJson('desktop-context.json',{});
-    publish ||= context=>storage.writeJson('desktop-context.json',context);
+    publish ||= (await import('./desktop-context-store.mjs')).publishDesktopContext;
   }
+  readBindings ||= ()=>[];
+  const key=context=>JSON.stringify([context?.pipePath,context?.threadId]);
   const saved=read();
-  if(saved.pipePath && saved.threadId && saved.pipePath!==current.pipePath) {
+  if(saved.pipePath && saved.threadId && key(saved)!==key(current)) {
     try {await probe(saved);return saved;}catch{}
+  }
+  const seen=new Set([key(current),key(saved)]);
+  const bindings=readBindings();
+  const prior=(Array.isArray(bindings)?bindings:[]).filter(context=>{
+    if(!context?.pipePath || !context.threadId || seen.has(key(context)))return false;seen.add(key(context));return true;
+  }).slice(0,16);
+  // Prefer the most recent healthy host-supplied caller. Check four at a time
+  // instead of flooding the desktop, and never navigate or start a model turn.
+  for(let offset=0;offset<prior.length;offset+=4) {
+    const checked=await Promise.allSettled(prior.slice(offset,offset+4).map(async context=>{await probe(context);return context;}));
+    const candidate=checked.find(result=>result.status==='fulfilled')?.value;
+    if(candidate) {
+      const latest=read();
+      if(latest.pipePath && latest.threadId && key(latest)!==key(saved)) {
+        try {await probe(latest);return latest;}catch{}
+      }
+      await publish(candidate,{expected:saved});return candidate;
+    }
   }
   // Discovery authenticates the server process; retain an actual host-provided
   // caller chat. Finding an endpoint never invents a source thread identity.
@@ -58,5 +79,5 @@ export async function recoverDesktopContext(current,{probe,discover=discoverDesk
   if(latest.pipePath && latest.threadId && (latest.pipePath!==saved.pipePath || latest.threadId!==saved.threadId)) {
     try{await probe(latest);return latest;}catch{}
   }
-  publish(candidate);return candidate;
+  await publish(candidate,{expected:saved});return candidate;
 }

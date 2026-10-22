@@ -7,6 +7,7 @@ import {ChannelManager} from './channel-manager.mjs';
 import {createDashboard} from './dashboard.mjs';
 import {VERSION} from './version.mjs';
 import {removeLegacyAssistantData} from './legacy-cleanup.mjs';
+import {rememberDesktopContext} from './desktop-context-store.mjs';
 
 export async function main() {
   secureDirectory();
@@ -46,6 +47,8 @@ export async function main() {
         desktop.updateContext(current);
       }
       await desktop.probe();
+      rememberDesktopContext(desktop.context);
+      if(desktop.lastRecovery)status.desktopRecovery=desktop.lastRecovery;
       if(!desktop.input.socket || desktop.input.socket.destroyed)await desktop.input.connect();
       status.desktopConnected=true;
     }catch{status.desktopConnected=false;}

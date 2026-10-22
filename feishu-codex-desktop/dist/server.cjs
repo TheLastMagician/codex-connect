@@ -7263,6 +7263,38 @@ var init_storage = __esm({
   }
 });
 
+// src/desktop-context-store.mjs
+var desktop_context_store_exports = {};
+__export(desktop_context_store_exports, {
+  contextKey: () => contextKey,
+  publishDesktopContext: () => publishDesktopContext,
+  rememberDesktopContext: () => rememberDesktopContext
+});
+function rememberDesktopContext(context2) {
+  const next = binding(context2);
+  if (!next) return;
+  const previous = readJson("desktop-contexts.json", { bindings: [] }).bindings;
+  const seen = /* @__PURE__ */ new Set(), bindings = [next, ...Array.isArray(previous) ? previous : []].map(binding).filter((item) => {
+    if (!item || seen.has(contextKey(item))) return false;
+    seen.add(contextKey(item));
+    return true;
+  }).slice(0, 16);
+  if (JSON.stringify(bindings) !== JSON.stringify(previous)) writeJson("desktop-contexts.json", { bindings });
+}
+function publishDesktopContext(context2, { expected } = {}) {
+  rememberDesktopContext(context2);
+  if (expected && contextKey(readJson("desktop-context.json", {})) !== contextKey(expected)) return;
+  writeJson("desktop-context.json", context2);
+}
+var contextKey, binding;
+var init_desktop_context_store = __esm({
+  "src/desktop-context-store.mjs"() {
+    init_storage();
+    contextKey = (context2) => JSON.stringify([context2?.pipePath, context2?.threadId]);
+    binding = (context2) => typeof context2?.pipePath === "string" && context2.pipePath && typeof context2.threadId === "string" && context2.threadId ? { pipePath: context2.pipePath, threadId: context2.threadId, ...typeof context2.inputPipePath === "string" ? { inputPipePath: context2.inputPipePath } : {} } : null;
+  }
+});
+
 // node_modules/qrcode/lib/can-promise.js
 var require_can_promise = __commonJS({
   "node_modules/qrcode/lib/can-promise.js"(exports2, module2) {
@@ -21887,18 +21919,47 @@ async function discoverDesktopEndpoints({ platform = process.platform, script = 
     child.stdin.end("& {\n" + source + "\n}\n\n");
   });
 }
-async function recoverDesktopContext(current, { probe, discover = discoverDesktopEndpoints, read, publish } = {}) {
+async function recoverDesktopContext(current, { probe, discover = discoverDesktopEndpoints, read, readBindings, publish } = {}) {
   if (!read || !publish) {
     const storage = await Promise.resolve().then(() => (init_storage(), storage_exports));
+    if (!read) readBindings ||= () => storage.readJson("desktop-contexts.json", { bindings: [] }).bindings;
     read ||= () => storage.readJson("desktop-context.json", {});
-    publish ||= (context2) => storage.writeJson("desktop-context.json", context2);
+    publish ||= (await Promise.resolve().then(() => (init_desktop_context_store(), desktop_context_store_exports))).publishDesktopContext;
   }
+  readBindings ||= () => [];
+  const key = (context2) => JSON.stringify([context2?.pipePath, context2?.threadId]);
   const saved = read();
-  if (saved.pipePath && saved.threadId && saved.pipePath !== current.pipePath) {
+  if (saved.pipePath && saved.threadId && key(saved) !== key(current)) {
     try {
       await probe(saved);
       return saved;
     } catch {
+    }
+  }
+  const seen = /* @__PURE__ */ new Set([key(current), key(saved)]);
+  const bindings = readBindings();
+  const prior = (Array.isArray(bindings) ? bindings : []).filter((context2) => {
+    if (!context2?.pipePath || !context2.threadId || seen.has(key(context2))) return false;
+    seen.add(key(context2));
+    return true;
+  }).slice(0, 16);
+  for (let offset = 0; offset < prior.length; offset += 4) {
+    const checked2 = await Promise.allSettled(prior.slice(offset, offset + 4).map(async (context2) => {
+      await probe(context2);
+      return context2;
+    }));
+    const candidate2 = checked2.find((result) => result.status === "fulfilled")?.value;
+    if (candidate2) {
+      const latest2 = read();
+      if (latest2.pipePath && latest2.threadId && key(latest2) !== key(saved)) {
+        try {
+          await probe(latest2);
+          return latest2;
+        } catch {
+        }
+      }
+      await publish(candidate2, { expected: saved });
+      return candidate2;
     }
   }
   const source = saved.threadId ? saved : current;
@@ -21923,7 +21984,7 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
     } catch {
     }
   }
-  publish(candidate);
+  await publish(candidate, { expected: saved });
   return candidate;
 }
 
@@ -21943,6 +22004,9 @@ var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
   "move_thread_to_sidebar_section",
   "navigate_to_codex_page"
 ]);
+var READ_ONLY_TOOLS = /* @__PURE__ */ new Set(["list_threads", "list_archived_threads", "list_projects", "read_thread", "wait_threads"]);
+var contextKey2 = (context2) => JSON.stringify([context2?.pipePath, context2?.threadId]);
+var unloadedThread = (error2) => error2?.message?.match(/thread not loaded:\s*([A-Za-z0-9_-]+)/i)?.[1];
 function encodeFrame(value) {
   const body = Buffer.from(JSON.stringify(value), "utf8");
   if (body.length > MAX_FRAME2) throw new Error("\u8BF7\u6C42\u8FC7\u5927");
@@ -21975,16 +22039,7 @@ var DesktopClient = class _DesktopClient {
       if (generation !== this.connectionGeneration) throw desktopUnavailable();
       let next;
       try {
-        next = await this.resolveContext(this.context, { probe: async (context2) => {
-          const probe = new _DesktopClient(context2, { recover: false });
-          try {
-            const tools2 = await probe.tools({ timeoutMs: 1500 });
-            if (!tools2.some((tool) => tool.name === "list_threads") || !tools2.some((tool) => tool.name === "read_thread")) throw desktopUnavailable();
-            await probe.probe({ timeoutMs: 3e3 });
-          } finally {
-            probe.close();
-          }
-        } });
+        next = await this.resolveContext(this.context, { probe: (context2) => this.verifyContext(context2) });
       } catch {
         throw desktopUnavailable();
       }
@@ -22100,29 +22155,89 @@ var DesktopClient = class _DesktopClient {
     const result = await this.request("tools/list", { threadStartKind: "all" }, timeoutMs);
     return (result.tools || []).filter((tool) => tool.namespace === "codex_app" && ALLOWED_TOOLS.has(tool.name));
   }
+  async verifyContext(context2) {
+    const probe = new _DesktopClient(context2, { recover: false });
+    try {
+      const tools2 = await probe.tools({ timeoutMs: 1500 });
+      if (!tools2.some((t) => t.name === "list_threads") || !tools2.some((t) => t.name === "read_thread")) throw desktopUnavailable();
+      await probe.probe({ timeoutMs: 3e3 });
+    } finally {
+      probe.close();
+    }
+  }
   probe({ timeoutMs = 5e3 } = {}) {
-    return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs });
+    return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs, callerProbe: true });
+  }
+  async recoverCaller(failed, reason = "caller_unloaded") {
+    const key = contextKey2(failed), generation = this.connectionGeneration;
+    if (contextKey2(this.context) !== key) return;
+    if (this.callerRecovery?.key === key) return this.callerRecovery.work;
+    const work = (async () => {
+      const next = await this.resolveContext(failed, { probe: (context2) => this.verifyContext(context2) });
+      if (contextKey2(this.context) !== key) return;
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      if (!next?.pipePath || !next.threadId || contextKey2(next) === key) throw desktopUnavailable();
+      this.updateContext(next);
+      this.lastRecovery = { at: Date.now(), reason };
+      this.failedCaller = null;
+    })().catch(() => {
+      if (contextKey2(this.context) !== key) return;
+      this.failedCaller = { key, retryAt: Date.now() + 1e4 };
+      throw desktopUnavailable();
+    }).finally(() => {
+      if (this.callerRecovery?.work === work) this.callerRecovery = null;
+    });
+    this.callerRecovery = { key, work };
+    return work;
   }
   async call(tool, args = {}, options = {}) {
     if (!ALLOWED_TOOLS.has(tool)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
     if (tool === "send_message_to_thread") return this.input.send(args, options.beforeSend, options);
-    const result = await this.request("tools/call", {
-      namespace: "codex_app",
-      tool,
-      arguments: args,
-      callerSource: "codex",
-      threadId: this.context.threadId,
-      hostId: "local",
-      turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
-      callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
-    }, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), options.beforeSend);
-    const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
-    if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
+    const canRecover = this.recover && READ_ONLY_TOOLS.has(tool);
+    if (canRecover && this.failedCaller?.key === contextKey2(this.context) && this.failedCaller.retryAt > Date.now()) throw desktopUnavailable();
+    let caller;
+    const invoke = async () => {
+      const params = {
+        namespace: "codex_app",
+        tool,
+        arguments: options.callerProbe ? { ...args, threadId: this.context.threadId } : args,
+        callerSource: "codex",
+        threadId: this.context.threadId,
+        hostId: "local",
+        turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
+        callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
+      };
+      const result = await this.request("tools/call", params, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), () => {
+        options.beforeSend?.();
+        caller = { ...this.context };
+        if (options.callerProbe) params.arguments = { ...args, threadId: caller.threadId };
+      });
+      const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
+      if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
+      try {
+        return JSON.parse(output);
+      } catch {
+        return { text: output };
+      }
+    };
     try {
-      return JSON.parse(output);
-    } catch {
-      return { text: output };
+      return await invoke();
+    } catch (error2) {
+      if (!canRecover || !caller) throw error2;
+      const missing = unloadedThread(error2);
+      if (missing && missing !== caller.threadId) throw error2;
+      if (!missing && contextKey2(this.context) === contextKey2(caller)) {
+        let healthy2 = false;
+        try {
+          await this.verifyContext(caller);
+          healthy2 = true;
+        } catch {
+        }
+        if (healthy2) throw error2;
+      }
+      await this.recoverCaller(caller, missing ? "caller_unloaded" : "caller_unavailable");
+      return invoke();
     }
   }
 };
@@ -22163,7 +22278,7 @@ var stopControl = () => requestControl("stop");
 var import_node_crypto8 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.1";
+var VERSION = "0.9.2";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
@@ -22381,6 +22496,7 @@ function publicBot(bot) {
 }
 
 // src/bridge-lifecycle.mjs
+init_desktop_context_store();
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -22436,7 +22552,14 @@ function automaticSkip(context2) {
   if (readJson("autostart-pause.json", {}).pipePath === context2.pipePath) return "paused";
   if (!hasConfiguredChannel()) return "not_configured";
 }
-async function ensureBridge(context2, { entryPath, automatic = false, management = false, validate: validate2 = validateDesktopContext } = {}) {
+var startupQueue = Promise.resolve();
+function ensureBridge(context2, options = {}) {
+  const work = startupQueue.catch(() => {
+  }).then(() => startBridge(context2, options));
+  startupQueue = work;
+  return work;
+}
+async function startBridge(context2, { entryPath, automatic = false, management = false, validate: validate2 = validateDesktopContext } = {}) {
   const skipped = automatic && automaticSkip(context2);
   if (skipped) return { skipped };
   if (!management && !hasConfiguredChannel()) {
@@ -22477,7 +22600,7 @@ async function ensureBridge(context2, { entryPath, automatic = false, management
     }
     const skipped2 = automatic && automaticSkip(context2);
     if (skipped2) return { skipped: skipped2 };
-    if (validated) writeJson("desktop-context.json", context2);
+    if (validated) publishDesktopContext(context2);
     if (!automatic && !management) writeJson("autostart-pause.json", {});
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
@@ -22882,7 +23005,7 @@ var tools = [
   { name: "start_bridge", description: "\u542F\u52A8\u5E38\u9A7B\u684C\u9762\u804A\u5929\u6865\u63A5\u3002\u98DE\u4E66\u5148\u914D\u7F6E App ID/Secret\uFF0C\u5FAE\u4FE1\u4F7F\u7528 wechat_login \u626B\u7801\uFF1B\u53EF\u4EE5\u540C\u65F6\u542F\u7528\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false, openWorldHint: true } },
   { name: "stop_bridge", description: "\u505C\u6B62\u6240\u6709\u804A\u5929\u901A\u9053\u7684\u6865\u63A5\u670D\u52A1\u3002\u4E0D\u4F1A\u505C\u6B62\u4EFB\u4F55 Codex \u4F1A\u8BDD\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false } }
 ];
-async function startBridge(extra) {
+async function startBridge2(extra) {
   return ensureBridge(context(extra), { entryPath: import_node_path8.default.join(__dirname, "bridge.cjs") });
 }
 async function managementService(extra) {
@@ -22964,7 +23087,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       case "wechat_login": {
         context(extra);
         result = await beginWechatLogin({ refresh: request.params.arguments?.refresh === true });
-        await startBridge(extra);
+        await startBridge2(extra);
         break;
       }
       case "wechat_login_status":
@@ -23026,7 +23149,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         break;
       }
       case "start_bridge": {
-        result = await startBridge(extra);
+        result = await startBridge2(extra);
         break;
       }
       case "stop_bridge": {

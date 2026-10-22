@@ -61,11 +61,18 @@ var init_storage = __esm({
   }
 });
 
+// src/desktop-context-store.mjs
+var init_desktop_context_store = __esm({
+  "src/desktop-context-store.mjs"() {
+    init_storage();
+  }
+});
+
 // src/responses-compat-daemon.mjs
 init_storage();
 
 // src/version.mjs
-var VERSION = "0.9.1";
+var VERSION = "0.9.2";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);
@@ -213,6 +220,7 @@ init_storage();
 init_storage();
 
 // src/bridge-lifecycle.mjs
+init_desktop_context_store();
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -222,6 +230,7 @@ function alive(pid) {
     return false;
   }
 }
+var startupQueue = Promise.resolve();
 
 // src/responses-compat-settings.mjs
 var execute = (0, import_node_util.promisify)(import_node_child_process.execFile);

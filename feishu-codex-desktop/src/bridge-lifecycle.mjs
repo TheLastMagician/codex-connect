@@ -6,6 +6,7 @@ import {DesktopClient} from './desktop.mjs';
 import {dataDir,secureDirectory,readJson,writeJson} from './storage.mjs';
 import {readWechatAccount} from './wechat-storage.mjs';
 import {feishuBots} from './connections.mjs';
+import {publishDesktopContext} from './desktop-context-store.mjs';
 
 export function alive(pid) {
   if(!Number.isInteger(pid) || pid<=0)return false;
@@ -40,7 +41,15 @@ function automaticSkip(context) {
   if(readJson('autostart-pause.json',{}).pipePath===context.pipePath)return 'paused';
   if(!hasConfiguredChannel())return 'not_configured';
 }
-export async function ensureBridge(context,{entryPath,automatic=false,management=false,validate=validateDesktopContext}={}) {
+let startupQueue=Promise.resolve();
+export function ensureBridge(context,options={}) {
+  // Serialize this process before Windows ACL setup and the cross-process lock.
+  // Otherwise simultaneous MCP requests can exhaust the lock timeout while
+  // synchronous ACL setup blocks the request that already owns the lock.
+  const work=startupQueue.catch(()=>{}).then(()=>startBridge(context,options));
+  startupQueue=work;return work;
+}
+async function startBridge(context,{entryPath,automatic=false,management=false,validate=validateDesktopContext}={}) {
   const skipped=automatic && automaticSkip(context);if(skipped)return {skipped};
   if(!management && !hasConfiguredChannel()) {
     if(automatic)return {skipped:'not_configured'};
@@ -67,7 +76,7 @@ export async function ensureBridge(context,{entryPath,automatic=false,management
     try{if(context?.pipePath && context?.threadId){context=await validate(context)||context;validated=true;}else if(!management)throw new Error('缺少真实桌面连接');}
     catch(error){if(!management)throw error;}
     const skipped=automatic && automaticSkip(context);if(skipped)return {skipped};
-    if(validated)writeJson('desktop-context.json',context);
+    if(validated)publishDesktopContext(context);
     if(!automatic && !management)writeJson('autostart-pause.json',{});
     const previous=readJson('status.json',{}),running=readLock('bridge.lock');
     if(alive(running.pid))return {alreadyRunning:true,pid:running.pid,state:previous.state||'starting'};

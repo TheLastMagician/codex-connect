@@ -11,6 +11,9 @@ export const ALLOWED_TOOLS = new Set([
   'send_message_to_thread','create_thread','set_thread_title','set_thread_archived',
   'fork_thread','move_thread_to_sidebar_section','navigate_to_codex_page'
 ]);
+const READ_ONLY_TOOLS=new Set(['list_threads','list_archived_threads','list_projects','read_thread','wait_threads']);
+const contextKey=context=>JSON.stringify([context?.pipePath,context?.threadId]);
+const unloadedThread=error=>error?.message?.match(/thread not loaded:\s*([A-Za-z0-9_-]+)/i)?.[1];
 export function encodeFrame(value) {
   const body = Buffer.from(JSON.stringify(value),'utf8');
   if (body.length > MAX_FRAME) throw new Error('请求过大');
@@ -32,14 +35,7 @@ export class DesktopClient {
       if(generation!==this.connectionGeneration)throw desktopUnavailable();
       let next;
       try {
-        next=await this.resolveContext(this.context,{probe:async context=>{
-          const probe=new DesktopClient(context,{recover:false});
-          try {
-            const tools=await probe.tools({timeoutMs:1500});
-            if(!tools.some(tool=>tool.name==='list_threads') || !tools.some(tool=>tool.name==='read_thread'))throw desktopUnavailable();
-            await probe.probe({timeoutMs:3000});
-          }finally{probe.close();}
-        }});
+        next=await this.resolveContext(this.context,{probe:context=>this.verifyContext(context)});
       }catch{throw desktopUnavailable();}
       if(generation!==this.connectionGeneration)throw desktopUnavailable();
       this.context={...this.context,...next};
@@ -111,20 +107,71 @@ export class DesktopClient {
     const result = await this.request('tools/list',{threadStartKind:'all'},timeoutMs);
     return (result.tools||[]).filter(tool => tool.namespace === 'codex_app' && ALLOWED_TOOLS.has(tool.name));
   }
+  async verifyContext(context) {
+    const probe=new DesktopClient(context,{recover:false});
+    try {
+      const tools=await probe.tools({timeoutMs:1500});
+      if(!tools.some(t=>t.name==='list_threads') || !tools.some(t=>t.name==='read_thread'))throw desktopUnavailable();
+      await probe.probe({timeoutMs:3000});
+    }finally{probe.close();}
+  }
   probe({timeoutMs=5000}={}) {
-    return this.call('read_thread',{threadId:this.context.threadId,turnLimit:1,maxOutputCharsPerItem:1},{timeoutMs});
+    return this.call('read_thread',{threadId:this.context.threadId,turnLimit:1,maxOutputCharsPerItem:1},{timeoutMs,callerProbe:true});
+  }
+  async recoverCaller(failed,reason='caller_unloaded') {
+    const key=contextKey(failed),generation=this.connectionGeneration;
+    if(contextKey(this.context)!==key)return;
+    if(this.callerRecovery?.key===key)return this.callerRecovery.work;
+    const work=(async()=>{
+      const next=await this.resolveContext(failed,{probe:context=>this.verifyContext(context)});
+      if(contextKey(this.context)!==key)return;
+      if(generation!==this.connectionGeneration)throw desktopUnavailable();
+      if(!next?.pipePath || !next.threadId || contextKey(next)===key)throw desktopUnavailable();
+      this.updateContext(next);this.lastRecovery={at:Date.now(),reason};
+      this.failedCaller=null;
+    })().catch(()=>{
+      if(contextKey(this.context)!==key)return;
+      this.failedCaller={key,retryAt:Date.now()+10000};throw desktopUnavailable();
+    }).finally(()=>{if(this.callerRecovery?.work===work)this.callerRecovery=null;});
+    this.callerRecovery={key,work};return work;
   }
   async call(tool,args={},options={}) {
     if(!ALLOWED_TOOLS.has(tool)) throw new Error('不支持的桌面操作');
     if(!this.context.threadId) throw new Error('缺少真实调用会话，请从 Codex 桌面内启动桥接');
     if(tool==='send_message_to_thread')return this.input.send(args,options.beforeSend,options);
-    const result=await this.request('tools/call',{
-      namespace:'codex_app',tool,arguments:args,callerSource:'codex',
-      threadId:this.context.threadId,hostId:'local',
-      turnId:`feishu-${randomUUID()}`,callId:`feishu-${randomUUID()}`
-    },options.timeoutMs??(tool==='wait_threads'?45000:30000),options.beforeSend);
-    const output=(result.contentItems||[]).filter(item=>item.type==='inputText').map(item=>item.text).join('\n');
-    if(!result.success) throw new Error(output || '桌面操作失败');
-    try {return JSON.parse(output);} catch {return {text:output};}
+    const canRecover=this.recover && READ_ONLY_TOOLS.has(tool);
+    if(canRecover && this.failedCaller?.key===contextKey(this.context) && this.failedCaller.retryAt>Date.now())throw desktopUnavailable();
+    let caller;
+    const invoke=async()=>{
+      const params={
+        namespace:'codex_app',tool,arguments:options.callerProbe?{...args,threadId:this.context.threadId}:args,callerSource:'codex',
+        threadId:this.context.threadId,hostId:'local',
+        turnId:`feishu-${randomUUID()}`,callId:`feishu-${randomUUID()}`
+      };
+      const result=await this.request('tools/call',params,options.timeoutMs??(tool==='wait_threads'?45000:30000),()=>{
+        options.beforeSend?.();caller={...this.context};
+        if(options.callerProbe)params.arguments={...args,threadId:caller.threadId};
+      });
+      const output=(result.contentItems||[]).filter(item=>item.type==='inputText').map(item=>item.text).join('\n');
+      if(!result.success)throw new Error(output||'桌面操作失败');
+      try{return JSON.parse(output);}catch{return {text:output};}
+    };
+    try{return await invoke();}
+    catch(error){
+      // A healthy pipe can still refer to an unloaded calling chat. Recover
+      // only that exact caller, never a missing destination, and retry reads
+      // once. A creation, mutation or native user input is never replayed.
+      if(!canRecover || !caller)throw error;
+      const missing=unloadedThread(error);
+      if(missing && missing!==caller.threadId)throw error;
+      if(!missing && contextKey(this.context)===contextKey(caller)) {
+        // Some desktop versions hide the underlying error behind a generic
+        // tool failure. Verify the caller independently before attributing it
+        // to the connection; a healthy caller leaves destination errors intact.
+        let healthy=false;try{await this.verifyContext(caller);healthy=true;}catch{}
+        if(healthy)throw error;
+      }
+      await this.recoverCaller(caller,missing?'caller_unloaded':'caller_unavailable');return invoke();
+    }
   }
 }

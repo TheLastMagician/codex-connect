@@ -41,7 +41,8 @@ async function stopChildren() {
 }
 test.beforeEach(async()=>{
   await stopChildren();
-  if(fs.existsSync(dataDir))fs.rmSync(dataDir,{recursive:true,force:true,maxRetries:15,retryDelay:25});
+  assert.equal(path.resolve(dataDir),path.join(path.resolve(folder),'private'));
+  if(fs.existsSync(dataDir))await fs.promises.rm(dataDir,{recursive:true,force:true,maxRetries:50,retryDelay:100});
   fs.mkdirSync(dataDir,{recursive:true});
   writeJson('config.json',{appId:'fixture-app',appSecret:'fixture-secret'});
   fs.writeFileSync(path.join(home,'hooks.json'),JSON.stringify({description:'Existing user hooks',hooks:{
@@ -51,7 +52,7 @@ test.beforeEach(async()=>{
 test.after(async()=>{
   await stopChildren();
   assert.ok(path.resolve(folder).startsWith(path.resolve(os.tmpdir())+path.sep+'codex-autostart-test-'));
-  fs.rmSync(folder,{recursive:true,force:true,maxRetries:15,retryDelay:25});
+  await fs.promises.rm(folder,{recursive:true,force:true,maxRetries:50,retryDelay:100});
 });
 
 test('autostart is opt-in and installing it preserves other hooks; repeated enable and disable are reversible',()=>{
@@ -114,6 +115,7 @@ test('concurrent startup attempts launch a single bridge and retain its real con
   const rebound=await ensureBridge(next,options);
   assert.equal(rebound.alreadyRunning,true);assert.equal(rebound.pid,results[0].pid);
   assert.deepEqual(readJson('desktop-context.json',{}),next);
+  assert.deepEqual(readJson('desktop-contexts.json',{}).bindings,[next,context]);
 });
 
 test('startup publishes the recovered host context instead of restoring a stale inherited pipe',async()=>{

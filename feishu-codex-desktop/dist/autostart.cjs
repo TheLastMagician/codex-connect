@@ -90,6 +90,38 @@ var init_storage = __esm({
   }
 });
 
+// src/desktop-context-store.mjs
+var desktop_context_store_exports = {};
+__export(desktop_context_store_exports, {
+  contextKey: () => contextKey,
+  publishDesktopContext: () => publishDesktopContext,
+  rememberDesktopContext: () => rememberDesktopContext
+});
+function rememberDesktopContext(context) {
+  const next = binding(context);
+  if (!next) return;
+  const previous = readJson("desktop-contexts.json", { bindings: [] }).bindings;
+  const seen = /* @__PURE__ */ new Set(), bindings = [next, ...Array.isArray(previous) ? previous : []].map(binding).filter((item) => {
+    if (!item || seen.has(contextKey(item))) return false;
+    seen.add(contextKey(item));
+    return true;
+  }).slice(0, 16);
+  if (JSON.stringify(bindings) !== JSON.stringify(previous)) writeJson("desktop-contexts.json", { bindings });
+}
+function publishDesktopContext(context, { expected } = {}) {
+  rememberDesktopContext(context);
+  if (expected && contextKey(readJson("desktop-context.json", {})) !== contextKey(expected)) return;
+  writeJson("desktop-context.json", context);
+}
+var contextKey, binding;
+var init_desktop_context_store = __esm({
+  "src/desktop-context-store.mjs"() {
+    init_storage();
+    contextKey = (context) => JSON.stringify([context?.pipePath, context?.threadId]);
+    binding = (context) => typeof context?.pipePath === "string" && context.pipePath && typeof context.threadId === "string" && context.threadId ? { pipePath: context.pipePath, threadId: context.threadId, ...typeof context.inputPipePath === "string" ? { inputPipePath: context.inputPipePath } : {} } : null;
+  }
+});
+
 // src/autostart.mjs
 var import_node_path5 = __toESM(require("node:path"), 1);
 
@@ -399,18 +431,47 @@ async function discoverDesktopEndpoints({ platform = process.platform, script = 
     child.stdin.end("& {\n" + source + "\n}\n\n");
   });
 }
-async function recoverDesktopContext(current, { probe, discover = discoverDesktopEndpoints, read, publish } = {}) {
+async function recoverDesktopContext(current, { probe, discover = discoverDesktopEndpoints, read, readBindings, publish } = {}) {
   if (!read || !publish) {
     const storage = await Promise.resolve().then(() => (init_storage(), storage_exports));
+    if (!read) readBindings ||= () => storage.readJson("desktop-contexts.json", { bindings: [] }).bindings;
     read ||= () => storage.readJson("desktop-context.json", {});
-    publish ||= (context) => storage.writeJson("desktop-context.json", context);
+    publish ||= (await Promise.resolve().then(() => (init_desktop_context_store(), desktop_context_store_exports))).publishDesktopContext;
   }
+  readBindings ||= () => [];
+  const key = (context) => JSON.stringify([context?.pipePath, context?.threadId]);
   const saved = read();
-  if (saved.pipePath && saved.threadId && saved.pipePath !== current.pipePath) {
+  if (saved.pipePath && saved.threadId && key(saved) !== key(current)) {
     try {
       await probe(saved);
       return saved;
     } catch {
+    }
+  }
+  const seen = /* @__PURE__ */ new Set([key(current), key(saved)]);
+  const bindings = readBindings();
+  const prior = (Array.isArray(bindings) ? bindings : []).filter((context) => {
+    if (!context?.pipePath || !context.threadId || seen.has(key(context))) return false;
+    seen.add(key(context));
+    return true;
+  }).slice(0, 16);
+  for (let offset = 0; offset < prior.length; offset += 4) {
+    const checked2 = await Promise.allSettled(prior.slice(offset, offset + 4).map(async (context) => {
+      await probe(context);
+      return context;
+    }));
+    const candidate2 = checked2.find((result) => result.status === "fulfilled")?.value;
+    if (candidate2) {
+      const latest2 = read();
+      if (latest2.pipePath && latest2.threadId && key(latest2) !== key(saved)) {
+        try {
+          await probe(latest2);
+          return latest2;
+        } catch {
+        }
+      }
+      await publish(candidate2, { expected: saved });
+      return candidate2;
     }
   }
   const source = saved.threadId ? saved : current;
@@ -435,7 +496,7 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
     } catch {
     }
   }
-  publish(candidate);
+  await publish(candidate, { expected: saved });
   return candidate;
 }
 
@@ -455,6 +516,9 @@ var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
   "move_thread_to_sidebar_section",
   "navigate_to_codex_page"
 ]);
+var READ_ONLY_TOOLS = /* @__PURE__ */ new Set(["list_threads", "list_archived_threads", "list_projects", "read_thread", "wait_threads"]);
+var contextKey2 = (context) => JSON.stringify([context?.pipePath, context?.threadId]);
+var unloadedThread = (error) => error?.message?.match(/thread not loaded:\s*([A-Za-z0-9_-]+)/i)?.[1];
 function encodeFrame(value) {
   const body = Buffer.from(JSON.stringify(value), "utf8");
   if (body.length > MAX_FRAME2) throw new Error("\u8BF7\u6C42\u8FC7\u5927");
@@ -487,16 +551,7 @@ var DesktopClient = class _DesktopClient {
       if (generation !== this.connectionGeneration) throw desktopUnavailable();
       let next;
       try {
-        next = await this.resolveContext(this.context, { probe: async (context) => {
-          const probe = new _DesktopClient(context, { recover: false });
-          try {
-            const tools = await probe.tools({ timeoutMs: 1500 });
-            if (!tools.some((tool) => tool.name === "list_threads") || !tools.some((tool) => tool.name === "read_thread")) throw desktopUnavailable();
-            await probe.probe({ timeoutMs: 3e3 });
-          } finally {
-            probe.close();
-          }
-        } });
+        next = await this.resolveContext(this.context, { probe: (context) => this.verifyContext(context) });
       } catch {
         throw desktopUnavailable();
       }
@@ -612,29 +667,89 @@ var DesktopClient = class _DesktopClient {
     const result = await this.request("tools/list", { threadStartKind: "all" }, timeoutMs);
     return (result.tools || []).filter((tool) => tool.namespace === "codex_app" && ALLOWED_TOOLS.has(tool.name));
   }
+  async verifyContext(context) {
+    const probe = new _DesktopClient(context, { recover: false });
+    try {
+      const tools = await probe.tools({ timeoutMs: 1500 });
+      if (!tools.some((t) => t.name === "list_threads") || !tools.some((t) => t.name === "read_thread")) throw desktopUnavailable();
+      await probe.probe({ timeoutMs: 3e3 });
+    } finally {
+      probe.close();
+    }
+  }
   probe({ timeoutMs = 5e3 } = {}) {
-    return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs });
+    return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs, callerProbe: true });
+  }
+  async recoverCaller(failed, reason = "caller_unloaded") {
+    const key = contextKey2(failed), generation = this.connectionGeneration;
+    if (contextKey2(this.context) !== key) return;
+    if (this.callerRecovery?.key === key) return this.callerRecovery.work;
+    const work = (async () => {
+      const next = await this.resolveContext(failed, { probe: (context) => this.verifyContext(context) });
+      if (contextKey2(this.context) !== key) return;
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      if (!next?.pipePath || !next.threadId || contextKey2(next) === key) throw desktopUnavailable();
+      this.updateContext(next);
+      this.lastRecovery = { at: Date.now(), reason };
+      this.failedCaller = null;
+    })().catch(() => {
+      if (contextKey2(this.context) !== key) return;
+      this.failedCaller = { key, retryAt: Date.now() + 1e4 };
+      throw desktopUnavailable();
+    }).finally(() => {
+      if (this.callerRecovery?.work === work) this.callerRecovery = null;
+    });
+    this.callerRecovery = { key, work };
+    return work;
   }
   async call(tool, args = {}, options = {}) {
     if (!ALLOWED_TOOLS.has(tool)) throw new Error("\u4E0D\u652F\u6301\u7684\u684C\u9762\u64CD\u4F5C");
     if (!this.context.threadId) throw new Error("\u7F3A\u5C11\u771F\u5B9E\u8C03\u7528\u4F1A\u8BDD\uFF0C\u8BF7\u4ECE Codex \u684C\u9762\u5185\u542F\u52A8\u6865\u63A5");
     if (tool === "send_message_to_thread") return this.input.send(args, options.beforeSend, options);
-    const result = await this.request("tools/call", {
-      namespace: "codex_app",
-      tool,
-      arguments: args,
-      callerSource: "codex",
-      threadId: this.context.threadId,
-      hostId: "local",
-      turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
-      callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
-    }, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), options.beforeSend);
-    const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
-    if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
+    const canRecover = this.recover && READ_ONLY_TOOLS.has(tool);
+    if (canRecover && this.failedCaller?.key === contextKey2(this.context) && this.failedCaller.retryAt > Date.now()) throw desktopUnavailable();
+    let caller;
+    const invoke = async () => {
+      const params = {
+        namespace: "codex_app",
+        tool,
+        arguments: options.callerProbe ? { ...args, threadId: this.context.threadId } : args,
+        callerSource: "codex",
+        threadId: this.context.threadId,
+        hostId: "local",
+        turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
+        callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
+      };
+      const result = await this.request("tools/call", params, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), () => {
+        options.beforeSend?.();
+        caller = { ...this.context };
+        if (options.callerProbe) params.arguments = { ...args, threadId: caller.threadId };
+      });
+      const output = (result.contentItems || []).filter((item) => item.type === "inputText").map((item) => item.text).join("\n");
+      if (!result.success) throw new Error(output || "\u684C\u9762\u64CD\u4F5C\u5931\u8D25");
+      try {
+        return JSON.parse(output);
+      } catch {
+        return { text: output };
+      }
+    };
     try {
-      return JSON.parse(output);
-    } catch {
-      return { text: output };
+      return await invoke();
+    } catch (error) {
+      if (!canRecover || !caller) throw error;
+      const missing = unloadedThread(error);
+      if (missing && missing !== caller.threadId) throw error;
+      if (!missing && contextKey2(this.context) === contextKey2(caller)) {
+        let healthy = false;
+        try {
+          await this.verifyContext(caller);
+          healthy = true;
+        } catch {
+        }
+        if (healthy) throw error;
+      }
+      await this.recoverCaller(caller, missing ? "caller_unloaded" : "caller_unavailable");
+      return invoke();
     }
   }
 };
@@ -666,6 +781,7 @@ function feishuBots() {
 }
 
 // src/bridge-lifecycle.mjs
+init_desktop_context_store();
 function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
@@ -717,7 +833,14 @@ function automaticSkip(context) {
   if (readJson("autostart-pause.json", {}).pipePath === context.pipePath) return "paused";
   if (!hasConfiguredChannel()) return "not_configured";
 }
-async function ensureBridge(context, { entryPath, automatic = false, management = false, validate = validateDesktopContext } = {}) {
+var startupQueue = Promise.resolve();
+function ensureBridge(context, options = {}) {
+  const work = startupQueue.catch(() => {
+  }).then(() => startBridge(context, options));
+  startupQueue = work;
+  return work;
+}
+async function startBridge(context, { entryPath, automatic = false, management = false, validate = validateDesktopContext } = {}) {
   const skipped = automatic && automaticSkip(context);
   if (skipped) return { skipped };
   if (!management && !hasConfiguredChannel()) {
@@ -758,7 +881,7 @@ async function ensureBridge(context, { entryPath, automatic = false, management 
     }
     const skipped2 = automatic && automaticSkip(context);
     if (skipped2) return { skipped: skipped2 };
-    if (validated) writeJson("desktop-context.json", context);
+    if (validated) publishDesktopContext(context);
     if (!automatic && !management) writeJson("autostart-pause.json", {});
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
