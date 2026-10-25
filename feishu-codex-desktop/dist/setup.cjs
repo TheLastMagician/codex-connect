@@ -1638,10 +1638,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version);
-      const path11 = dijkstra.find_path(graph.map, "start", "end");
+      const path12 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path11.length - 1; i++) {
-        optimizedSegs.push(graph.table[path11[i]].node);
+      for (let i = 1; i < path12.length - 1; i++) {
+        optimizedSegs.push(graph.table[path12[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -4118,7 +4118,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path12, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4129,7 +4129,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs7.createWriteStream(path11);
+      const stream = fs7.createWriteStream(path12);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -4191,14 +4191,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path12, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
       const fs7 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs7.writeFile(path11, utf8, cb);
+      fs7.writeFile(path12, utf8, cb);
     };
   }
 });
@@ -4319,7 +4319,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path11 = "";
+      let path12 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -4330,19 +4330,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path11 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path12 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path11 += svgCmd("h", lineLength);
+            path12 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path11;
+      return path12;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -4350,10 +4350,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path11 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path12 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path11 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path12 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -4367,7 +4367,7 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path12, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4375,7 +4375,7 @@ var require_svg = __commonJS({
       const fs7 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs7.writeFile(path11, xmlStr, cb);
+      fs7.writeFile(path12, xmlStr, cb);
     };
   }
 });
@@ -4533,8 +4533,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path11) {
-      return path11.slice((path11.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path12) {
+      return path12.slice((path12.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -4598,17 +4598,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path11, text, opts, cb) {
-      if (typeof path11 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path12, text, opts, cb) {
+      if (typeof path12 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path11);
+      const type = params.opts.type || getTypeFromFilename(path12);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path11);
+      const renderToFile = renderer.renderToFile.bind(null, path12);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -4681,7 +4681,7 @@ init_storage();
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.2";
+var VERSION = "0.9.3";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -4924,8 +4924,8 @@ function configureAutostart(enabled, { bundleDir, codexHome } = {}) {
 // src/responses-compat-settings.mjs
 var import_node_fs6 = __toESM(require("node:fs"), 1);
 var import_node_os4 = __toESM(require("node:os"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
-var import_node_child_process5 = require("node:child_process");
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_child_process6 = require("node:child_process");
 var import_node_util = require("node:util");
 var import_node_crypto7 = require("node:crypto");
 var import_promises3 = require("node:timers/promises");
@@ -4934,8 +4934,8 @@ init_storage();
 
 // src/bridge-lifecycle.mjs
 var import_node_fs5 = __toESM(require("node:fs"), 1);
-var import_node_path6 = __toESM(require("node:path"), 1);
-var import_node_child_process4 = require("node:child_process");
+var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_child_process5 = require("node:child_process");
 var import_promises2 = require("node:timers/promises");
 
 // src/desktop.mjs
@@ -5307,6 +5307,58 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
   return candidate;
 }
 
+// src/desktop-wake.mjs
+var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_child_process4 = require("node:child_process");
+var threadIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+function threadWakeUrl(thread) {
+  if ((thread?.hostId || "local") !== "local" || !threadIdPattern.test(thread?.id || "")) return null;
+  return `codex://threads/${thread.id}`;
+}
+async function openRegisteredThread(url, { platform = process.platform, launch = import_node_child_process4.spawn } = {}) {
+  if (platform !== "win32" || !/^codex:\/\/threads\/[0-9a-f-]{36}$/i.test(url)) throw new Error("\u65E0\u6CD5\u5524\u8D77\u684C\u9762\u4F1A\u8BDD");
+  const child = launch(
+    import_node_path6.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
+    [url],
+    { windowsHide: true, stdio: "ignore" }
+  );
+  await new Promise((resolve, reject) => {
+    child.once("spawn", resolve);
+    child.once("error", reject);
+  });
+  child.unref();
+}
+var DesktopWake = class {
+  constructor({ platform = process.platform, open = openRegisteredThread, now = Date.now, cooldownMs = 6e4 } = {}) {
+    Object.assign(this, { platform, open, now, cooldownMs });
+  }
+  async recover(thread, { authorize, beforeWake } = {}) {
+    const url = threadWakeUrl(thread);
+    if (this.platform !== "win32" || !url || typeof authorize !== "function" || typeof beforeWake !== "function") return false;
+    if (this.work) {
+      await this.work.catch(() => {
+      });
+      return false;
+    }
+    if (this.lastAttempt && this.now() - this.lastAttempt.at < this.cooldownMs) return false;
+    authorize();
+    if (beforeWake() !== true) return false;
+    this.lastAttempt = { at: this.now(), state: "requested" };
+    const work = Promise.resolve().then(async () => {
+      authorize();
+      await this.open(url);
+      return true;
+    }).catch(() => {
+      this.lastAttempt = { ...this.lastAttempt, state: "failed" };
+      return false;
+    }).finally(() => {
+      if (this.work === work) this.work = null;
+    });
+    this.work = work;
+    return work;
+  }
+};
+
 // src/desktop.mjs
 var MAX_FRAME2 = 8 * 1024 * 1024;
 var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
@@ -5335,10 +5387,11 @@ function encodeFrame(value) {
   return frame2;
 }
 var DesktopClient = class _DesktopClient {
-  constructor(context, { recover = true, resolveContext = recoverDesktopContext } = {}) {
+  constructor(context, { recover = true, resolveContext = recoverDesktopContext, wakeDesktop = new DesktopWake() } = {}) {
     this.context = context;
     this.recover = recover;
     this.resolveContext = resolveContext;
+    this.wakeDesktop = wakeDesktop;
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
@@ -5410,7 +5463,7 @@ var DesktopClient = class _DesktopClient {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         if (method === "tools/call") this.socket?.write(encodeFrame({ jsonrpc: "2.0", id, method: "tools/cancel" }));
-        reject(new Error("\u684C\u9762\u64CD\u4F5C\u8D85\u65F6\uFF1B\u64CD\u4F5C\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1"));
+        reject(Object.assign(new Error("\u684C\u9762\u64CD\u4F5C\u8D85\u65F6\uFF1B\u64CD\u4F5C\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1"), { code: "DESKTOP_REQUEST_TIMEOUT" }));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       try {
@@ -5444,7 +5497,7 @@ var DesktopClient = class _DesktopClient {
       if (!pending) continue;
       clearTimeout(pending.timer);
       this.pending.delete(value.id);
-      if (value.error) pending.reject(new Error(value.error.message));
+      if (value.error) pending.reject(Object.assign(new Error(value.error.message), { rpcCode: value.error.code }));
       else pending.resolve(value.result);
     }
   }
@@ -5486,6 +5539,23 @@ var DesktopClient = class _DesktopClient {
   }
   probe({ timeoutMs = 5e3 } = {}) {
     return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs, callerProbe: true });
+  }
+  async recoverForThread(thread, options = {}) {
+    if (!this.recover || !options.authorize || !options.beforeWake) return false;
+    const generation = this.connectionGeneration;
+    options.authorize();
+    try {
+      await this.tools({ timeoutMs: 1500 });
+      return false;
+    } catch (error) {
+      if (error.rpcCode !== -32e3 && error.code !== "DESKTOP_REQUEST_TIMEOUT") return false;
+    }
+    if (generation !== this.connectionGeneration) return false;
+    options.authorize();
+    return this.wakeDesktop.recover(thread, { ...options, authorize: () => {
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      options.authorize();
+    } });
   }
   async recoverCaller(failed, reason = "caller_unloaded") {
     const key = contextKey2(failed), generation = this.connectionGeneration;
@@ -5647,7 +5717,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
   secureDirectory();
-  const lockPath = import_node_path6.default.join(dataDir, "bridge-start.lock");
+  const lockPath = import_node_path7.default.join(dataDir, "bridge-start.lock");
   let lock2;
   const deadline = Date.now() + 6e3;
   while (lock2 === void 0) {
@@ -5685,10 +5755,10 @@ async function startBridge(context, { entryPath, automatic = false, management =
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs5.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
-    const log = import_node_fs5.default.openSync(import_node_path6.default.join(dataDir, "bridge.log"), "a", 384);
+    const log = import_node_fs5.default.openSync(import_node_path7.default.join(dataDir, "bridge.log"), "a", 384);
     let child;
     try {
-      child = (0, import_node_child_process4.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
+      child = (0, import_node_child_process5.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
@@ -5713,15 +5783,15 @@ async function startBridge(context, { entryPath, automatic = false, management =
 }
 
 // src/responses-compat-settings.mjs
-var execute = (0, import_node_util.promisify)(import_node_child_process5.execFile);
-var directory3 = typeof __dirname === "string" ? __dirname : import_node_path7.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
-var runtime = import_node_path7.default.join(dataDir, "runtime");
+var execute = (0, import_node_util.promisify)(import_node_child_process6.execFile);
+var directory3 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
+var runtime = import_node_path8.default.join(dataDir, "runtime");
 var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 var registryName = "CodexConnectResponsesCompat";
-var home = () => process.env.CODEX_HOME || import_node_path7.default.join(import_node_os4.default.homedir(), ".codex");
-async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path7.default.join(directory3, "provider-config.py") } = {}) {
+var home = () => process.env.CODEX_HOME || import_node_path8.default.join(import_node_os4.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path8.default.join(directory3, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
-    const child = (0, import_node_child_process5.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
+    const child = (0, import_node_child_process6.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
     const fail = () => reject(new Error("\u65E0\u6CD5\u5B89\u5168\u8BFB\u53D6\u6216\u66F4\u65B0\u4F9B\u5E94\u5546\u914D\u7F6E\uFF0C\u9700\u8981 Python 3.11+\u3002"));
     const timer = setTimeout(() => {
@@ -5783,7 +5853,7 @@ function responsesCompatStatus() {
 }
 async function lock(name, action) {
   import_node_fs6.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const file = import_node_path7.default.join(dataDir, name);
+  const file = import_node_path8.default.join(dataDir, name);
   let descriptor;
   const deadline = Date.now() + 12e3;
   while (descriptor === void 0) {
@@ -5818,7 +5888,7 @@ async function lock(name, action) {
     }
   }
 }
-async function setCompatStartup(enabled, { entry = import_node_path7.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+async function setCompatStartup(enabled, { entry = import_node_path8.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
   else await execute("reg.exe", ["delete", registry, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
@@ -5836,7 +5906,7 @@ async function configureResponsesCompat({ providerId, enabled }, {
     const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
-    const backup = () => import_node_path7.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto7.randomUUID)()}.toml`);
+    const backup = () => import_node_path8.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto7.randomUUID)()}.toml`);
     if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
     const next = {
       ...previous,
@@ -5850,20 +5920,20 @@ async function configureResponsesCompat({ providerId, enabled }, {
 }
 
 // src/dashboard.mjs
-var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
 init_storage();
 
 // src/catalog.mjs
-var import_node_child_process6 = require("node:child_process");
+var import_node_child_process7 = require("node:child_process");
 var import_node_util2 = require("node:util");
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_path9 = __toESM(require("node:path"), 1);
 var import_node_url4 = require("node:url");
-var execute2 = (0, import_node_util2.promisify)(import_node_child_process6.execFile);
-var directory4 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
+var execute2 = (0, import_node_util2.promisify)(import_node_child_process7.execFile);
+var directory4 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
 
 // src/dashboard.mjs
-var directory5 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
+var directory5 = typeof __dirname === "string" ? __dirname : import_node_path10.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
 function dashboardLink() {
   const saved = readJson("dashboard.json", {});
   if (!saved.port || !saved.token) throw new Error("\u7BA1\u7406\u9875\u9762\u5C1A\u672A\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
@@ -5871,7 +5941,7 @@ function dashboardLink() {
 }
 
 // src/setup.mjs
-var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_path11 = __toESM(require("node:path"), 1);
 var import_promises5 = require("node:timers/promises");
 async function hiddenQuestion(prompt) {
   let muted = false;
@@ -5898,7 +5968,7 @@ async function main() {
     } catch {
       context = {};
     }
-    const started = await ensureBridge(context, { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), management: true });
+    const started = await ensureBridge(context, { entryPath: import_node_path11.default.join(__dirname, "bridge.cjs"), management: true });
     for (let i = 0; i < 100; i++) {
       if (readJson("dashboard.json", {}).pid === started.pid) {
         console.log(dashboardLink());

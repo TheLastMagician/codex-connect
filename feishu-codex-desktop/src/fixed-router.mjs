@@ -71,7 +71,7 @@ export class FixedChatRouter extends Router {
       || !Number.isFinite(message.timestamp) || Math.abs(this.now()-message.timestamp)>600000 || !this.authorized(message.openId))return false;
     const key=fingerprint(message);if(this.state.seen[key])return false;
     const queue=this.state.fixedQueue,ahead=queue.pending.length+(queue.active?1:0)+(this.watches.size?1:0);
-    if(!ahead)delete queue.autoOpenAttempted;
+    if(!ahead){delete queue.autoOpenAttempted;delete queue.desktopWakeAttempted;}
     this.state.seen[key]=this.now();
     for(const [id,at] of Object.entries(this.state.seen))if(this.now()-at>86400000)delete this.state.seen[id];
     if(queue.pending.length>=100) {
@@ -101,7 +101,26 @@ export class FixedChatRouter extends Router {
     });
     this.queues.set(this.target,work);return work;
   }
-  async read() {return this.readSnapshot?this.readSnapshot():this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:10,maxOutputCharsPerItem:20000});}
+  async read() {
+    const read=()=>this.readSnapshot?this.readSnapshot():this.desktop.call('read_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),turnLimit:10,maxOutputCharsPerItem:20000});
+    try {return await read();}
+    catch(error) {
+      const queue=this.state.fixedQueue;
+      const message=queue.active?.message||queue.pending[0]||queue.review.find(item=>this.authorized(item.message.openId))?.message;
+      if(!message || !this.desktop.recoverForThread || queue.desktopWakeAttempted)throw error;
+      const authorize=()=>{if(!this.live() || !this.authorized(message.openId))throw new Error('通道已断开或授权已撤销');};
+      try {
+        const opened=await this.desktop.recoverForThread(this.thread,{authorize,beforeWake:()=>{
+          authorize();if(queue.desktopWakeAttempted)return false;
+          // Save before navigation so restarts and all retries in this batch
+          // cannot repeatedly steal focus. This never submits or resends input.
+          queue.desktopWakeAttempted=true;queue.autoOpenAttempted=true;this.saveState();return true;
+        }});
+        authorize();if(opened)return await read();
+      }catch{/* Keep the original failure and durable queue until recovery. */}
+      throw error;
+    }
+  }
   async accepted(active,turnId,finished=false) {
     active.phase='waiting';if(typeof turnId==='string')active.turnId=turnId;this.saveState();
     if(active.acceptedNotified)return;

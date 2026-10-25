@@ -123,12 +123,12 @@ var init_desktop_context_store = __esm({
 });
 
 // src/autostart.mjs
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 
 // src/bridge-lifecycle.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path4 = __toESM(require("node:path"), 1);
-var import_node_child_process3 = require("node:child_process");
+var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_child_process4 = require("node:child_process");
 var import_promises2 = require("node:timers/promises");
 
 // src/desktop.mjs
@@ -500,6 +500,58 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
   return candidate;
 }
 
+// src/desktop-wake.mjs
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_child_process3 = require("node:child_process");
+var threadIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+function threadWakeUrl(thread) {
+  if ((thread?.hostId || "local") !== "local" || !threadIdPattern.test(thread?.id || "")) return null;
+  return `codex://threads/${thread.id}`;
+}
+async function openRegisteredThread(url, { platform = process.platform, launch = import_node_child_process3.spawn } = {}) {
+  if (platform !== "win32" || !/^codex:\/\/threads\/[0-9a-f-]{36}$/i.test(url)) throw new Error("\u65E0\u6CD5\u5524\u8D77\u684C\u9762\u4F1A\u8BDD");
+  const child = launch(
+    import_node_path4.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
+    [url],
+    { windowsHide: true, stdio: "ignore" }
+  );
+  await new Promise((resolve, reject) => {
+    child.once("spawn", resolve);
+    child.once("error", reject);
+  });
+  child.unref();
+}
+var DesktopWake = class {
+  constructor({ platform = process.platform, open = openRegisteredThread, now = Date.now, cooldownMs = 6e4 } = {}) {
+    Object.assign(this, { platform, open, now, cooldownMs });
+  }
+  async recover(thread, { authorize, beforeWake } = {}) {
+    const url = threadWakeUrl(thread);
+    if (this.platform !== "win32" || !url || typeof authorize !== "function" || typeof beforeWake !== "function") return false;
+    if (this.work) {
+      await this.work.catch(() => {
+      });
+      return false;
+    }
+    if (this.lastAttempt && this.now() - this.lastAttempt.at < this.cooldownMs) return false;
+    authorize();
+    if (beforeWake() !== true) return false;
+    this.lastAttempt = { at: this.now(), state: "requested" };
+    const work = Promise.resolve().then(async () => {
+      authorize();
+      await this.open(url);
+      return true;
+    }).catch(() => {
+      this.lastAttempt = { ...this.lastAttempt, state: "failed" };
+      return false;
+    }).finally(() => {
+      if (this.work === work) this.work = null;
+    });
+    this.work = work;
+    return work;
+  }
+};
+
 // src/desktop.mjs
 var MAX_FRAME2 = 8 * 1024 * 1024;
 var ALLOWED_TOOLS = /* @__PURE__ */ new Set([
@@ -528,10 +580,11 @@ function encodeFrame(value) {
   return frame2;
 }
 var DesktopClient = class _DesktopClient {
-  constructor(context, { recover = true, resolveContext = recoverDesktopContext } = {}) {
+  constructor(context, { recover = true, resolveContext = recoverDesktopContext, wakeDesktop = new DesktopWake() } = {}) {
     this.context = context;
     this.recover = recover;
     this.resolveContext = resolveContext;
+    this.wakeDesktop = wakeDesktop;
     this.pending = /* @__PURE__ */ new Map();
     this.nextId = 1;
     this.buffer = Buffer.alloc(0);
@@ -603,7 +656,7 @@ var DesktopClient = class _DesktopClient {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         if (method === "tools/call") this.socket?.write(encodeFrame({ jsonrpc: "2.0", id, method: "tools/cancel" }));
-        reject(new Error("\u684C\u9762\u64CD\u4F5C\u8D85\u65F6\uFF1B\u64CD\u4F5C\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1"));
+        reject(Object.assign(new Error("\u684C\u9762\u64CD\u4F5C\u8D85\u65F6\uFF1B\u64CD\u4F5C\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u68C0\u67E5\u4F1A\u8BDD\u540E\u518D\u51B3\u5B9A\u662F\u5426\u91CD\u53D1"), { code: "DESKTOP_REQUEST_TIMEOUT" }));
       }, timeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       try {
@@ -637,7 +690,7 @@ var DesktopClient = class _DesktopClient {
       if (!pending) continue;
       clearTimeout(pending.timer);
       this.pending.delete(value.id);
-      if (value.error) pending.reject(new Error(value.error.message));
+      if (value.error) pending.reject(Object.assign(new Error(value.error.message), { rpcCode: value.error.code }));
       else pending.resolve(value.result);
     }
   }
@@ -679,6 +732,23 @@ var DesktopClient = class _DesktopClient {
   }
   probe({ timeoutMs = 5e3 } = {}) {
     return this.call("read_thread", { threadId: this.context.threadId, turnLimit: 1, maxOutputCharsPerItem: 1 }, { timeoutMs, callerProbe: true });
+  }
+  async recoverForThread(thread, options = {}) {
+    if (!this.recover || !options.authorize || !options.beforeWake) return false;
+    const generation = this.connectionGeneration;
+    options.authorize();
+    try {
+      await this.tools({ timeoutMs: 1500 });
+      return false;
+    } catch (error) {
+      if (error.rpcCode !== -32e3 && error.code !== "DESKTOP_REQUEST_TIMEOUT") return false;
+    }
+    if (generation !== this.connectionGeneration) return false;
+    options.authorize();
+    return this.wakeDesktop.recover(thread, { ...options, authorize: () => {
+      if (generation !== this.connectionGeneration) throw desktopUnavailable();
+      options.authorize();
+    } });
   }
   async recoverCaller(failed, reason = "caller_unloaded") {
     const key = contextKey2(failed), generation = this.connectionGeneration;
@@ -848,7 +918,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
   secureDirectory();
-  const lockPath = import_node_path4.default.join(dataDir, "bridge-start.lock");
+  const lockPath = import_node_path5.default.join(dataDir, "bridge-start.lock");
   let lock;
   const deadline = Date.now() + 6e3;
   while (lock === void 0) {
@@ -886,10 +956,10 @@ async function startBridge(context, { entryPath, automatic = false, management =
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs3.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
-    const log = import_node_fs3.default.openSync(import_node_path4.default.join(dataDir, "bridge.log"), "a", 384);
+    const log = import_node_fs3.default.openSync(import_node_path5.default.join(dataDir, "bridge.log"), "a", 384);
     let child;
     try {
-      child = (0, import_node_child_process3.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
+      child = (0, import_node_child_process4.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
       await new Promise((resolve, reject) => {
         child.once("spawn", resolve);
         child.once("error", reject);
@@ -932,7 +1002,7 @@ async function main() {
   try {
     if (!process.env.CODEX_APP_TOOLS_PIPE_PATH) throw new Error("No desktop host context");
     const context = desktopContext(void 0, { event });
-    const result = await ensureBridge(context, { automatic: true, entryPath: import_node_path5.default.join(__dirname, "bridge.cjs") });
+    const result = await ensureBridge(context, { automatic: true, entryPath: import_node_path6.default.join(__dirname, "bridge.cjs") });
     writeJson("autostart-status.json", { state: result.skipped || "started", checkedAt: Date.now() });
   } catch {
     writeJson("autostart-status.json", { state: "waiting_desktop", checkedAt: Date.now() });

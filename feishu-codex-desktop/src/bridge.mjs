@@ -52,6 +52,7 @@ export async function main() {
       if(!desktop.input.socket || desktop.input.socket.destroyed)await desktop.input.connect();
       status.desktopConnected=true;
     }catch{status.desktopConnected=false;}
+    if(desktop.wakeDesktop.lastAttempt)status.desktopWake=desktop.wakeDesktop.lastAttempt;
     saveStatus();
   };
   try {

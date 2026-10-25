@@ -2,6 +2,7 @@ import net from 'node:net';
 import {randomUUID} from 'node:crypto';
 import {DesktopInput} from './desktop-input.mjs';
 import {recoverDesktopContext,desktopUnavailable} from './desktop-context.mjs';
+import {DesktopWake} from './desktop-wake.mjs';
 
 const MAX_FRAME = 8 * 1024 * 1024;
 // This is the desktop's installed app-tools transport. It is version-specific.
@@ -21,7 +22,7 @@ export function encodeFrame(value) {
   frame.writeUInt32LE(body.length); body.copy(frame,4); return frame;
 }
 export class DesktopClient {
-  constructor(context,{recover=true,resolveContext=recoverDesktopContext}={}) { this.context = context; this.recover=recover;this.resolveContext=resolveContext;this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
+  constructor(context,{recover=true,resolveContext=recoverDesktopContext,wakeDesktop=new DesktopWake()}={}) { this.context = context; this.recover=recover;this.resolveContext=resolveContext;this.wakeDesktop=wakeDesktop;this.pending = new Map(); this.nextId = 1; this.buffer = Buffer.alloc(0);
     this.connectionGeneration=0;
     this.input=new DesktopInput({pipePath:context.inputPipePath,
       activateThread:({threadId})=>this.call('navigate_to_codex_page',{threadId})}); }
@@ -68,7 +69,7 @@ export class DesktopClient {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         if (method === 'tools/call') this.socket?.write(encodeFrame({jsonrpc:'2.0',id,method:'tools/cancel'}));
-        reject(new Error('桌面操作超时；操作结果未知，请检查会话后再决定是否重发'));
+        reject(Object.assign(new Error('桌面操作超时；操作结果未知，请检查会话后再决定是否重发'),{code:'DESKTOP_REQUEST_TIMEOUT'}));
       },timeoutMs);
       this.pending.set(id,{resolve,reject,timer});
       try { this.socket.write(encodeFrame({jsonrpc:'2.0',id,method,params})); }
@@ -88,7 +89,7 @@ export class DesktopClient {
       const pending = this.pending.get(value.id);
       if(!pending) continue;
       clearTimeout(pending.timer);this.pending.delete(value.id);
-      if(value.error) pending.reject(new Error(value.error.message)); else pending.resolve(value.result);
+      if(value.error) pending.reject(Object.assign(new Error(value.error.message),{rpcCode:value.error.code})); else pending.resolve(value.result);
     }
   }
   disconnect(error) {
@@ -117,6 +118,24 @@ export class DesktopClient {
   }
   probe({timeoutMs=5000}={}) {
     return this.call('read_thread',{threadId:this.context.threadId,turnLimit:1,maxOutputCharsPerItem:1},{timeoutMs,callerProbe:true});
+  }
+  async recoverForThread(thread,options={}) {
+    if(!this.recover || !options.authorize || !options.beforeWake)return false;
+    const generation=this.connectionGeneration;
+    options.authorize();
+    // A missing calling chat is different from an unresponsive renderer. Only
+    // a renderer-dependent catalog failure on the live host enables waking.
+    // A healthy catalog, missing pipe, or destination error leaves focus alone.
+    try {await this.tools({timeoutMs:1500});return false;}
+    catch(error) {
+      if(error.rpcCode!==-32000 && error.code!=='DESKTOP_REQUEST_TIMEOUT')return false;
+    }
+    if(generation!==this.connectionGeneration)return false;
+    options.authorize();
+    return this.wakeDesktop.recover(thread,{...options,authorize:()=>{
+      if(generation!==this.connectionGeneration)throw desktopUnavailable();
+      options.authorize();
+    }});
   }
   async recoverCaller(failed,reason='caller_unloaded') {
     const key=contextKey(failed),generation=this.connectionGeneration;

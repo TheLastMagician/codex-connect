@@ -84,6 +84,36 @@ test('definitely unsent messages survive connection errors and automatically ret
   delete f.writeError;await f.router.poll();assert.deepEqual(f.writes,['A','A']);await f.complete('a','A');assert.equal(f.answers().length,1);
 });
 
+test('an unavailable renderer wakes once per saved batch and submits queued input only after a successful read',async()=>{
+  const f=fixture();f.readError=Error('renderer unavailable');let wakes=0;
+  f.desktop.recoverForThread=async(thread,options)=>{
+    options.authorize();if(!options.beforeWake())return false;wakes++;return true;
+  };
+  await f.accept(f.message('A'));await f.router.poll();
+  assert.equal(wakes,1);assert.equal(f.state.fixedQueue.desktopWakeAttempted,true);assert.deepEqual(f.writes,[]);
+  const saved=structuredClone(f.state);f.router.stop();const restored=fixture({state:saved});restored.readError=Error('still asleep');
+  restored.desktop.recoverForThread=()=>assert.fail('Restart must retain the wake decision');
+  await restored.router.poll();assert.deepEqual(restored.writes,[]);
+  delete restored.readError;await restored.router.poll();assert.deepEqual(restored.writes,['A']);
+  await restored.complete('a','A');assert.equal(restored.answers().length,1);
+});
+
+test('waking during reply recovery returns the original answer without submitting it again',async()=>{
+  const f=fixture();await f.accept(f.message('A'));await f.accept(f.message('B','bob'));
+  f.readError=Error('renderer unavailable');let wakes=0;
+  f.desktop.recoverForThread=async(thread,options)=>{
+    options.authorize();assert.equal(options.beforeWake(),true);wakes++;
+    delete f.readError;f.snapshot=snapshot(turn('a','A'));return true;
+  };
+  await f.router.poll();assert.equal(wakes,1);assert.deepEqual(f.writes,['A','B']);assert.equal(f.answers()[0].text,'答复 A');
+});
+
+test('revocation during wake recovery never submits the saved message',async()=>{
+  const f=fixture();f.readError=Error('renderer unavailable');
+  f.desktop.recoverForThread=async(thread,options)=>{f.allowed.clear();options.authorize();assert.fail('Authorization must stop recovery');};
+  await f.accept(f.message('A'));assert.deepEqual(f.writes,[]);assert.equal(f.state.fixedQueue.desktopWakeAttempted,undefined);
+});
+
 test('reply delivery failure saves an independent outbox and allows the next task to run',async()=>{
   const f=fixture();await f.accept(f.message('A'),f.message('B','bob'));f.sendError=Error('Feishu offline');await f.complete('a','A');
   await f.router.deliveryWork;
