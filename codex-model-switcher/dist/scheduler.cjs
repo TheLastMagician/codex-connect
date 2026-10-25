@@ -894,7 +894,7 @@ var AppServer = class {
       if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
       else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.3.1" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.4.0" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }
@@ -1120,7 +1120,7 @@ function openThread(threadId) {
 }
 
 // src/schedules.mjs
-var SCHEDULER_VERSION = "0.3.0";
+var SCHEDULER_VERSION = "0.4.0";
 var GRACE_MS = 15 * 60 * 1e3;
 var scheduleDirectory = () => import_node_path4.default.join(home(), "model-switcher", "scheduler");
 function localDay(now) {
@@ -1129,11 +1129,28 @@ function localDay(now) {
 function scheduledTime(job, day) {
   return Date.parse(`${day}T${job.time}:00+08:00`);
 }
+var ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
+function scheduleDays(job) {
+  if (!job.frequency || job.frequency === "daily") return ALL_DAYS;
+  if (job.frequency !== "weekly" || !Array.isArray(job.weekdays) || !job.weekdays.length || job.weekdays.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) throw new Error("\u6BCF\u5468\u8BA1\u5212\u81F3\u5C11\u9009\u62E9\u4E00\u4E2A\u6709\u6548\u7684\u661F\u671F\uFF081=\u5468\u4E00\uFF0C7=\u5468\u65E5\uFF09\u3002");
+  return [...new Set(job.weekdays)].sort((a, b) => a - b);
+}
+function runsOnDay(job, day) {
+  return scheduleDays(job).includes((/* @__PURE__ */ new Date(`${day}T12:00:00+08:00`)).getUTCDay() || 7);
+}
+function previousScheduledDay(job, now) {
+  for (let offset = 1; offset <= 7; offset++) {
+    const day = localDay(now - offset * 864e5);
+    if (runsOnDay(job, day)) return day;
+  }
+}
 function nextRun(job, now = Date.now()) {
   if (job.status !== "ACTIVE") return null;
-  let at = scheduledTime(job, localDay(now));
-  if (at <= now) at += 864e5;
-  return at;
+  for (let offset = 0; offset <= 7; offset++) {
+    const day = localDay(now + offset * 864e5), at = scheduledTime(job, day);
+    if (at > now && runsOnDay(job, day)) return at;
+  }
+  return null;
 }
 function atomicJson(file, value) {
   import_node_fs4.default.mkdirSync(import_node_path4.default.dirname(file), { recursive: true, mode: 448 });
@@ -1213,15 +1230,18 @@ var ScheduleStore = class {
     const { id, name, threadRef, prompt, time, status = "ACTIVE", providerId = "custom", model = "qwen3.8-27b", effort = "xhigh" } = input;
     this.jobFile(id);
     const threadId = existingThreadId(threadRef), selection = requireSelection(this.read(), providerId, model);
+    const old = import_node_fs4.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
+    const frequency = input.frequency ?? old?.frequency ?? "daily";
+    if (!["daily", "weekly"].includes(frequency)) throw new Error("\u6267\u884C\u9891\u7387\u5FC5\u987B\u4E3A\u6BCF\u5929\u6216\u6BCF\u5468\u3002");
+    const weekdays = scheduleDays({ frequency, weekdays: input.weekdays ?? (old?.frequency === "weekly" ? old.weekdays : void 0) });
     if (typeof name !== "string" || !name.trim() || name.length > 100) throw new Error("\u4EFB\u52A1\u540D\u79F0\u9700\u8981 1\u2013100 \u4E2A\u5B57\u7B26\u3002");
     if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3) throw new Error("\u4EFB\u52A1\u63D0\u793A\u8BCD\u9700\u8981 1\u201312000 \u4E2A\u5B57\u7B26\u3002");
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")) throw new Error("\u8BF7\u9009\u62E9\u6709\u6548\u7684\u6BCF\u65E5\u6267\u884C\u65F6\u95F4\u3002");
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time || "")) throw new Error("\u8BF7\u9009\u62E9\u6709\u6548\u7684\u6267\u884C\u65F6\u95F4\u3002");
     if (!["ACTIVE", "PAUSED"].includes(status) || !["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("\u65E0\u6548\u7684\u4EFB\u52A1\u72B6\u6001\u6216\u601D\u8003\u5F3A\u5EA6\u3002");
     const thread = await this.rpc(async (c) => (await c.request("thread/read", { threadId, includeTurns: false })).thread);
     if (thread?.id !== threadId || thread.modelProvider !== providerId) throw new Error("\u4EFB\u52A1\u76EE\u6807\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u4E0D\u4E00\u81F4\uFF0C\u672A\u4FDD\u5B58\u3002");
-    if (status === "ACTIVE" && this.jobs().some((j) => j.id !== id && j.status === "ACTIVE" && j.threadId === threadId && j.time === time && j.prompt === prompt.trim())) throw new Error("\u8FD9\u4E2A\u4F1A\u8BDD\u5DF2\u6709\u76F8\u540C\u65F6\u95F4\u548C\u63D0\u793A\u8BCD\u7684\u542F\u7528\u4EFB\u52A1\uFF0C\u8BF7\u7F16\u8F91\u5DF2\u6709\u4EFB\u52A1\u3002");
-    const old = import_node_fs4.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
-    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto2.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
+    if (status === "ACTIVE" && this.jobs().some((j) => j.id !== id && j.status === "ACTIVE" && j.threadId === threadId && j.time === time && j.prompt === prompt.trim() && scheduleDays(j).some((d) => weekdays.includes(d)))) throw new Error("\u8FD9\u4E2A\u4F1A\u8BDD\u5DF2\u6709\u76F8\u540C\u65F6\u95F4\u548C\u63D0\u793A\u8BCD\u4E14\u6267\u884C\u65E5\u671F\u91CD\u53E0\u7684\u542F\u7528\u4EFB\u52A1\uFF0C\u8BF7\u7F16\u8F91\u5DF2\u6709\u4EFB\u52A1\u3002");
+    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time, frequency, weekdays, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto2.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
     atomicJson(this.jobFile(id), job);
     return { ...job, nextRunAt: nextRun(job, this.now()) };
   }
@@ -1248,10 +1268,10 @@ async function tickSchedules(store, { now = Date.now(), dispatch, observe = asyn
     }
     const current = store.readJob(job.id);
     if (current.revision !== job.revision || current.status !== "ACTIVE") continue;
-    const previousDay = localDay(now - 864e5), previousDue = scheduledTime(job, previousDay), activeSince = job.activeSince || job.createdAt;
+    const previousDay = previousScheduledDay(job, now), previousDue = scheduledTime(job, previousDay), activeSince = job.activeSince || job.createdAt;
     if (job.status === "ACTIVE" && activeSince < previousDue && !store.run(job.id, previousDay)) store.saveRun({ ...store.claim(job, previousDay), status: "missed", note: "\u7535\u8111\u6216\u540E\u53F0\u670D\u52A1\u672A\u5728\u7B49\u5F85\u7A97\u53E3\u5185\u6267\u884C\uFF0C\u672C\u6B21\u5DF2\u8DF3\u8FC7\uFF0C\u4E0D\u4F1A\u8865\u8DD1\u3002" });
     const due = scheduledTime(job, day);
-    if (job.status !== "ACTIVE" || now < due || activeSince > due) continue;
+    if (job.status !== "ACTIVE" || !runsOnDay(job, day) || now < due || activeSince > due) continue;
     let run = store.run(job.id, day);
     if (run && run.status !== "waiting") continue;
     if (now - due > GRACE_MS) {

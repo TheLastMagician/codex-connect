@@ -6,6 +6,15 @@ let editing=false,scheduling=false,existing=[],threadCursor=null,threadGeneratio
 let scheduleModels=[],scheduleModelGeneration=0,scheduleModelsLoading=false,scheduleThreads=[],scheduleThreadCursor=null,scheduleThreadGeneration=0,scheduleThreadsLoading=false,scheduleReady=false;
 const EFFORTS=['none','minimal','low','medium','high','xhigh','max','ultra'];
 const scheduleModelId=()=>$('schedule-manual').checked?$('schedule-manual-model').value.trim():$('schedule-model').value;
+const weekdayNames=['周一','周二','周三','周四','周五','周六','周日'];
+const selectedWeekdays=()=>[...document.querySelectorAll('input[name="schedule-weekday"]:checked')].map(node=>Number(node.value));
+const planLabel=job=>`${job.frequency==='weekly'?'每周 '+(job.weekdays||[]).map(d=>weekdayNames[d-1]).join('、'):'每天'} ${job.time} 北京时间`;
+function updateSchedulePlan(){
+  const weekly=$('schedule-frequency').value==='weekly';$('schedule-weekdays-row').hidden=!weekly;
+  $('schedule-plan').textContent=weekly&&!selectedWeekdays().length?'请至少选择一个执行星期。':planLabel({frequency:$('schedule-frequency').value,weekdays:selectedWeekdays(),time:$('schedule-time').value});
+  update();
+}
+function selectWeekdays(days){for(const node of document.querySelectorAll('input[name="schedule-weekday"]'))node.checked=days.includes(Number(node.value));updateSchedulePlan();}
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function unpack(result){if(result.isError)throw new Error(result.content?.map(i=>i.text||'').join('\n')||'操作失败');return result.structuredContent||JSON.parse(result.content?.find(i=>i.type==='text')?.text||'{}');}
 function option(value,label){const node=document.createElement('option');node.value=value;node.textContent=label;return node;}
@@ -18,7 +27,7 @@ function update(){
   $('edit-submit').disabled=loading||!catalog||!$('edit-provider').value||!$('edit-ref').value.trim()||!$('edit-model').value.trim();
   for(const id of ['mode-create','mode-edit','mode-schedule'])$(id).disabled=loading||!catalog;
   for(const id of ['schedule-stop','schedule-new'])$(id).disabled=loading;
-  $('schedule-save').disabled=loading||scheduleModelsLoading||!$('schedule-provider').value||!scheduleModelId()||!$('schedule-effort').value;
+  $('schedule-save').disabled=loading||scheduleModelsLoading||!$('schedule-provider').value||!scheduleModelId()||!$('schedule-effort').value||$('schedule-frequency').value==='weekly'&&!selectedWeekdays().length;
   $('schedule-more-threads').disabled=loading||scheduleThreadsLoading;
   $('refresh').disabled=loading;
 }
@@ -51,6 +60,7 @@ async function scheduleForm(job){
   scheduleId=job?.id||crypto.randomUUID();
   $('schedule-name').value=job?.name||'';$('schedule-ref').value=job?.threadId?`codex://threads/${job.threadId}`:'';
   $('schedule-prompt').value=job?.prompt||'';$('schedule-time').value=job?.time||'23:00';$('schedule-status').value=job?.status||'ACTIVE';
+  $('schedule-frequency').value=job?.frequency||'daily';selectWeekdays(job?.frequency==='weekly'?job.weekdays:[1]);
   const providerId=job?.providerId||(catalog.providers.some(p=>p.id==='custom')?'custom':catalog.launcherDefaults?.providerId||catalog.defaultProvider);
   $('schedule-provider').replaceChildren(...catalog.providers.map(p=>option(p.id,`${p.name} · ${p.id}`)));
   if(!catalog.providers.some(p=>p.id===providerId))$('schedule-provider').append(option(providerId,`${providerId}（配置中未找到）`));
@@ -104,7 +114,7 @@ async function loadSchedules(){
     for(const job of result.jobs){
       const card=document.createElement('article');card.className='result';
       const title=document.createElement('h2');title.textContent=job.name;
-      const info=document.createElement('p');info.className='hint';info.textContent=`每天 ${job.time} 北京时间 · ${job.status==='ACTIVE'?'启用':'暂停'} · 下次：${dateLabel(job.nextRunAt)}\n${job.providerId} / ${job.model} / ${job.effort}\n${job.title} · ${job.threadId}`;
+      const info=document.createElement('p');info.className='hint';info.textContent=`${planLabel(job)} · ${job.status==='ACTIVE'?'启用':'暂停'} · 下次：${dateLabel(job.nextRunAt)}\n${job.providerId} / ${job.model} / ${job.effort}\n${job.title} · ${job.threadId}`;
       const edit=document.createElement('button');edit.type='button';edit.textContent='编辑';edit.onclick=()=>busy(()=>scheduleForm(job));
       const toggle=document.createElement('button');toggle.type='button';toggle.textContent=job.status==='ACTIVE'?'暂停任务':'启用任务';toggle.onclick=()=>busy(async()=>{const r=await call('set_model_schedule_status',{id:job.id,status:job.status==='ACTIVE'?'PAUSED':'ACTIVE'});await loadSchedules();status(r.service?.error||'任务状态已保存。',!!r.service?.error);});
       card.append(title,info,edit,toggle);
@@ -179,6 +189,9 @@ async function busy(action){if(loading)return;loading=true;for(const id of ['cre
 $('edit-effort').replaceChildren(...['none','minimal','low','medium','high','xhigh','max','ultra'].map(e=>option(e,e)));$('edit-effort').value='xhigh';
 $('mode-create').onclick=()=>switchMode(false);$('mode-edit').onclick=()=>switchMode(true);
 $('mode-schedule').onclick=()=>switchMode('schedule');$('schedule-new').onclick=()=>busy(()=>scheduleForm());
+$('schedule-frequency').onchange=updateSchedulePlan;$('schedule-time').oninput=updateSchedulePlan;
+for(const node of document.querySelectorAll('input[name="schedule-weekday"]'))node.onchange=updateSchedulePlan;
+$('schedule-workdays').onclick=()=>selectWeekdays([1,2,3,4,5]);$('schedule-weekend').onclick=()=>selectWeekdays([6,7]);
 $('schedule-provider').onchange=()=>{$('schedule-ref').value='';busy(()=>Promise.all([loadScheduleModels({model:$('schedule-provider').value==='custom'?'qwen3.8-27b':'',effort:$('schedule-provider').value==='custom'?'xhigh':null}),loadScheduleThreads()]));};
 $('schedule-model').onchange=()=>updateScheduleEffort();
 $('schedule-manual').onchange=()=>{$('schedule-manual-model').hidden=!$('schedule-manual').checked;updateScheduleEffort();};
@@ -188,7 +201,7 @@ $('schedule-reload-threads').onclick=()=>busy(()=>loadScheduleThreads());$('sche
 $('schedule-stop').onclick=()=>busy(async()=>{const result=await call('stop_model_scheduler',{});await loadSchedules();status(result.service.running?'所有任务已暂停；后台服务正在退出。':'所有任务已暂停，后台服务和登录自启动已停用。');});
 $('schedule-thread').onchange=()=>{if($('schedule-thread').value)$('schedule-ref').value=`codex://threads/${$('schedule-thread').value}`;};
 $('schedule-form').onsubmit=event=>{event.preventDefault();busy(async()=>{
-  const result=await call('save_model_schedule',{id:scheduleId,name:$('schedule-name').value.trim(),threadRef:$('schedule-ref').value.trim(),prompt:$('schedule-prompt').value.trim(),time:$('schedule-time').value,status:$('schedule-status').value,providerId:$('schedule-provider').value,model:scheduleModelId(),effort:$('schedule-effort').value});
+  const result=await call('save_model_schedule',{id:scheduleId,name:$('schedule-name').value.trim(),threadRef:$('schedule-ref').value.trim(),prompt:$('schedule-prompt').value.trim(),time:$('schedule-time').value,frequency:$('schedule-frequency').value,weekdays:$('schedule-frequency').value==='weekly'?selectedWeekdays():[1,2,3,4,5,6,7],status:$('schedule-status').value,providerId:$('schedule-provider').value,model:scheduleModelId(),effort:$('schedule-effort').value});
   await loadSchedules();status(result.service.error||`任务已保存，下次执行：${dateLabel(result.job.nextRunAt)}。`,!!result.service.error);
 });};
 $('edit-provider').onchange=()=>{$('edit-ref').value='';$('edit-result').hidden=true;loadExisting();update();};
@@ -224,7 +237,7 @@ if(window.parent===window){
   call=async(name,args)=>{const response=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({name,arguments:args})});return unpack(await response.json());};
   refresh();
 }else{
-  const app=new App({name:'供应商与模型',version:'0.3.1'});
+  const app=new App({name:'供应商与模型',version:'0.4.0'});
   function apply(ctx){if(ctx.theme)applyDocumentTheme(ctx.theme);if(ctx.styles?.variables)applyHostStyleVariables(ctx.styles.variables);if(ctx.safeAreaInsets){const s=ctx.safeAreaInsets;document.body.style.padding=`${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`;}}
   app.onhostcontextchanged=apply;app.ontoolresult=result=>{if(result.structuredContent?.initialMode==='schedule')switchMode('schedule');};app.onerror=()=>status('面板与 Codex 的连接暂不可用，请重新打开。',true);
   call=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));

@@ -36,7 +36,7 @@ export class NativeSettings {
     {kind:'group',title:'新建会话的连接',items:[{kind:'property',property:'providerId'},{kind:'property',property:'model'},{kind:'property',property:'effort'},{kind:'tool',tool:'open_model_panel',description:'在 Codex 内打开模型选择面板。'}]},
     {kind:'group',title:'新会话',items:[{kind:'property',property:'project'},{kind:'property',property:'title'},{kind:'tool',tool:'launch_from_settings',description:'在所选项目中新建真实会话并打开，不发送首条消息。'}]},
     {kind:'group',title:'修改已有会话模型',items:[{kind:'property',property:'editThread'},{kind:'property',property:'editProvider'},{kind:'property',property:'editModel'},{kind:'property',property:'editEffort'},{kind:'tool',tool:'modify_from_settings',description:'修改模型并核对历史模型记录；仅验证设置。旧模型压缩失败时需在原会话执行 /compact，本操作不自动压缩或发送消息。'}]},
-    {kind:'group',title:'定时任务管理',items:[{kind:'tool',tool:'open_schedule_panel',description:'为每个任务选择供应商、模型、思考强度、已有会话和每日执行时间；默认填入千问，可编辑配置、查看记录并启停任务。'}]}
+    {kind:'group',title:'定时任务管理',items:[{kind:'tool',tool:'open_schedule_panel',description:'为每个任务选择供应商、模型、思考强度、已有会话及每天或每周执行计划；默认填入千问，可编辑配置、查看记录并启停任务。'}]}
   ]};}
   async update(set){
     if(!set||typeof set!=='object'||Array.isArray(set)||!Object.keys(set).length)throw new Error('没有可更新的设置。');

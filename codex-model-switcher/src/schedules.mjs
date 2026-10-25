@@ -5,14 +5,28 @@ import {home,readConfig,requireSelection} from './providers.mjs';
 import {existingThreadId,UUID} from './service.mjs';
 import {withAppServer} from './app-server.mjs';
 
-export const SCHEDULER_VERSION='0.3.0';
+export const SCHEDULER_VERSION='0.4.0';
 export const GRACE_MS=15*60*1000;
 export const scheduleDirectory=()=>path.join(home(),'model-switcher','scheduler');
 export function localDay(now){return new Date(now+8*3600000).toISOString().slice(0,10);}
 export function scheduledTime(job,day){return Date.parse(`${day}T${job.time}:00+08:00`);}
+const ALL_DAYS=[1,2,3,4,5,6,7];
+export function scheduleDays(job){
+  if(!job.frequency||job.frequency==='daily')return ALL_DAYS;
+  if(job.frequency!=='weekly'||!Array.isArray(job.weekdays)||!job.weekdays.length||job.weekdays.some(d=>!Number.isInteger(d)||d<1||d>7))throw new Error('每周计划至少选择一个有效的星期（1=周一，7=周日）。');
+  return [...new Set(job.weekdays)].sort((a,b)=>a-b);
+}
+export function runsOnDay(job,day){return scheduleDays(job).includes(new Date(`${day}T12:00:00+08:00`).getUTCDay()||7);}
+export function previousScheduledDay(job,now){
+  for(let offset=1;offset<=7;offset++){const day=localDay(now-offset*86400000);if(runsOnDay(job,day))return day;}
+}
 export function nextRun(job,now=Date.now()){
   if(job.status!=='ACTIVE')return null;
-  let at=scheduledTime(job,localDay(now));if(at<=now)at+=86400000;return at;
+  for(let offset=0;offset<=7;offset++){
+    const day=localDay(now+offset*86400000),at=scheduledTime(job,day);
+    if(at>now&&runsOnDay(job,day))return at;
+  }
+  return null;
 }
 export function atomicJson(file,value){
   fs.mkdirSync(path.dirname(file),{recursive:true,mode:0o700});
@@ -35,15 +49,18 @@ export class ScheduleStore {
   async save(input){
     const {id,name,threadRef,prompt,time,status='ACTIVE',providerId='custom',model='qwen3.8-27b',effort='xhigh'}=input;
     this.jobFile(id);const threadId=existingThreadId(threadRef),selection=requireSelection(this.read(),providerId,model);
+    const old=fs.existsSync(this.jobFile(id))?this.readJob(id):null;
+    const frequency=input.frequency??old?.frequency??'daily';
+    if(!['daily','weekly'].includes(frequency))throw new Error('执行频率必须为每天或每周。');
+    const weekdays=scheduleDays({frequency,weekdays:input.weekdays??(old?.frequency==='weekly'?old.weekdays:undefined)});
     if(typeof name!=='string'||!name.trim()||name.length>100)throw new Error('任务名称需要 1–100 个字符。');
     if(typeof prompt!=='string'||!prompt.trim()||prompt.length>12000)throw new Error('任务提示词需要 1–12000 个字符。');
-    if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time||''))throw new Error('请选择有效的每日执行时间。');
+    if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time||''))throw new Error('请选择有效的执行时间。');
     if(!['ACTIVE','PAUSED'].includes(status)||!['none','minimal','low','medium','high','xhigh','max','ultra'].includes(effort))throw new Error('无效的任务状态或思考强度。');
     const thread=await this.rpc(async c=>(await c.request('thread/read',{threadId,includeTurns:false})).thread);
     if(thread?.id!==threadId||thread.modelProvider!==providerId)throw new Error('任务目标会话的供应商不一致，未保存。');
-    if(status==='ACTIVE'&&this.jobs().some(j=>j.id!==id&&j.status==='ACTIVE'&&j.threadId===threadId&&j.time===time&&j.prompt===prompt.trim()))throw new Error('这个会话已有相同时间和提示词的启用任务，请编辑已有任务。');
-    const old=fs.existsSync(this.jobFile(id))?this.readJob(id):null;
-    const job={id,name:name.trim(),threadId,title:thread.name||thread.title||name.trim(),prompt:prompt.trim(),time,timeZone:'Asia/Shanghai',status,providerId,model:selection.model,effort,revision:randomUUID(),activeSince:this.now(),createdAt:old?.createdAt||this.now(),updatedAt:this.now()};
+    if(status==='ACTIVE'&&this.jobs().some(j=>j.id!==id&&j.status==='ACTIVE'&&j.threadId===threadId&&j.time===time&&j.prompt===prompt.trim()&&scheduleDays(j).some(d=>weekdays.includes(d))))throw new Error('这个会话已有相同时间和提示词且执行日期重叠的启用任务，请编辑已有任务。');
+    const job={id,name:name.trim(),threadId,title:thread.name||thread.title||name.trim(),prompt:prompt.trim(),time,frequency,weekdays,timeZone:'Asia/Shanghai',status,providerId,model:selection.model,effort,revision:randomUUID(),activeSince:this.now(),createdAt:old?.createdAt||this.now(),updatedAt:this.now()};
     atomicJson(this.jobFile(id),job);return {...job,nextRunAt:nextRun(job,this.now())};
   }
   setStatus(id,status){if(!['ACTIVE','PAUSED'].includes(status))throw new Error('无效的任务状态。');const job={...this.readJob(id),status,revision:randomUUID(),updatedAt:this.now()};atomicJson(this.jobFile(id),job);return job;}
@@ -58,10 +75,10 @@ export async function tickSchedules(store,{now=Date.now(),dispatch,observe=async
       try{const result=await observe(job,run);if(result){store.saveRun({...run,...result});if(result.status==='model_mismatch')store.setStatus(job.id,'PAUSED');}}catch{/* Keep accepted until a later observation succeeds. */}
     }
     const current=store.readJob(job.id);if(current.revision!==job.revision||current.status!=='ACTIVE')continue;
-    const previousDay=localDay(now-86400000),previousDue=scheduledTime(job,previousDay),activeSince=job.activeSince||job.createdAt;
+    const previousDay=previousScheduledDay(job,now),previousDue=scheduledTime(job,previousDay),activeSince=job.activeSince||job.createdAt;
     if(job.status==='ACTIVE'&&activeSince<previousDue&&!store.run(job.id,previousDay))store.saveRun({...store.claim(job,previousDay),status:'missed',note:'电脑或后台服务未在等待窗口内执行，本次已跳过，不会补跑。'});
     const due=scheduledTime(job,day);
-    if(job.status!=='ACTIVE'||now<due||activeSince>due)continue;
+    if(job.status!=='ACTIVE'||!runsOnDay(job,day)||now<due||activeSince>due)continue;
     let run=store.run(job.id,day);
     if(run&&run.status!=='waiting')continue;
     if(now-due>GRACE_MS){if(!run)run=store.claim(job,day);store.saveRun({...run,status:'missed',note:'超过 15 分钟等待窗口，已跳过；不会补跑旧任务。'});continue;}

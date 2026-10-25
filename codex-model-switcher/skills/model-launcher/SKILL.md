@@ -26,6 +26,6 @@ description: 打开本机供应商与模型面板，选择已配置的 API 供�
 
 修改已有会话后检查 `requiresContextReview`、`history` 和 `note`。`verificationScope=settings_only` 始终不证明实际普通消息请求成功。历史模型与目标模型不同时，Codex 可能先用旧模型进行 ModelDownshift 压缩并失败；提示用户在原会话执行 `/compact`，等待当前模型压缩完成，再发送消息。不要自动压缩、删除或篡改历史，也不要擅自发送探测消息。历史记录不可读时必须说明核对范围有限。
 
-用户明确要求插件独立定时后，使用 `save_model_schedule` 保存本机每日任务。“定时任务管理”支持为每个任务单独选择已配置的供应商、模型和思考强度，千问只是新任务的默认值 custom / qwen3.8-27b / xhigh，并非固定限制。保存时显式传入用户选择的 providerId、model 和 effort，编辑时保留该任务原配置，不用默认值覆盖。先确定同一供应商的目标会话、任务提示词、北京时间 HH:mm 和启停状态；相同任务重试或编辑复用 id。启用会安装隐藏后台服务及当前用户登录自启动，不修改原生模型目录。需要电脑在线且 Codex 运行；最多等待 15 分钟，不补跑旧日期。用户未要求立即执行时，不发送即时测试消息。
+用户明确要求插件独立定时后，使用 `save_model_schedule` 保存本机每天或每周任务。“定时任务管理”支持为每个任务单独选择已配置的供应商、模型和思考强度，千问只是新任务的默认值 custom / qwen3.8-27b / xhigh，并非固定限制。保存时显式传入用户选择的 providerId、model 和 effort，编辑时保留该任务原配置，不用默认值覆盖。先确定同一供应商的目标会话、任务提示词、北京时间 HH:mm、重复频率和启停状态；每周计划传 frequency=weekly 和 weekdays（整数 1–7，周一到周日），至少选择一天；每天传 frequency=daily。编辑和重试保留原 frequency/weekdays 配置，省略时后台保留原计划；旧版任务默认每天。相同任务重试或编辑复用 id。启用会安装隐藏后台服务及当前用户登录自启动，不修改原生模型目录。需要电脑在线且 Codex 运行；最多等待 15 分钟，不补跑旧日期。用户未要求立即执行时，不发送即时测试消息。
 
 调用 `list_model_schedules` 查看任务和运行记录，`set_model_schedule_status` 启停。迁移既有原生定时任务时核对其状态，按用户授权通过官方 automation_update 暂停原任务，避免两边重复；不要直接改 automation.toml。未知发送结果不会自动重试；仅用户明确确认已经检查原会话后，才能调用 `acknowledge_model_schedule_run` 解除阻塞。记录为 accepted 不代表运行完成，更不证明模型已实际核对。

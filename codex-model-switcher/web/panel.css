@@ -4,3 +4,4 @@
 .mode-switch{display:flex;gap:4px;padding:4px;background:var(--field);border-radius:10px;margin-bottom:24px;width:fit-content}.mode-switch button{border:0;background:transparent;color:var(--muted)}.mode-switch button[aria-pressed=true]{background:var(--page);color:var(--text);box-shadow:0 1px 3px #00000012}.result a{display:inline-block;color:var(--text);font-size:12px;margin-top:12px}
 
 textarea{font:inherit;color:inherit;width:100%;resize:vertical;min-height:100px;background:var(--field);border:1px solid transparent;border-radius:8px;padding:10px;font-size:13px}textarea:focus-visible{outline:2px solid var(--text);outline-offset:3px}#schedule-jobs .hint{white-space:pre-wrap}#schedule-jobs button+button{margin-left:8px}
+.weekday-options{display:flex;flex-wrap:wrap;gap:8px 18px}.weekday-options .check{margin:0}
