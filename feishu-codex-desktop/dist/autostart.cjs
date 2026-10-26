@@ -53,7 +53,7 @@ function secureDirectory(dir = dataDir) {
 }
 function readJson(name, fallback) {
   try {
-    return JSON.parse(import_node_fs.default.readFileSync(import_node_path2.default.join(dataDir, name), "utf8"));
+    return JSON.parse(import_node_fs.default.readFileSync(import_node_path3.default.join(dataDir, name), "utf8"));
   } catch (error) {
     if (error.code === "ENOENT") return fallback;
     throw error;
@@ -61,8 +61,8 @@ function readJson(name, fallback) {
 }
 function writeJson(name, value) {
   import_node_fs.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const target = import_node_path2.default.join(dataDir, name);
-  const temp = `${target}.${process.pid}.${(0, import_node_crypto2.randomBytes)(4).toString("hex")}.tmp`;
+  const target = import_node_path3.default.join(dataDir, name);
+  const temp = `${target}.${process.pid}.${(0, import_node_crypto3.randomBytes)(4).toString("hex")}.tmp`;
   try {
     import_node_fs.default.writeFileSync(temp, JSON.stringify(value, null, 2), { mode: 384, flag: "wx" });
     import_node_fs.default.renameSync(temp, target);
@@ -77,16 +77,16 @@ function config() {
   if (!Array.isArray(result.allowedOpenIds)) result.allowedOpenIds = [];
   return { ...result, appId, appSecret };
 }
-var import_node_fs, import_node_path2, import_node_os2, import_node_child_process, import_node_crypto2, dataArgument, dataDir;
+var import_node_fs, import_node_path3, import_node_os2, import_node_child_process, import_node_crypto3, dataArgument, dataDir;
 var init_storage = __esm({
   "src/storage.mjs"() {
     import_node_fs = __toESM(require("node:fs"), 1);
-    import_node_path2 = __toESM(require("node:path"), 1);
+    import_node_path3 = __toESM(require("node:path"), 1);
     import_node_os2 = __toESM(require("node:os"), 1);
     import_node_child_process = require("node:child_process");
-    import_node_crypto2 = require("node:crypto");
+    import_node_crypto3 = require("node:crypto");
     dataArgument = process.argv.indexOf("--codex-connect-data-dir");
-    dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex-feishu-desktop");
+    dataDir = process.env.FEISHU_CODEX_DATA_DIR || (dataArgument >= 0 ? process.argv[dataArgument + 1] : null) || import_node_path3.default.join(import_node_os2.default.homedir(), ".codex-feishu-desktop");
   }
 });
 
@@ -123,28 +123,67 @@ var init_desktop_context_store = __esm({
 });
 
 // src/autostart.mjs
-var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
 
 // src/bridge-lifecycle.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 var import_node_child_process4 = require("node:child_process");
-var import_promises2 = require("node:timers/promises");
+var import_promises3 = require("node:timers/promises");
 
 // src/desktop.mjs
 var import_node_net2 = __toESM(require("node:net"), 1);
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 
 // src/desktop-input.mjs
 var import_node_net = __toESM(require("node:net"), 1);
 var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
+var import_promises2 = require("node:timers/promises");
+
+// src/image-input.mjs
+var import_promises = __toESM(require("node:fs/promises"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_crypto = require("node:crypto");
-var import_promises = require("node:timers/promises");
+var MAX_INPUT_IMAGES = 8;
+var MAX_INPUT_IMAGE_BYTES = 10 * 1024 * 1024;
+var imageInputError = (message, retryable = true) => Object.assign(new Error(message), { code: "IMAGE_INPUT_ERROR", notSent: true, retryable });
+function imageExtension(buffer) {
+  if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "png";
+  if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) return "jpg";
+  if (/^GIF8[79]a$/.test(buffer.toString("ascii", 0, 6))) return "gif";
+  if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return "webp";
+}
+async function localImageInputs(images = []) {
+  if (!Array.isArray(images) || images.length > MAX_INPUT_IMAGES) throw imageInputError("\u6BCF\u6761\u6D88\u606F\u6700\u591A\u652F\u6301 8 \u5F20\u56FE\u7247\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", false);
+  const input = [], evidence = [];
+  for (const file of images) {
+    if (typeof file !== "string" || !import_node_path.default.isAbsolute(file) || /^[\\/]{2}/.test(file) || file.includes("\0")) throw imageInputError("\u56FE\u7247\u9644\u4EF6\u8DEF\u5F84\u65E0\u6548\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002");
+    let handle;
+    try {
+      if ((await import_promises.default.lstat(file)).isSymbolicLink()) throw Error("symbolic link");
+      handle = await import_promises.default.open(file, "r");
+      const stat = await handle.stat();
+      if (!stat.isFile() || !stat.size || stat.size > MAX_INPUT_IMAGE_BYTES) throw Error("size");
+      const buffer = await handle.readFile();
+      if (buffer.length !== stat.size || !imageExtension(buffer)) throw Error("format");
+      input.push({ type: "localImage", path: file });
+      evidence.push({ path: file, digest: (0, import_node_crypto.createHash)("sha256").update(buffer).digest("hex") });
+    } catch {
+      throw imageInputError("\u56FE\u7247\u9644\u4EF6\u4E0D\u53EF\u7528\u6216\u8D85\u8FC7 10 MB\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002");
+    } finally {
+      await handle?.close();
+    }
+  }
+  return { input, evidence };
+}
+
+// src/desktop-input.mjs
 var MAX_FRAME = 8 * 1024 * 1024;
 var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
 function desktopInputPath() {
-  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path.default.join(process.env.CODEX_HOME || import_node_path.default.join(import_node_os.default.homedir(), ".codex"), "ipc", "ipc.sock");
+  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path2.default.join(process.env.CODEX_HOME || import_node_path2.default.join(import_node_os.default.homedir(), ".codex"), "ipc", "ipc.sock");
 }
 function frame(message) {
   const data = Buffer.from(JSON.stringify(message), "utf8");
@@ -202,7 +241,7 @@ var DesktopInput = class {
   request(method, params, { targetClientId, hostId, timeoutMs = this.timeoutMs } = {}) {
     if (!Object.hasOwn(VERSIONS, method)) throw inputError("\u4E0D\u652F\u6301\u7684\u684C\u9762\u8F93\u5165\u64CD\u4F5C", true);
     if (!this.socket || this.socket.destroyed) throw inputError("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
-    const requestId = (0, import_node_crypto.randomUUID)();
+    const requestId = (0, import_node_crypto2.randomUUID)();
     const remote = hostId && hostId !== "local";
     const message = {
       type: "request",
@@ -278,7 +317,7 @@ var DesktopInput = class {
       } catch {
         authorize();
         if (attempt) throw inputError("\u5DF2\u4FDD\u7559\u6240\u9009\u4F1A\u8BDD\uFF0C\u4F46\u684C\u9762\u6D88\u606F\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u7A0D\u540E\u53EF\u76F4\u63A5\u91CD\u53D1\uFF0C\u65E0\u9700\u91CD\u65B0\u9009\u62E9\u3002", true);
-        await (0, import_promises.setTimeout)(150);
+        await (0, import_promises2.setTimeout)(150);
       }
     }
   }
@@ -311,7 +350,7 @@ var DesktopInput = class {
             throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u65E0\u6CD5\u786E\u8BA4\u52A0\u8F7D\u72B6\u6001\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
           }
           if (owner) return owner;
-          await (0, import_promises.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
+          await (0, import_promises2.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
         }
         throw inputError("\u76EE\u6807\u4F1A\u8BDD\u52A0\u8F7D\u8D85\u65F6\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8BE5\u4F1A\u8BDD\u662F\u5426\u6709\u52A0\u8F7D\u9519\u8BEF\uFF0C\u518D\u91CD\u65B0\u53D1\u9001\u3002", true);
       })();
@@ -323,7 +362,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId, images }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -339,16 +378,18 @@ var DesktopInput = class {
     let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
     if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
+    if (images?.length && hostId !== "local") throw Object.assign(inputError("\u56FE\u7247\u76EE\u524D\u4EC5\u652F\u6301\u672C\u673A\u4F1A\u8BDD\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: "IMAGE_INPUT_ERROR" });
+    const prepared = await localImageInputs(images);
     try {
-      await beforeSubmit?.();
+      await beforeSubmit?.({ imageEvidence: prepared.evidence });
     } catch (error) {
       throw Object.assign(inputError(error.message || "\u53D1\u9001\u524D\u68C0\u67E5\u5931\u8D25\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: error.code });
     }
     authorize();
     const request = {
       threadId,
-      clientUserMessageId: clientUserMessageId || (0, import_node_crypto.randomUUID)(),
-      input: [{ type: "text", text: prompt, text_elements: [] }],
+      clientUserMessageId: clientUserMessageId || (0, import_node_crypto2.randomUUID)(),
+      input: [{ type: "text", text: prompt, text_elements: [] }, ...prepared.input],
       ...model ? { model } : {},
       ...thinking ? { effort: thinking } : {}
     };
@@ -383,15 +424,15 @@ var DesktopInput = class {
 
 // src/desktop-context.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 var import_node_child_process2 = require("node:child_process");
 var import_node_url = require("node:url");
-var directory = typeof __dirname === "string" ? __dirname : import_node_path3.default.dirname((0, import_node_url.fileURLToPath)(__filename));
+var directory = typeof __dirname === "string" ? __dirname : import_node_path4.default.dirname((0, import_node_url.fileURLToPath)(__filename));
 var discovery;
 function desktopUnavailable() {
   return Object.assign(new Error("Codex \u684C\u9762\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5\u3002\u672C\u6B21\u64CD\u4F5C\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\uFF0C\u7A0D\u540E\u91CD\u8BD5\u3002"), { code: "DESKTOP_DISCONNECTED", notSent: true });
 }
-async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path3.default.join(directory, "discover-desktop.ps1") } = {}) {
+async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path4.default.join(directory, "discover-desktop.ps1") } = {}) {
   if (platform !== "win32") return [];
   return new Promise((resolve) => {
     let source;
@@ -501,7 +542,7 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
 }
 
 // src/desktop-wake.mjs
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
 var import_node_child_process3 = require("node:child_process");
 var threadIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function threadWakeUrl(thread) {
@@ -511,7 +552,7 @@ function threadWakeUrl(thread) {
 async function openRegisteredThread(url, { platform = process.platform, launch = import_node_child_process3.spawn } = {}) {
   if (platform !== "win32" || !/^codex:\/\/threads\/[0-9a-f-]{36}$/i.test(url)) throw new Error("\u65E0\u6CD5\u5524\u8D77\u684C\u9762\u4F1A\u8BDD");
   const child = launch(
-    import_node_path4.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
+    import_node_path5.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
     [url],
     { windowsHide: true, stdio: "ignore" }
   );
@@ -787,8 +828,8 @@ var DesktopClient = class _DesktopClient {
         callerSource: "codex",
         threadId: this.context.threadId,
         hostId: "local",
-        turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
-        callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
+        turnId: `feishu-${(0, import_node_crypto4.randomUUID)()}`,
+        callId: `feishu-${(0, import_node_crypto4.randomUUID)()}`
       };
       const result = await this.request("tools/call", params, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), () => {
         options.beforeSend?.();
@@ -918,7 +959,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
   secureDirectory();
-  const lockPath = import_node_path5.default.join(dataDir, "bridge-start.lock");
+  const lockPath = import_node_path6.default.join(dataDir, "bridge-start.lock");
   let lock;
   const deadline = Date.now() + 6e3;
   while (lock === void 0) {
@@ -936,7 +977,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
         continue;
       }
       if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u542F\u52A8\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\uFF0C\u8BF7\u7A0D\u540E\u68C0\u67E5\u6865\u63A5\u72B6\u6001\u3002");
-      await (0, import_promises2.setTimeout)(50);
+      await (0, import_promises3.setTimeout)(50);
     }
   }
   try {
@@ -956,7 +997,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs3.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
-    const log = import_node_fs3.default.openSync(import_node_path5.default.join(dataDir, "bridge.log"), "a", 384);
+    const log = import_node_fs3.default.openSync(import_node_path6.default.join(dataDir, "bridge.log"), "a", 384);
     let child;
     try {
       child = (0, import_node_child_process4.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
@@ -971,7 +1012,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     const readyBy = Date.now() + 3e3;
     while (Date.now() < readyBy && alive(child.pid)) {
       if (readLock("bridge.lock").pid === child.pid) return { startedProcess: true, pid: child.pid, note: "\u6865\u63A5\u5DF2\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u901A\u9053\u8FDE\u63A5\u72B6\u6001\u3002" };
-      await (0, import_promises2.setTimeout)(50);
+      await (0, import_promises3.setTimeout)(50);
     }
     throw new Error("\u6865\u63A5\u672A\u80FD\u786E\u8BA4\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u6865\u63A5\u72B6\u6001\u3002");
   } finally {
@@ -1002,7 +1043,7 @@ async function main() {
   try {
     if (!process.env.CODEX_APP_TOOLS_PIPE_PATH) throw new Error("No desktop host context");
     const context = desktopContext(void 0, { event });
-    const result = await ensureBridge(context, { automatic: true, entryPath: import_node_path6.default.join(__dirname, "bridge.cjs") });
+    const result = await ensureBridge(context, { automatic: true, entryPath: import_node_path7.default.join(__dirname, "bridge.cjs") });
     writeJson("autostart-status.json", { state: result.skipped || "started", checkedAt: Date.now() });
   } catch {
     writeJson("autostart-status.json", { state: "waiting_desktop", checkedAt: Date.now() });

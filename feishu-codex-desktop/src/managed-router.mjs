@@ -9,8 +9,8 @@ const terminal=turn=>['completed','failed','interrupted'].includes(turn?.status)
 // Commands retain their chat ordering. Ordinary input is handed to the same
 // durable per-conversation executor used by fixed bots, without waiting for it.
 export class ManagedChatRouter extends Router {
-  constructor({isActive=()=>true,...options}) {
-    super(options);this.isActive=isActive;this.workers=new Map();this.state.taskQueues ||= {};
+  constructor({isActive=()=>true,prepareInput,...options}) {
+    super(options);this.isActive=isActive;this.prepareInput=prepareInput;this.workers=new Map();this.state.taskQueues ||= {};
     for(const entry of Object.values(this.state.taskQueues))if(entry.thread?.id)this.worker(entry.thread);
   }
   worker(thread) {
@@ -19,7 +19,7 @@ export class ManagedChatRouter extends Router {
     const send=(chatId,text,meta={})=>this.send(chatId,text,{...meta,kind:meta.kind==='notice'?'info':meta.kind,
       title:/发送结果|回执/.test(text)?'发送核对中':'消息队列',thread:{...entry.thread},
       session:this.state.sessions[`${meta.openId}:${chatId}`]});
-    const worker=new FixedChatRouter({thread:entry.thread,desktop:this.desktop,state:entry,
+    const worker=new FixedChatRouter({thread:entry.thread,desktop:this.desktop,state:entry,prepareInput:this.prepareInput,
       getConfig:this.getConfig,saveState:()=>this.saveState(),isActive:()=>!this.stopped && this.isActive(),
       isAuthorized:id=>this.authorized(id),now:this.now,send,
       readSnapshot:()=>this.readBeforeSend({selected:entry.thread},()=>{
@@ -50,6 +50,7 @@ export class ManagedChatRouter extends Router {
     const worker=this.worker({...this.selected(session)});
     // Do not copy connector tokens or unrelated event payloads into the queue.
     const accepted=worker.acceptMessage({id:message.id,openId:message.openId,chatId:message.chatId,text:prompt,
+      ...(message.images?.length?{images:message.images.map(image=>({key:image.key}))}:{}),
       timestamp:message.timestamp??this.now(),...(message.chatType?{chatType:message.chatType}:{}),modelArgs:{...taskModelArgs(session)}});
     if(!accepted)throw new Error('本条消息未加入队列，请检查通道连接后重新发送。');
     session.awaitingChoice=null;this.saveState();

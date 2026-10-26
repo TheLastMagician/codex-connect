@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -46,6 +47,18 @@ async function fixture(options={}) {
     input.close();for(const socket of sockets)socket.destroy();await new Promise(resolve=>server.close(resolve));
   }};
 }
+
+test('images enter the same native turn as text, preserving order and providing receipt evidence without a model proxy',async()=>{
+  const folder=await fs.mkdtemp(path.join(os.tmpdir(),'codex-native-images-'));
+  const file=path.join(folder,'photo.png');const f=await fixture();let evidence;
+  try {
+    await fs.writeFile(file,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==','base64'));
+    await f.input.send({threadId:'target',prompt:'检查这张图片，保留原模型。',images:[file]},()=>{}, {beforeSubmit:value=>{evidence=value.imageEvidence;}});
+    const request=f.requests.find(r=>r.method==='thread-follower-start-turn').params.turnStart.request;
+    assert.deepEqual(request.input,[{type:'text',text:'检查这张图片，保留原模型。',text_elements:[]},{type:'localImage',path:file}]);
+    assert.equal(evidence[0].path,file);assert.equal(evidence[0].digest.length,64);assert.equal(request.model,undefined);
+  }finally{await f.close();assert.ok(folder.startsWith(path.join(os.tmpdir(),'codex-native-images-')));await fs.rm(folder,{recursive:true,force:true});}
+});
 
 test('local desktop starts an ordinary turn without forcing cloud user-message admission',async()=>{
   const f=await fixture();try{

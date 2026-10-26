@@ -1638,10 +1638,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version);
-      const path12 = dijkstra.find_path(graph.map, "start", "end");
+      const path13 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path12.length - 1; i++) {
-        optimizedSegs.push(graph.table[path12[i]].node);
+      for (let i = 1; i < path13.length - 1; i++) {
+        optimizedSegs.push(graph.table[path13[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -4077,7 +4077,7 @@ var require_utils2 = __commonJS({
 // node_modules/qrcode/lib/renderer/png.js
 var require_png2 = __commonJS({
   "node_modules/qrcode/lib/renderer/png.js"(exports2) {
-    var fs7 = require("fs");
+    var fs8 = require("fs");
     var PNG = require_png().PNG;
     var Utils = require_utils2();
     exports2.render = function render(qrData, options) {
@@ -4118,7 +4118,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path12, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path13, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -4129,7 +4129,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs7.createWriteStream(path12);
+      const stream = fs8.createWriteStream(path13);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -4191,14 +4191,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path12, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path13, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs7 = require("fs");
+      const fs8 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs7.writeFile(path12, utf8, cb);
+      fs8.writeFile(path13, utf8, cb);
     };
   }
 });
@@ -4319,7 +4319,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path12 = "";
+      let path13 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -4330,19 +4330,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path12 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path13 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path12 += svgCmd("h", lineLength);
+            path13 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path12;
+      return path13;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -4350,10 +4350,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path12 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path13 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path12 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path13 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -4367,15 +4367,15 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path12, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path13, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs7 = require("fs");
+      const fs8 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs7.writeFile(path12, xmlStr, cb);
+      fs8.writeFile(path13, xmlStr, cb);
     };
   }
 });
@@ -4533,8 +4533,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path12) {
-      return path12.slice((path12.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path13) {
+      return path13.slice((path13.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -4598,17 +4598,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path12, text, opts, cb) {
-      if (typeof path12 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path13, text, opts, cb) {
+      if (typeof path13 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path12);
+      const type = params.opts.type || getTypeFromFilename(path13);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path12);
+      const renderToFile = renderer.renderToFile.bind(null, path13);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -4663,9 +4663,9 @@ var init_desktop_context_store = __esm({
 });
 
 // src/setup.mjs
-var import_promises4 = __toESM(require("node:readline/promises"), 1);
+var import_promises5 = __toESM(require("node:readline/promises"), 1);
 var import_node_stream = require("node:stream");
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 init_storage();
 
 // src/wechat-auth.mjs
@@ -4681,7 +4681,7 @@ init_storage();
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.3";
+var VERSION = "0.9.4";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
@@ -4924,34 +4924,73 @@ function configureAutostart(enabled, { bundleDir, codexHome } = {}) {
 // src/responses-compat-settings.mjs
 var import_node_fs6 = __toESM(require("node:fs"), 1);
 var import_node_os4 = __toESM(require("node:os"), 1);
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_path9 = __toESM(require("node:path"), 1);
 var import_node_child_process6 = require("node:child_process");
 var import_node_util = require("node:util");
-var import_node_crypto7 = require("node:crypto");
-var import_promises3 = require("node:timers/promises");
+var import_node_crypto8 = require("node:crypto");
+var import_promises4 = require("node:timers/promises");
 var import_node_url3 = require("node:url");
 init_storage();
 
 // src/bridge-lifecycle.mjs
 var import_node_fs5 = __toESM(require("node:fs"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
 var import_node_child_process5 = require("node:child_process");
-var import_promises2 = require("node:timers/promises");
+var import_promises3 = require("node:timers/promises");
 
 // src/desktop.mjs
 var import_node_net2 = __toESM(require("node:net"), 1);
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto7 = require("node:crypto");
 
 // src/desktop-input.mjs
 var import_node_net = __toESM(require("node:net"), 1);
 var import_node_os3 = __toESM(require("node:os"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_crypto6 = require("node:crypto");
+var import_promises2 = require("node:timers/promises");
+
+// src/image-input.mjs
+var import_promises = __toESM(require("node:fs/promises"), 1);
 var import_node_path4 = __toESM(require("node:path"), 1);
 var import_node_crypto5 = require("node:crypto");
-var import_promises = require("node:timers/promises");
+var MAX_INPUT_IMAGES = 8;
+var MAX_INPUT_IMAGE_BYTES = 10 * 1024 * 1024;
+var imageInputError = (message, retryable = true) => Object.assign(new Error(message), { code: "IMAGE_INPUT_ERROR", notSent: true, retryable });
+function imageExtension(buffer) {
+  if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "png";
+  if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) return "jpg";
+  if (/^GIF8[79]a$/.test(buffer.toString("ascii", 0, 6))) return "gif";
+  if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return "webp";
+}
+async function localImageInputs(images = []) {
+  if (!Array.isArray(images) || images.length > MAX_INPUT_IMAGES) throw imageInputError("\u6BCF\u6761\u6D88\u606F\u6700\u591A\u652F\u6301 8 \u5F20\u56FE\u7247\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", false);
+  const input = [], evidence = [];
+  for (const file of images) {
+    if (typeof file !== "string" || !import_node_path4.default.isAbsolute(file) || /^[\\/]{2}/.test(file) || file.includes("\0")) throw imageInputError("\u56FE\u7247\u9644\u4EF6\u8DEF\u5F84\u65E0\u6548\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002");
+    let handle;
+    try {
+      if ((await import_promises.default.lstat(file)).isSymbolicLink()) throw Error("symbolic link");
+      handle = await import_promises.default.open(file, "r");
+      const stat = await handle.stat();
+      if (!stat.isFile() || !stat.size || stat.size > MAX_INPUT_IMAGE_BYTES) throw Error("size");
+      const buffer = await handle.readFile();
+      if (buffer.length !== stat.size || !imageExtension(buffer)) throw Error("format");
+      input.push({ type: "localImage", path: file });
+      evidence.push({ path: file, digest: (0, import_node_crypto5.createHash)("sha256").update(buffer).digest("hex") });
+    } catch {
+      throw imageInputError("\u56FE\u7247\u9644\u4EF6\u4E0D\u53EF\u7528\u6216\u8D85\u8FC7 10 MB\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002");
+    } finally {
+      await handle?.close();
+    }
+  }
+  return { input, evidence };
+}
+
+// src/desktop-input.mjs
 var MAX_FRAME = 8 * 1024 * 1024;
 var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
 function desktopInputPath() {
-  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path4.default.join(process.env.CODEX_HOME || import_node_path4.default.join(import_node_os3.default.homedir(), ".codex"), "ipc", "ipc.sock");
+  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path5.default.join(process.env.CODEX_HOME || import_node_path5.default.join(import_node_os3.default.homedir(), ".codex"), "ipc", "ipc.sock");
 }
 function frame(message) {
   const data = Buffer.from(JSON.stringify(message), "utf8");
@@ -5009,7 +5048,7 @@ var DesktopInput = class {
   request(method, params, { targetClientId, hostId, timeoutMs = this.timeoutMs } = {}) {
     if (!Object.hasOwn(VERSIONS, method)) throw inputError("\u4E0D\u652F\u6301\u7684\u684C\u9762\u8F93\u5165\u64CD\u4F5C", true);
     if (!this.socket || this.socket.destroyed) throw inputError("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
-    const requestId = (0, import_node_crypto5.randomUUID)();
+    const requestId = (0, import_node_crypto6.randomUUID)();
     const remote = hostId && hostId !== "local";
     const message = {
       type: "request",
@@ -5085,7 +5124,7 @@ var DesktopInput = class {
       } catch {
         authorize();
         if (attempt) throw inputError("\u5DF2\u4FDD\u7559\u6240\u9009\u4F1A\u8BDD\uFF0C\u4F46\u684C\u9762\u6D88\u606F\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u7A0D\u540E\u53EF\u76F4\u63A5\u91CD\u53D1\uFF0C\u65E0\u9700\u91CD\u65B0\u9009\u62E9\u3002", true);
-        await (0, import_promises.setTimeout)(150);
+        await (0, import_promises2.setTimeout)(150);
       }
     }
   }
@@ -5118,7 +5157,7 @@ var DesktopInput = class {
             throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u65E0\u6CD5\u786E\u8BA4\u52A0\u8F7D\u72B6\u6001\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
           }
           if (owner) return owner;
-          await (0, import_promises.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
+          await (0, import_promises2.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
         }
         throw inputError("\u76EE\u6807\u4F1A\u8BDD\u52A0\u8F7D\u8D85\u65F6\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8BE5\u4F1A\u8BDD\u662F\u5426\u6709\u52A0\u8F7D\u9519\u8BEF\uFF0C\u518D\u91CD\u65B0\u53D1\u9001\u3002", true);
       })();
@@ -5130,7 +5169,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId, images }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -5146,16 +5185,18 @@ var DesktopInput = class {
     let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
     if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
+    if (images?.length && hostId !== "local") throw Object.assign(inputError("\u56FE\u7247\u76EE\u524D\u4EC5\u652F\u6301\u672C\u673A\u4F1A\u8BDD\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: "IMAGE_INPUT_ERROR" });
+    const prepared = await localImageInputs(images);
     try {
-      await beforeSubmit?.();
+      await beforeSubmit?.({ imageEvidence: prepared.evidence });
     } catch (error) {
       throw Object.assign(inputError(error.message || "\u53D1\u9001\u524D\u68C0\u67E5\u5931\u8D25\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: error.code });
     }
     authorize();
     const request = {
       threadId,
-      clientUserMessageId: clientUserMessageId || (0, import_node_crypto5.randomUUID)(),
-      input: [{ type: "text", text: prompt, text_elements: [] }],
+      clientUserMessageId: clientUserMessageId || (0, import_node_crypto6.randomUUID)(),
+      input: [{ type: "text", text: prompt, text_elements: [] }, ...prepared.input],
       ...model ? { model } : {},
       ...thinking ? { effort: thinking } : {}
     };
@@ -5190,15 +5231,15 @@ var DesktopInput = class {
 
 // src/desktop-context.mjs
 var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 var import_node_child_process3 = require("node:child_process");
 var import_node_url2 = require("node:url");
-var directory2 = typeof __dirname === "string" ? __dirname : import_node_path5.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
+var directory2 = typeof __dirname === "string" ? __dirname : import_node_path6.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
 var discovery;
 function desktopUnavailable() {
   return Object.assign(new Error("Codex \u684C\u9762\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5\u3002\u672C\u6B21\u64CD\u4F5C\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\uFF0C\u7A0D\u540E\u91CD\u8BD5\u3002"), { code: "DESKTOP_DISCONNECTED", notSent: true });
 }
-async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path5.default.join(directory2, "discover-desktop.ps1") } = {}) {
+async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path6.default.join(directory2, "discover-desktop.ps1") } = {}) {
   if (platform !== "win32") return [];
   return new Promise((resolve) => {
     let source;
@@ -5308,7 +5349,7 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
 }
 
 // src/desktop-wake.mjs
-var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
 var import_node_child_process4 = require("node:child_process");
 var threadIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function threadWakeUrl(thread) {
@@ -5318,7 +5359,7 @@ function threadWakeUrl(thread) {
 async function openRegisteredThread(url, { platform = process.platform, launch = import_node_child_process4.spawn } = {}) {
   if (platform !== "win32" || !/^codex:\/\/threads\/[0-9a-f-]{36}$/i.test(url)) throw new Error("\u65E0\u6CD5\u5524\u8D77\u684C\u9762\u4F1A\u8BDD");
   const child = launch(
-    import_node_path6.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
+    import_node_path7.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
     [url],
     { windowsHide: true, stdio: "ignore" }
   );
@@ -5594,8 +5635,8 @@ var DesktopClient = class _DesktopClient {
         callerSource: "codex",
         threadId: this.context.threadId,
         hostId: "local",
-        turnId: `feishu-${(0, import_node_crypto6.randomUUID)()}`,
-        callId: `feishu-${(0, import_node_crypto6.randomUUID)()}`
+        turnId: `feishu-${(0, import_node_crypto7.randomUUID)()}`,
+        callId: `feishu-${(0, import_node_crypto7.randomUUID)()}`
       };
       const result = await this.request("tools/call", params, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), () => {
         options.beforeSend?.();
@@ -5717,7 +5758,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
   secureDirectory();
-  const lockPath = import_node_path7.default.join(dataDir, "bridge-start.lock");
+  const lockPath = import_node_path8.default.join(dataDir, "bridge-start.lock");
   let lock2;
   const deadline = Date.now() + 6e3;
   while (lock2 === void 0) {
@@ -5735,7 +5776,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
         continue;
       }
       if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u542F\u52A8\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\uFF0C\u8BF7\u7A0D\u540E\u68C0\u67E5\u6865\u63A5\u72B6\u6001\u3002");
-      await (0, import_promises2.setTimeout)(50);
+      await (0, import_promises3.setTimeout)(50);
     }
   }
   try {
@@ -5755,7 +5796,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs5.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
-    const log = import_node_fs5.default.openSync(import_node_path7.default.join(dataDir, "bridge.log"), "a", 384);
+    const log = import_node_fs5.default.openSync(import_node_path8.default.join(dataDir, "bridge.log"), "a", 384);
     let child;
     try {
       child = (0, import_node_child_process5.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
@@ -5770,7 +5811,7 @@ async function startBridge(context, { entryPath, automatic = false, management =
     const readyBy = Date.now() + 3e3;
     while (Date.now() < readyBy && alive(child.pid)) {
       if (readLock("bridge.lock").pid === child.pid) return { startedProcess: true, pid: child.pid, note: "\u6865\u63A5\u5DF2\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u901A\u9053\u8FDE\u63A5\u72B6\u6001\u3002" };
-      await (0, import_promises2.setTimeout)(50);
+      await (0, import_promises3.setTimeout)(50);
     }
     throw new Error("\u6865\u63A5\u672A\u80FD\u786E\u8BA4\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u6865\u63A5\u72B6\u6001\u3002");
   } finally {
@@ -5784,12 +5825,12 @@ async function startBridge(context, { entryPath, automatic = false, management =
 
 // src/responses-compat-settings.mjs
 var execute = (0, import_node_util.promisify)(import_node_child_process6.execFile);
-var directory3 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
-var runtime = import_node_path8.default.join(dataDir, "runtime");
+var directory3 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
+var runtime = import_node_path9.default.join(dataDir, "runtime");
 var registry = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 var registryName = "CodexConnectResponsesCompat";
-var home = () => process.env.CODEX_HOME || import_node_path8.default.join(import_node_os4.default.homedir(), ".codex");
-async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path8.default.join(directory3, "provider-config.py") } = {}) {
+var home = () => process.env.CODEX_HOME || import_node_path9.default.join(import_node_os4.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path9.default.join(directory3, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
     const child = (0, import_node_child_process6.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
@@ -5853,7 +5894,7 @@ function responsesCompatStatus() {
 }
 async function lock(name, action) {
   import_node_fs6.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const file = import_node_path8.default.join(dataDir, name);
+  const file = import_node_path9.default.join(dataDir, name);
   let descriptor;
   const deadline = Date.now() + 12e3;
   while (descriptor === void 0) {
@@ -5875,7 +5916,7 @@ async function lock(name, action) {
         continue;
       }
       if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u517C\u5BB9\u8BBE\u7F6E\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\u3002");
-      await (0, import_promises3.setTimeout)(100);
+      await (0, import_promises4.setTimeout)(100);
     }
   }
   try {
@@ -5888,7 +5929,7 @@ async function lock(name, action) {
     }
   }
 }
-async function setCompatStartup(enabled, { entry = import_node_path8.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+async function setCompatStartup(enabled, { entry = import_node_path9.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
   else await execute("reg.exe", ["delete", registry, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
@@ -5906,7 +5947,7 @@ async function configureResponsesCompat({ providerId, enabled }, {
     const config2 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config2({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
-    const backup = () => import_node_path8.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto7.randomUUID)()}.toml`);
+    const backup = () => import_node_path9.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto8.randomUUID)()}.toml`);
     if (existing && provider.baseUrl === existing.baseUrl) await config2({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
     const next = {
       ...previous,
@@ -5920,20 +5961,20 @@ async function configureResponsesCompat({ providerId, enabled }, {
 }
 
 // src/dashboard.mjs
-var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_path11 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
 init_storage();
 
 // src/catalog.mjs
 var import_node_child_process7 = require("node:child_process");
 var import_node_util2 = require("node:util");
-var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 var import_node_url4 = require("node:url");
 var execute2 = (0, import_node_util2.promisify)(import_node_child_process7.execFile);
-var directory4 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
+var directory4 = typeof __dirname === "string" ? __dirname : import_node_path10.default.dirname((0, import_node_url4.fileURLToPath)(__filename));
 
 // src/dashboard.mjs
-var directory5 = typeof __dirname === "string" ? __dirname : import_node_path10.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
+var directory5 = typeof __dirname === "string" ? __dirname : import_node_path11.default.dirname((0, import_node_url5.fileURLToPath)(__filename));
 function dashboardLink() {
   const saved = readJson("dashboard.json", {});
   if (!saved.port || !saved.token) throw new Error("\u7BA1\u7406\u9875\u9762\u5C1A\u672A\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
@@ -5941,15 +5982,15 @@ function dashboardLink() {
 }
 
 // src/setup.mjs
-var import_node_path11 = __toESM(require("node:path"), 1);
-var import_promises5 = require("node:timers/promises");
+var import_node_path12 = __toESM(require("node:path"), 1);
+var import_promises6 = require("node:timers/promises");
 async function hiddenQuestion(prompt) {
   let muted = false;
   const output = new import_node_stream.Writable({ write(chunk, encoding, next) {
     if (!muted) process.stdout.write(chunk);
     next();
   } });
-  const input = import_promises4.default.createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
+  const input = import_promises5.default.createInterface({ input: process.stdin, output, terminal: process.stdin.isTTY });
   const answer = input.question(prompt);
   muted = true;
   try {
@@ -5968,13 +6009,13 @@ async function main() {
     } catch {
       context = {};
     }
-    const started = await ensureBridge(context, { entryPath: import_node_path11.default.join(__dirname, "bridge.cjs"), management: true });
+    const started = await ensureBridge(context, { entryPath: import_node_path12.default.join(__dirname, "bridge.cjs"), management: true });
     for (let i = 0; i < 100; i++) {
       if (readJson("dashboard.json", {}).pid === started.pid) {
         console.log(dashboardLink());
         return;
       }
-      await (0, import_promises5.setTimeout)(100);
+      await (0, import_promises6.setTimeout)(100);
     }
     throw new Error("\u7BA1\u7406\u9875\u9762\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
   }
@@ -6001,7 +6042,7 @@ async function main() {
   if (process.argv[2] && process.argv[2] !== "feishu") throw new Error("\u4F7F\u7528 setup.cjs \u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u4F7F\u7528 dashboard\u3001wechat\u3001autostart on/off\u3002");
   secureDirectory();
   const previous = readJson("config.json", {});
-  const rl = import_promises4.default.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = import_promises5.default.createInterface({ input: process.stdin, output: process.stdout });
   console.log("\u98DE\u4E66 Codex \u684C\u9762\u6865\u63A5 \xB7 \u672C\u5730\u914D\u7F6E\n\u521B\u5EFA\u98DE\u4E66\u81EA\u5EFA\u5E94\u7528\u5E76\u542F\u7528\u673A\u5668\u4EBA\u540E\u586B\u5199\u51ED\u636E\u3002");
   let appId;
   try {
@@ -6011,7 +6052,7 @@ async function main() {
   }
   const appSecret = await hiddenQuestion(`App Secret${previous.appSecret ? "\uFF08\u56DE\u8F66\u4FDD\u7559\uFF09" : ""}: `) || previous.appSecret;
   if (!appId || !appSecret) throw new Error("App ID \u548C App Secret \u90FD\u4E0D\u80FD\u4E3A\u7A7A");
-  const code = (0, import_node_crypto8.randomBytes)(12).toString("hex");
+  const code = (0, import_node_crypto9.randomBytes)(12).toString("hex");
   writeJson("config.json", { ...previous, appId, appSecret, allowedOpenIds: previous.allowedOpenIds || [], pairing: { code, expiresAt: Date.now() + 10 * 60 * 1e3 } });
   console.log(`\u914D\u7F6E\u5DF2\u4FDD\u5B58\u5230 ${dataDir}\uFF08\u4EC5\u5F53\u524D Windows \u7528\u6237\u53EF\u8BBF\u95EE\uFF09\u3002
 \u56DE\u5230 Codex \u684C\u9762\uFF0C\u8C03\u7528\u63D2\u4EF6 start_bridge\u3002

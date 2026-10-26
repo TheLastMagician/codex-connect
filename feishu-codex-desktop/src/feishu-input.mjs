@@ -1,5 +1,5 @@
 // Feishu can send visible text as either text or post. Flatten only documented
-// textual nodes; do not treat an audio file key or card payload as an instruction.
+// text and image nodes; keep image keys separate from the user's instructions.
 const LIMIT=12000;
 const decode=value=>{
   if(typeof value==='string'){if(value.length>256000)return;try{return JSON.parse(value);}catch{return;}}
@@ -20,13 +20,13 @@ function postText(body,mentions) {
   if(!Array.isArray(body.content) && !Array.isArray(body.content_v2))body=body.zh_cn||body.en_us||body.ja_jp;
   if(!body)return;
   for(const rows of [body.content_v2,body.content]) {
-    const text=postRows(rows,body.title,mentions);
-    if(typeof text==='string' && text.trim() && text.length<=LIMIT)return text;
+    const input=postRows(rows,body.title,mentions);
+    if(input && (input.text.trim() || input.images.length))return input;
   }
 }
 function postRows(rows,title,mentions) {
   if(!Array.isArray(rows) || rows.length>400)return;
-  const paragraphs=[];let length=0,nodes=0,hasText=false;
+  const paragraphs=[],images=[];let length=0,nodes=0,hasText=false;
   if(typeof title==='string' && title){if(title.length>LIMIT)return;paragraphs.push(title);length+=title.length;hasText=true;}
   for(const row of rows) {
     if(!Array.isArray(row))return;
@@ -49,7 +49,10 @@ function postRows(rows,title,mentions) {
       }else if(node.tag==='at')text=mentionText(node.user_id,node.user_name,mentions);
       else if(node.tag==='hr')text='\n';
       else if(node.tag==='emotion' && typeof node.emoji_type==='string')text=`:${node.emoji_type}:`;
-      else if(node.tag==='img')text='[图片附件未传入 Codex]';
+      else if(node.tag==='img'){
+        if(!validImageKey(node.image_key))return;
+        images.push({key:node.image_key});
+      }
       else if(node.tag==='media')text='[媒体附件未传入 Codex]';
       else return; // An unknown node may contain instructions; never execute a partial message.
       line+=text;length+=text.length;if(length+paragraphs.length>LIMIT)return;
@@ -58,16 +61,19 @@ function postRows(rows,title,mentions) {
   }
   const result=paragraphs.join('\n');
   // A real @ without a question may still produce the existing local usage hint.
-  return hasText || mentions.some(m=>result.includes(m.key))?result:undefined;
+  return hasText || images.length || mentions.some(m=>result.includes(m.key))?{text:result,images}:undefined;
 }
-export function feishuText(message) {
-  if(!['text','post'].includes(message?.message_type))return;
+export const validImageKey=value=>typeof value==='string' && /^img_[A-Za-z0-9_-]{1,250}$/.test(value);
+export function feishuInput(message) {
+  if(!['text','post','image'].includes(message?.message_type))return;
   const mentions=(Array.isArray(message.mentions)?message.mentions:[])
     .filter(m=>typeof m?.key==='string' && /^@_[A-Za-z0-9_]{1,80}$/.test(m.key));
   // Prefer the modern representation, but an absent/invalid v2 can use legacy text.
   for(const value of [message.content_v2,message.content]) {
     const body=decode(value);if(!body)continue;
-    const text=message.message_type==='text'?body.text:postText(body,mentions);
-    if(typeof text==='string' && text.trim() && text.length<=LIMIT)return text;
+    const input=message.message_type==='text'?{text:body.text,images:[]}:
+      message.message_type==='image'?(validImageKey(body.image_key)?{text:'',images:[{key:body.image_key}]}:undefined):postText(body,mentions);
+    if(input && typeof input.text==='string' && input.text.length<=LIMIT && (input.text.trim() || input.images.length))return input;
   }
 }
+export function feishuText(message) {return feishuInput(message)?.text;}

@@ -3269,8 +3269,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path10) {
-      let input = path10;
+    function removeDotSegments(path11) {
+      let input = path11;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3679,8 +3679,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path10 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path10 && path10 !== "/" ? path10 : void 0;
+        const path11 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path11 && path11 !== "/" ? path11 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7193,12 +7193,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs8, exportName) {
+    function addFormats(ajv, list, fs9, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs8[f]);
+        ajv.addFormat(f, fs9[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -8836,10 +8836,10 @@ var require_segments = __commonJS({
       const segs = getSegmentsFromString(data, Utils.isKanjiModeEnabled());
       const nodes = buildNodes(segs);
       const graph = buildGraph(nodes, version2);
-      const path10 = dijkstra.find_path(graph.map, "start", "end");
+      const path11 = dijkstra.find_path(graph.map, "start", "end");
       const optimizedSegs = [];
-      for (let i = 1; i < path10.length - 1; i++) {
-        optimizedSegs.push(graph.table[path10[i]].node);
+      for (let i = 1; i < path11.length - 1; i++) {
+        optimizedSegs.push(graph.table[path11[i]].node);
       }
       return exports2.fromArray(mergeSegments(optimizedSegs));
     };
@@ -11275,7 +11275,7 @@ var require_utils3 = __commonJS({
 // node_modules/qrcode/lib/renderer/png.js
 var require_png2 = __commonJS({
   "node_modules/qrcode/lib/renderer/png.js"(exports2) {
-    var fs8 = require("fs");
+    var fs9 = require("fs");
     var PNG = require_png().PNG;
     var Utils = require_utils3();
     exports2.render = function render(qrData, options) {
@@ -11316,7 +11316,7 @@ var require_png2 = __commonJS({
       });
       png.pack();
     };
-    exports2.renderToFile = function renderToFile(path10, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
@@ -11327,7 +11327,7 @@ var require_png2 = __commonJS({
         called = true;
         cb.apply(null, args);
       };
-      const stream = fs8.createWriteStream(path10);
+      const stream = fs9.createWriteStream(path11);
       stream.on("error", done);
       stream.on("close", done);
       exports2.renderToFileStream(stream, qrData, options);
@@ -11389,14 +11389,14 @@ var require_utf8 = __commonJS({
       }
       return output;
     };
-    exports2.renderToFile = function renderToFile(path10, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs8 = require("fs");
+      const fs9 = require("fs");
       const utf8 = exports2.render(qrData, options);
-      fs8.writeFile(path10, utf8, cb);
+      fs9.writeFile(path11, utf8, cb);
     };
   }
 });
@@ -11517,7 +11517,7 @@ var require_svg_tag = __commonJS({
       return str;
     }
     function qrToPath(data, size, margin) {
-      let path10 = "";
+      let path11 = "";
       let moveBy = 0;
       let newRow = false;
       let lineLength = 0;
@@ -11528,19 +11528,19 @@ var require_svg_tag = __commonJS({
         if (data[i]) {
           lineLength++;
           if (!(i > 0 && col > 0 && data[i - 1])) {
-            path10 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
+            path11 += newRow ? svgCmd("M", col + margin, 0.5 + row + margin) : svgCmd("m", moveBy, 0);
             moveBy = 0;
             newRow = false;
           }
           if (!(col + 1 < size && data[i + 1])) {
-            path10 += svgCmd("h", lineLength);
+            path11 += svgCmd("h", lineLength);
             lineLength = 0;
           }
         } else {
           moveBy++;
         }
       }
-      return path10;
+      return path11;
     }
     exports2.render = function render(qrData, options, cb) {
       const opts = Utils.getOptions(options);
@@ -11548,10 +11548,10 @@ var require_svg_tag = __commonJS({
       const data = qrData.modules.data;
       const qrcodesize = size + opts.margin * 2;
       const bg = !opts.color.light.a ? "" : "<path " + getColorAttrib(opts.color.light, "fill") + ' d="M0 0h' + qrcodesize + "v" + qrcodesize + 'H0z"/>';
-      const path10 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
+      const path11 = "<path " + getColorAttrib(opts.color.dark, "stroke") + ' d="' + qrToPath(data, size, opts.margin) + '"/>';
       const viewBox = 'viewBox="0 0 ' + qrcodesize + " " + qrcodesize + '"';
       const width = !opts.width ? "" : 'width="' + opts.width + '" height="' + opts.width + '" ';
-      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path10 + "</svg>\n";
+      const svgTag = '<svg xmlns="http://www.w3.org/2000/svg" ' + width + viewBox + ' shape-rendering="crispEdges">' + bg + path11 + "</svg>\n";
       if (typeof cb === "function") {
         cb(null, svgTag);
       }
@@ -11565,15 +11565,15 @@ var require_svg = __commonJS({
   "node_modules/qrcode/lib/renderer/svg.js"(exports2) {
     var svgTagRenderer = require_svg_tag();
     exports2.render = svgTagRenderer.render;
-    exports2.renderToFile = function renderToFile(path10, qrData, options, cb) {
+    exports2.renderToFile = function renderToFile(path11, qrData, options, cb) {
       if (typeof cb === "undefined") {
         cb = options;
         options = void 0;
       }
-      const fs8 = require("fs");
+      const fs9 = require("fs");
       const svgTag = exports2.render(qrData, options);
       const xmlStr = '<?xml version="1.0" encoding="utf-8"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">' + svgTag;
-      fs8.writeFile(path10, xmlStr, cb);
+      fs9.writeFile(path11, xmlStr, cb);
     };
   }
 });
@@ -11731,8 +11731,8 @@ var require_server = __commonJS({
         cb
       };
     }
-    function getTypeFromFilename(path10) {
-      return path10.slice((path10.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+    function getTypeFromFilename(path11) {
+      return path11.slice((path11.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
     }
     function getRendererFromType(type) {
       switch (type) {
@@ -11796,17 +11796,17 @@ var require_server = __commonJS({
       const renderer = getRendererFromType(params.opts.type);
       return render(renderer.renderToBuffer, text, params);
     };
-    exports2.toFile = function toFile(path10, text, opts, cb) {
-      if (typeof path10 !== "string" || !(typeof text === "string" || typeof text === "object")) {
+    exports2.toFile = function toFile(path11, text, opts, cb) {
+      if (typeof path11 !== "string" || !(typeof text === "string" || typeof text === "object")) {
         throw new Error("Invalid argument");
       }
       if (arguments.length < 3 && !canPromise()) {
         throw new Error("Too few arguments provided");
       }
       const params = checkParams(text, opts, cb);
-      const type = params.opts.type || getTypeFromFilename(path10);
+      const type = params.opts.type || getTypeFromFilename(path11);
       const renderer = getRendererFromType(type);
-      const renderToFile = renderer.renderToFile.bind(null, path10);
+      const renderToFile = renderer.renderToFile.bind(null, path11);
       return render(renderToFile, text, params);
     };
     exports2.toFileStream = function toFileStream(stream, text, opts) {
@@ -11829,7 +11829,7 @@ var require_lib = __commonJS({
 });
 
 // src/server.mjs
-var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 var import_node_fs7 = __toESM(require("node:fs"), 1);
 
 // node_modules/zod/v4/core/util.js
@@ -12069,10 +12069,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path10) {
-  if (!path10)
+function getElementAtPath(obj, path11) {
+  if (!path11)
     return obj;
-  return path10.reduce((acc, key) => acc?.[key], obj);
+  return path11.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -12412,11 +12412,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path10, issues) {
+function prefixIssues(path11, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path10);
+    iss.path.unshift(path11);
     return iss;
   });
 }
@@ -12874,16 +12874,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path10 = []) => {
+  const processError = (error3, path11 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path10, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
       } else {
-        const fullpath = [...path10, ...issue2.path];
+        const fullpath = [...path11, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -21621,18 +21621,57 @@ init_storage();
 
 // src/desktop.mjs
 var import_node_net2 = __toESM(require("node:net"), 1);
-var import_node_crypto3 = require("node:crypto");
+var import_node_crypto4 = require("node:crypto");
 
 // src/desktop-input.mjs
 var import_node_net = __toESM(require("node:net"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_crypto3 = require("node:crypto");
+var import_promises2 = require("node:timers/promises");
+
+// src/image-input.mjs
+var import_promises = __toESM(require("node:fs/promises"), 1);
 var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_crypto2 = require("node:crypto");
-var import_promises = require("node:timers/promises");
+var MAX_INPUT_IMAGES = 8;
+var MAX_INPUT_IMAGE_BYTES = 10 * 1024 * 1024;
+var imageInputError = (message, retryable = true) => Object.assign(new Error(message), { code: "IMAGE_INPUT_ERROR", notSent: true, retryable });
+function imageExtension(buffer) {
+  if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "png";
+  if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) return "jpg";
+  if (/^GIF8[79]a$/.test(buffer.toString("ascii", 0, 6))) return "gif";
+  if (buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP") return "webp";
+}
+async function localImageInputs(images = []) {
+  if (!Array.isArray(images) || images.length > MAX_INPUT_IMAGES) throw imageInputError("\u6BCF\u6761\u6D88\u606F\u6700\u591A\u652F\u6301 8 \u5F20\u56FE\u7247\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", false);
+  const input = [], evidence = [];
+  for (const file of images) {
+    if (typeof file !== "string" || !import_node_path2.default.isAbsolute(file) || /^[\\/]{2}/.test(file) || file.includes("\0")) throw imageInputError("\u56FE\u7247\u9644\u4EF6\u8DEF\u5F84\u65E0\u6548\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002");
+    let handle;
+    try {
+      if ((await import_promises.default.lstat(file)).isSymbolicLink()) throw Error("symbolic link");
+      handle = await import_promises.default.open(file, "r");
+      const stat = await handle.stat();
+      if (!stat.isFile() || !stat.size || stat.size > MAX_INPUT_IMAGE_BYTES) throw Error("size");
+      const buffer = await handle.readFile();
+      if (buffer.length !== stat.size || !imageExtension(buffer)) throw Error("format");
+      input.push({ type: "localImage", path: file });
+      evidence.push({ path: file, digest: (0, import_node_crypto2.createHash)("sha256").update(buffer).digest("hex") });
+    } catch {
+      throw imageInputError("\u56FE\u7247\u9644\u4EF6\u4E0D\u53EF\u7528\u6216\u8D85\u8FC7 10 MB\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002");
+    } finally {
+      await handle?.close();
+    }
+  }
+  return { input, evidence };
+}
+
+// src/desktop-input.mjs
 var MAX_FRAME = 8 * 1024 * 1024;
 var VERSIONS = { initialize: 0, "thread-owner-discovery": 1, "thread-follower-start-turn": 2 };
 function desktopInputPath() {
-  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path2.default.join(process.env.CODEX_HOME || import_node_path2.default.join(import_node_os2.default.homedir(), ".codex"), "ipc", "ipc.sock");
+  return process.platform === "win32" ? "\\\\.\\pipe\\codex-ipc" : import_node_path3.default.join(process.env.CODEX_HOME || import_node_path3.default.join(import_node_os2.default.homedir(), ".codex"), "ipc", "ipc.sock");
 }
 function frame(message) {
   const data = Buffer.from(JSON.stringify(message), "utf8");
@@ -21690,7 +21729,7 @@ var DesktopInput = class {
   request(method, params, { targetClientId, hostId, timeoutMs = this.timeoutMs } = {}) {
     if (!Object.hasOwn(VERSIONS, method)) throw inputError("\u4E0D\u652F\u6301\u7684\u684C\u9762\u8F93\u5165\u64CD\u4F5C", true);
     if (!this.socket || this.socket.destroyed) throw inputError("\u684C\u9762\u8FDE\u63A5\u5DF2\u5173\u95ED\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
-    const requestId = (0, import_node_crypto2.randomUUID)();
+    const requestId = (0, import_node_crypto3.randomUUID)();
     const remote = hostId && hostId !== "local";
     const message = {
       type: "request",
@@ -21766,7 +21805,7 @@ var DesktopInput = class {
       } catch {
         authorize();
         if (attempt) throw inputError("\u5DF2\u4FDD\u7559\u6240\u9009\u4F1A\u8BDD\uFF0C\u4F46\u684C\u9762\u6D88\u606F\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u8FD9\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u7A0D\u540E\u53EF\u76F4\u63A5\u91CD\u53D1\uFF0C\u65E0\u9700\u91CD\u65B0\u9009\u62E9\u3002", true);
-        await (0, import_promises.setTimeout)(150);
+        await (0, import_promises2.setTimeout)(150);
       }
     }
   }
@@ -21799,7 +21838,7 @@ var DesktopInput = class {
             throw inputError("\u5DF2\u5C1D\u8BD5\u6253\u5F00\u76EE\u6807\u4F1A\u8BDD\uFF0C\u4F46\u65E0\u6CD5\u786E\u8BA4\u52A0\u8F7D\u72B6\u6001\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8FDE\u63A5\u540E\u91CD\u8BD5\u3002", true);
           }
           if (owner) return owner;
-          await (0, import_promises.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
+          await (0, import_promises2.setTimeout)(Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now())));
         }
         throw inputError("\u76EE\u6807\u4F1A\u8BDD\u52A0\u8F7D\u8D85\u65F6\uFF0C\u672C\u6761\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u68C0\u67E5\u684C\u9762\u8BE5\u4F1A\u8BDD\u662F\u5426\u6709\u52A0\u8F7D\u9519\u8BEF\uFF0C\u518D\u91CD\u65B0\u53D1\u9001\u3002", true);
       })();
@@ -21811,7 +21850,7 @@ var DesktopInput = class {
       if (this.loading.get(key) === loading) this.loading.delete(key);
     }
   }
-  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
+  async send({ threadId, hostId = "local", prompt, model, thinking, clientUserMessageId, images }, beforeSend, { beforeSubmit, beforeActivate } = {}) {
     if (typeof threadId !== "string" || !threadId.trim() || typeof prompt !== "string" || !prompt.trim() || prompt.length > 12e3)
       throw inputError("\u4F1A\u8BDD\u6216\u6D88\u606F\u65E0\u6548\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true);
     if (clientUserMessageId !== void 0 && (typeof clientUserMessageId !== "string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -21827,16 +21866,18 @@ var DesktopInput = class {
     let owner = await this.discoverOwner(threadId, hostId, authorize);
     authorize();
     if (!owner) owner = await this.loadOwner(threadId, hostId, authorize, beforeActivate);
+    if (images?.length && hostId !== "local") throw Object.assign(inputError("\u56FE\u7247\u76EE\u524D\u4EC5\u652F\u6301\u672C\u673A\u4F1A\u8BDD\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: "IMAGE_INPUT_ERROR" });
+    const prepared = await localImageInputs(images);
     try {
-      await beforeSubmit?.();
+      await beforeSubmit?.({ imageEvidence: prepared.evidence });
     } catch (error2) {
       throw Object.assign(inputError(error2.message || "\u53D1\u9001\u524D\u68C0\u67E5\u5931\u8D25\uFF0C\u6D88\u606F\u5C1A\u672A\u53D1\u9001\u3002", true), { code: error2.code });
     }
     authorize();
     const request = {
       threadId,
-      clientUserMessageId: clientUserMessageId || (0, import_node_crypto2.randomUUID)(),
-      input: [{ type: "text", text: prompt, text_elements: [] }],
+      clientUserMessageId: clientUserMessageId || (0, import_node_crypto3.randomUUID)(),
+      input: [{ type: "text", text: prompt, text_elements: [] }, ...prepared.input],
       ...model ? { model } : {},
       ...thinking ? { effort: thinking } : {}
     };
@@ -21871,15 +21912,15 @@ var DesktopInput = class {
 
 // src/desktop-context.mjs
 var import_node_fs2 = __toESM(require("node:fs"), 1);
-var import_node_path3 = __toESM(require("node:path"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
 var import_node_child_process2 = require("node:child_process");
 var import_node_url = require("node:url");
-var directory = typeof __dirname === "string" ? __dirname : import_node_path3.default.dirname((0, import_node_url.fileURLToPath)(__filename));
+var directory = typeof __dirname === "string" ? __dirname : import_node_path4.default.dirname((0, import_node_url.fileURLToPath)(__filename));
 var discovery;
 function desktopUnavailable() {
   return Object.assign(new Error("Codex \u684C\u9762\u8FDE\u63A5\u6682\u4E0D\u53EF\u7528\uFF0C\u6B63\u5728\u7B49\u5F85\u91CD\u65B0\u8FDE\u63A5\u3002\u672C\u6B21\u64CD\u4F5C\u5C1A\u672A\u53D1\u9001\u3002\u8BF7\u4FDD\u6301 Codex \u8FD0\u884C\uFF0C\u7A0D\u540E\u91CD\u8BD5\u3002"), { code: "DESKTOP_DISCONNECTED", notSent: true });
 }
-async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path3.default.join(directory, "discover-desktop.ps1") } = {}) {
+async function discoverDesktopEndpoints({ platform = process.platform, script = import_node_path4.default.join(directory, "discover-desktop.ps1") } = {}) {
   if (platform !== "win32") return [];
   return new Promise((resolve) => {
     let source;
@@ -21989,7 +22030,7 @@ async function recoverDesktopContext(current, { probe, discover = discoverDeskto
 }
 
 // src/desktop-wake.mjs
-var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
 var import_node_child_process3 = require("node:child_process");
 var threadIdPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function threadWakeUrl(thread) {
@@ -21999,7 +22040,7 @@ function threadWakeUrl(thread) {
 async function openRegisteredThread(url, { platform = process.platform, launch = import_node_child_process3.spawn } = {}) {
   if (platform !== "win32" || !/^codex:\/\/threads\/[0-9a-f-]{36}$/i.test(url)) throw new Error("\u65E0\u6CD5\u5524\u8D77\u684C\u9762\u4F1A\u8BDD");
   const child = launch(
-    import_node_path4.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
+    import_node_path5.default.join(process.env.SystemRoot || "C:\\Windows", "explorer.exe"),
     [url],
     { windowsHide: true, stdio: "ignore" }
   );
@@ -22275,8 +22316,8 @@ var DesktopClient = class _DesktopClient {
         callerSource: "codex",
         threadId: this.context.threadId,
         hostId: "local",
-        turnId: `feishu-${(0, import_node_crypto3.randomUUID)()}`,
-        callId: `feishu-${(0, import_node_crypto3.randomUUID)()}`
+        turnId: `feishu-${(0, import_node_crypto4.randomUUID)()}`,
+        callId: `feishu-${(0, import_node_crypto4.randomUUID)()}`
       };
       const result = await this.request("tools/call", params, options.timeoutMs ?? (tool === "wait_threads" ? 45e3 : 3e4), () => {
         options.beforeSend?.();
@@ -22345,22 +22386,22 @@ async function requestControl(action, channel) {
 var stopControl = () => requestControl("stop");
 
 // src/server.mjs
-var import_node_crypto8 = require("node:crypto");
+var import_node_crypto9 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.3";
+var VERSION = "0.9.4";
 
 // src/wechat-auth.mjs
 var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 var import_node_url2 = require("node:url");
 var import_node_child_process4 = require("node:child_process");
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 var import_qrcode = __toESM(require_lib(), 1);
 init_storage();
 
 // src/wechat-api.mjs
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";
 function validateWechatBaseUrl(value) {
   const url = new URL(value);
@@ -22388,7 +22429,7 @@ var WechatApi = class {
     if (post) Object.assign(headers, {
       "Content-Type": "application/json",
       AuthorizationType: "ilink_bot_token",
-      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto4.randomBytes)(4).readUInt32BE())).toString("base64"),
+      "X-WECHAT-UIN": Buffer.from(String((0, import_node_crypto5.randomBytes)(4).readUInt32BE())).toString("base64"),
       ...auth && this.token ? { Authorization: `Bearer ${this.token}` } : {}
     });
     const timeout = AbortSignal.timeout(timeoutMs);
@@ -22433,7 +22474,7 @@ var WechatApi = class {
     return this.bot("sendmessage", { msg: {
       from_user_id: "",
       to_user_id: userId,
-      client_id: `codex-${(0, import_node_crypto4.randomUUID)()}`,
+      client_id: `codex-${(0, import_node_crypto5.randomUUID)()}`,
       message_type: 2,
       message_state: 2,
       context_token: contextToken,
@@ -22455,7 +22496,7 @@ function revokeWechatLogin(loginId, accountLoginId) {
 }
 
 // src/wechat-auth.mjs
-var directory2 = typeof __dirname === "string" ? __dirname : import_node_path5.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
+var directory2 = typeof __dirname === "string" ? __dirname : import_node_path6.default.dirname((0, import_node_url2.fileURLToPath)(__filename));
 function wechatLoginStatus() {
   const login = readJson("wechat-login.json", {});
   const account = readWechatAccount();
@@ -22478,8 +22519,8 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
   if (!refresh && existing.configured) return { status: "confirmed", configured: true, note: "\u5FAE\u4FE1\u5DF2\u767B\u5F55\u3002\u8981\u6362\u7ED1\u8D26\u53F7\uFF0C\u8BF7\u663E\u5F0F\u5237\u65B0\u767B\u5F55\u4E8C\u7EF4\u7801\u3002" };
   const result = await api.qrcode(account.token ? [account.token] : []);
   if (typeof result.qrcode !== "string" || !result.qrcode || typeof result.qrcode_img_content !== "string" || !result.qrcode_img_content || result.qrcode_img_content.length > 8192) throw new Error("\u5FAE\u4FE1\u6CA1\u6709\u8FD4\u56DE\u6709\u6548\u7684\u767B\u5F55\u4E8C\u7EF4\u7801\u3002");
-  const id = (0, import_node_crypto5.randomUUID)();
-  const qrPath = import_node_path5.default.join(dataDir, `wechat-login-${id}.png`);
+  const id = (0, import_node_crypto6.randomUUID)();
+  const qrPath = import_node_path6.default.join(dataDir, `wechat-login-${id}.png`);
   await import_qrcode.default.toFile(qrPath, result.qrcode_img_content, { width: 360, margin: 4, errorCorrectionLevel: "M" });
   import_node_fs3.default.chmodSync(qrPath, 384);
   writeJson("wechat-login.json", {
@@ -22492,8 +22533,8 @@ async function beginWechatLogin({ refresh = false, api = new WechatApi(), launch
     status: "wait"
   });
   if (launch) {
-    const worker = import_node_path5.default.join(directory2, typeof __dirname === "string" ? "wechat-auth-worker.cjs" : "wechat-auth-worker.mjs");
-    const log = import_node_fs3.default.openSync(import_node_path5.default.join(dataDir, "wechat-login.log"), "a", 384);
+    const worker = import_node_path6.default.join(directory2, typeof __dirname === "string" ? "wechat-auth-worker.cjs" : "wechat-auth-worker.mjs");
+    const log = import_node_fs3.default.openSync(import_node_path6.default.join(dataDir, "wechat-login.log"), "a", 384);
     try {
       const child = (0, import_node_child_process4.spawn)(process.execPath, [worker, id], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
       await new Promise((resolve, reject) => {
@@ -22520,7 +22561,7 @@ function disconnectWechat() {
   revokeWechatLogin(login.id, account.loginId);
   writeJson("wechat-login.json", { id: login.id, status: "cancelled" });
   try {
-    import_node_fs3.default.unlinkSync(import_node_path5.default.join(dataDir, "wechat.json"));
+    import_node_fs3.default.unlinkSync(import_node_path6.default.join(dataDir, "wechat.json"));
   } catch (e) {
     if (e.code !== "ENOENT") throw e;
   }
@@ -22529,9 +22570,9 @@ function disconnectWechat() {
 
 // src/bridge-lifecycle.mjs
 var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
 var import_node_child_process5 = require("node:child_process");
-var import_promises2 = require("node:timers/promises");
+var import_promises3 = require("node:timers/promises");
 init_storage();
 
 // src/connections.mjs
@@ -22637,7 +22678,7 @@ async function startBridge(context2, { entryPath, automatic = false, management 
     throw new Error("\u8BF7\u5148\u914D\u7F6E\u98DE\u4E66\uFF0C\u6216\u626B\u7801\u8FDE\u63A5\u5FAE\u4FE1\u3002");
   }
   secureDirectory();
-  const lockPath = import_node_path6.default.join(dataDir, "bridge-start.lock");
+  const lockPath = import_node_path7.default.join(dataDir, "bridge-start.lock");
   let lock2;
   const deadline = Date.now() + 6e3;
   while (lock2 === void 0) {
@@ -22655,7 +22696,7 @@ async function startBridge(context2, { entryPath, automatic = false, management 
         continue;
       }
       if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u542F\u52A8\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\uFF0C\u8BF7\u7A0D\u540E\u68C0\u67E5\u6865\u63A5\u72B6\u6001\u3002");
-      await (0, import_promises2.setTimeout)(50);
+      await (0, import_promises3.setTimeout)(50);
     }
   }
   try {
@@ -22675,7 +22716,7 @@ async function startBridge(context2, { entryPath, automatic = false, management 
     const previous = readJson("status.json", {}), running = readLock("bridge.lock");
     if (alive(running.pid)) return { alreadyRunning: true, pid: running.pid, state: previous.state || "starting" };
     if (!entryPath || !import_node_fs4.default.existsSync(entryPath)) throw new Error("\u7F3A\u5C11\u6865\u63A5\u8FD0\u884C\u6587\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
-    const log = import_node_fs4.default.openSync(import_node_path6.default.join(dataDir, "bridge.log"), "a", 384);
+    const log = import_node_fs4.default.openSync(import_node_path7.default.join(dataDir, "bridge.log"), "a", 384);
     let child;
     try {
       child = (0, import_node_child_process5.spawn)(process.execPath, [entryPath], { detached: true, windowsHide: true, stdio: ["ignore", log, log], env: process.env });
@@ -22690,7 +22731,7 @@ async function startBridge(context2, { entryPath, automatic = false, management 
     const readyBy = Date.now() + 3e3;
     while (Date.now() < readyBy && alive(child.pid)) {
       if (readLock("bridge.lock").pid === child.pid) return { startedProcess: true, pid: child.pid, note: "\u6865\u63A5\u5DF2\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u901A\u9053\u8FDE\u63A5\u72B6\u6001\u3002" };
-      await (0, import_promises2.setTimeout)(50);
+      await (0, import_promises3.setTimeout)(50);
     }
     throw new Error("\u6865\u63A5\u672A\u80FD\u786E\u8BA4\u542F\u52A8\uFF0C\u8BF7\u67E5\u770B\u6865\u63A5\u72B6\u6001\u3002");
   } finally {
@@ -22704,14 +22745,14 @@ async function startBridge(context2, { entryPath, automatic = false, management 
 
 // src/autostart-settings.mjs
 var import_node_fs5 = __toESM(require("node:fs"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
 var import_node_os3 = __toESM(require("node:os"), 1);
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto7 = require("node:crypto");
 init_storage();
-var runtimeDir = import_node_path7.default.join(dataDir, "runtime");
-var autostartEntry = () => import_node_path7.default.join(runtimeDir, "autostart.cjs");
-function hooksPath(codexHome = process.env.CODEX_HOME || import_node_path7.default.join(import_node_os3.default.homedir(), ".codex")) {
-  return import_node_path7.default.join(codexHome, "hooks.json");
+var runtimeDir = import_node_path8.default.join(dataDir, "runtime");
+var autostartEntry = () => import_node_path8.default.join(runtimeDir, "autostart.cjs");
+function hooksPath(codexHome = process.env.CODEX_HOME || import_node_path8.default.join(import_node_os3.default.homedir(), ".codex")) {
+  return import_node_path8.default.join(codexHome, "hooks.json");
 }
 function readHooks(file) {
   try {
@@ -22724,8 +22765,8 @@ function readHooks(file) {
   }
 }
 function atomicWrite(file, data) {
-  import_node_fs5.default.mkdirSync(import_node_path7.default.dirname(file), { recursive: true, mode: 448 });
-  const temp = file + "." + (0, import_node_crypto6.randomBytes)(8).toString("hex") + ".tmp";
+  import_node_fs5.default.mkdirSync(import_node_path8.default.dirname(file), { recursive: true, mode: 448 });
+  const temp = file + "." + (0, import_node_crypto7.randomBytes)(8).toString("hex") + ".tmp";
   try {
     import_node_fs5.default.writeFileSync(temp, data, { mode: 384, flag: "wx" });
     import_node_fs5.default.renameSync(temp, file);
@@ -22767,11 +22808,11 @@ function syncAutostartRuntime(bundleDir) {
     "dashboard.css",
     "dashboard-icon.png"
   ];
-  if (!bundleDir || required2.some((name) => !import_node_fs5.default.existsSync(import_node_path7.default.join(bundleDir, name)))) throw new Error("\u7F3A\u5C11\u81EA\u52A8\u542F\u52A8\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
+  if (!bundleDir || required2.some((name) => !import_node_fs5.default.existsSync(import_node_path8.default.join(bundleDir, name)))) throw new Error("\u7F3A\u5C11\u81EA\u52A8\u542F\u52A8\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u540E\u91CD\u8BD5\u3002");
   secureDirectory();
   for (const name of [...required2, "autostart.cjs.LEGAL.txt", "bridge.cjs.LEGAL.txt"]) {
-    const source = import_node_path7.default.join(bundleDir, name);
-    if (import_node_fs5.default.existsSync(source)) atomicWrite(import_node_path7.default.join(runtimeDir, name), import_node_fs5.default.readFileSync(source));
+    const source = import_node_path8.default.join(bundleDir, name);
+    if (import_node_fs5.default.existsSync(source)) atomicWrite(import_node_path8.default.join(runtimeDir, name), import_node_fs5.default.readFileSync(source));
   }
   const saved = readJson("autostart.json", {});
   if (saved.enabled === true && saved.runtimeVersion !== VERSION) writeJson("autostart.json", { ...saved, runtimeVersion: VERSION });
@@ -22799,20 +22840,20 @@ function configureAutostart(enabled, { bundleDir, codexHome } = {}) {
 // src/responses-compat-settings.mjs
 var import_node_fs6 = __toESM(require("node:fs"), 1);
 var import_node_os4 = __toESM(require("node:os"), 1);
-var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_path9 = __toESM(require("node:path"), 1);
 var import_node_child_process6 = require("node:child_process");
 var import_node_util = require("node:util");
-var import_node_crypto7 = require("node:crypto");
-var import_promises3 = require("node:timers/promises");
+var import_node_crypto8 = require("node:crypto");
+var import_promises4 = require("node:timers/promises");
 var import_node_url3 = require("node:url");
 init_storage();
 var execute = (0, import_node_util.promisify)(import_node_child_process6.execFile);
-var directory3 = typeof __dirname === "string" ? __dirname : import_node_path8.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
-var runtime = import_node_path8.default.join(dataDir, "runtime");
+var directory3 = typeof __dirname === "string" ? __dirname : import_node_path9.default.dirname((0, import_node_url3.fileURLToPath)(__filename));
+var runtime = import_node_path9.default.join(dataDir, "runtime");
 var registry2 = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 var registryName = "CodexConnectResponsesCompat";
-var home = () => process.env.CODEX_HOME || import_node_path8.default.join(import_node_os4.default.homedir(), ".codex");
-async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path8.default.join(directory3, "provider-config.py") } = {}) {
+var home = () => process.env.CODEX_HOME || import_node_path9.default.join(import_node_os4.default.homedir(), ".codex");
+async function providerConfig(request, { codexHome = home(), python = process.env.FEISHU_CODEX_PYTHON || "python", script = import_node_path9.default.join(directory3, "provider-config.py") } = {}) {
   return new Promise((resolve, reject) => {
     const child = (0, import_node_child_process6.spawn)(python, ["-I", "-X", "utf8", script], { windowsHide: true, stdio: ["pipe", "pipe", "ignore"] });
     let output = "";
@@ -22878,9 +22919,9 @@ function syncResponsesCompatRuntime(bundleDir) {
   secureDirectory();
   import_node_fs6.default.mkdirSync(runtime, { recursive: true, mode: 448 });
   for (const name of ["responses-compat-daemon.cjs", "provider-config.py"]) {
-    const source = import_node_path8.default.join(bundleDir, name);
+    const source = import_node_path9.default.join(bundleDir, name);
     if (!import_node_fs6.default.existsSync(source)) throw new Error("\u7F3A\u5C11 Responses \u517C\u5BB9\u7EC4\u4EF6\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
-    const target = import_node_path8.default.join(runtime, name), temp = target + "." + (0, import_node_crypto7.randomUUID)() + ".tmp";
+    const target = import_node_path9.default.join(runtime, name), temp = target + "." + (0, import_node_crypto8.randomUUID)() + ".tmp";
     try {
       import_node_fs6.default.copyFileSync(source, temp);
       import_node_fs6.default.renameSync(temp, target);
@@ -22894,7 +22935,7 @@ function syncResponsesCompatRuntime(bundleDir) {
 }
 async function lock(name, action) {
   import_node_fs6.default.mkdirSync(dataDir, { recursive: true, mode: 448 });
-  const file = import_node_path8.default.join(dataDir, name);
+  const file = import_node_path9.default.join(dataDir, name);
   let descriptor;
   const deadline = Date.now() + 12e3;
   while (descriptor === void 0) {
@@ -22916,7 +22957,7 @@ async function lock(name, action) {
         continue;
       }
       if (Date.now() >= deadline) throw new Error("\u53E6\u4E00\u4E2A\u517C\u5BB9\u8BBE\u7F6E\u64CD\u4F5C\u5C1A\u672A\u5B8C\u6210\u3002");
-      await (0, import_promises3.setTimeout)(100);
+      await (0, import_promises4.setTimeout)(100);
     }
   }
   try {
@@ -22946,7 +22987,7 @@ async function ensureResponsesCompat() {
     if (!settings.routes?.length) return { enabled: false };
     let status = readJson("responses-compat-status.json", {});
     if (await healthy(settings, status)) return status;
-    const entry = import_node_path8.default.join(runtime, "responses-compat-daemon.cjs");
+    const entry = import_node_path9.default.join(runtime, "responses-compat-daemon.cjs");
     if (!import_node_fs6.default.existsSync(entry)) throw new Error("\u672C\u673A Responses \u517C\u5BB9\u8FD0\u884C\u6587\u4EF6\u4E22\u5931\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
     const child = (0, import_node_child_process6.spawn)(process.execPath, [entry, "--codex-connect-data-dir", dataDir], { windowsHide: true, detached: true, stdio: "ignore", env: process.env });
     await new Promise((resolve, reject) => {
@@ -22955,7 +22996,7 @@ async function ensureResponsesCompat() {
     });
     child.unref();
     for (let index = 0; index < 50; index++) {
-      await (0, import_promises3.setTimeout)(100);
+      await (0, import_promises4.setTimeout)(100);
       status = readJson("responses-compat-status.json", {});
       if (status.pid === child.pid && await healthy(settings, status)) return status;
       if (!alive(child.pid)) break;
@@ -22963,7 +23004,7 @@ async function ensureResponsesCompat() {
     throw new Error("\u672C\u673A Responses \u517C\u5BB9\u670D\u52A1\u672A\u80FD\u5C31\u7EEA\uFF1B\u672A\u4FEE\u6539\u4F9B\u5E94\u5546\u5730\u5740\u3002");
   });
 }
-async function setCompatStartup(enabled, { entry = import_node_path8.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
+async function setCompatStartup(enabled, { entry = import_node_path9.default.join(runtime, "responses-compat-daemon.cjs") } = {}) {
   if (process.platform !== "win32") throw new Error("\u672C\u7248\u517C\u5BB9\u670D\u52A1\u81EA\u52A8\u542F\u52A8\u4EC5\u652F\u6301 Windows\u3002");
   if (enabled) await execute("reg.exe", ["add", registry2, "/v", registryName, "/t", "REG_SZ", "/d", `"${process.execPath}" "${entry}" --codex-connect-data-dir "${dataDir}"`, "/f"], { windowsHide: true });
   else await execute("reg.exe", ["delete", registry2, "/v", registryName, "/f"], { windowsHide: true }).catch(() => {
@@ -22981,7 +23022,7 @@ async function configureResponsesCompat({ providerId, enabled }, {
     const config3 = configOverride || ((request) => providerConfig(request, { codexHome: existing?.codexHome || codexHome || home() }));
     const catalog = await config3({ action: "list" }), provider = catalog.providers.find((p) => p.id === providerId);
     if (!provider) throw new Error("\u672A\u627E\u5230\u8FD9\u4E2A\u5DF2\u914D\u7F6E\u7684\u4F9B\u5E94\u5546\u3002");
-    const backup = () => import_node_path8.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto7.randomUUID)()}.toml`);
+    const backup = () => import_node_path9.default.join(dataDir, "provider-backups", `${Date.now()}-${(0, import_node_crypto8.randomUUID)()}.toml`);
     if (existing && provider.baseUrl === existing.baseUrl) await config3({ action: "update", providerId, expected: existing.baseUrl, replacement: existing.originalBaseUrl, backupPath: backup() });
     const next = {
       ...previous,
@@ -23050,11 +23091,11 @@ function connectionSettings(enabled) {
 }
 
 // src/server.mjs
-var import_promises4 = require("node:timers/promises");
+var import_promises5 = require("node:timers/promises");
 function context(extra) {
   return desktopContext(extra);
 }
-var icons = ["light", "dark"].map((theme) => ({ src: "data:image/png;base64," + import_node_fs7.default.readFileSync(import_node_path9.default.join(__dirname, theme === "dark" ? "entrypoint-icon-dark.png" : "entrypoint-icon.png")).toString("base64"), mimeType: "image/png", sizes: ["128x128"], theme }));
+var icons = ["light", "dark"].map((theme) => ({ src: "data:image/png;base64," + import_node_fs7.default.readFileSync(import_node_path10.default.join(__dirname, theme === "dark" ? "entrypoint-icon-dark.png" : "entrypoint-icon.png")).toString("base64"), mimeType: "image/png", sizes: ["128x128"], theme }));
 var tools = [
   { name: "open_settings", title: "Codex \u8FDE\u63A5", icons, description: "\u5728 Codex \u5185\u6253\u5F00\u901A\u9053\u914D\u7F6E\u9762\u677F\u3002\u7BA1\u7406\u98DE\u4E66\u3001\u5FAE\u4FE1\u3001\u591A\u4E2A\u673A\u5668\u4EBA\u3001\u56FA\u5B9A\u4F1A\u8BDD\u7ED1\u5B9A\u4E0E\u8D26\u53F7\u6388\u6743\uFF0C\u65E0\u9700\u6D4F\u89C8\u5668\u7F51\u5740\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "global" }] } } },
   { name: "open_thread_settings", title: "\u901A\u9053\u914D\u7F6E", icons, description: "\u5728\u5F53\u524D\u804A\u5929\u65C1\u6253\u5F00\u98DE\u4E66\u3001\u5FAE\u4FE1\u4E0E\u673A\u5668\u4EBA\u914D\u7F6E\u9762\u677F\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: SETTINGS_URI }, "openai/ui": { entrypoints: [{ type: "thread" }] } } },
@@ -23076,7 +23117,7 @@ var tools = [
   { name: "stop_bridge", description: "\u505C\u6B62\u6240\u6709\u804A\u5929\u901A\u9053\u7684\u6865\u63A5\u670D\u52A1\u3002\u4E0D\u4F1A\u505C\u6B62\u4EFB\u4F55 Codex \u4F1A\u8BDD\u3002", inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: false } }
 ];
 async function startBridge2(extra) {
-  return ensureBridge(context(extra), { entryPath: import_node_path9.default.join(__dirname, "bridge.cjs") });
+  return ensureBridge(context(extra), { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs") });
 }
 async function managementService(extra) {
   syncAutostartRuntime(__dirname);
@@ -23086,12 +23127,12 @@ async function managementService(extra) {
   } catch {
     current = {};
   }
-  return ensureBridge(current, { entryPath: import_node_path9.default.join(__dirname, "bridge.cjs"), management: true });
+  return ensureBridge(current, { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), management: true });
 }
 async function autoConnect(extra) {
   if (readJson("autostart.json", {}).enabled !== true) return;
   try {
-    const result = await ensureBridge(context(extra), { entryPath: import_node_path9.default.join(__dirname, "bridge.cjs"), automatic: true });
+    const result = await ensureBridge(context(extra), { entryPath: import_node_path10.default.join(__dirname, "bridge.cjs"), automatic: true });
     writeJson("autostart-status.json", { state: result.skipped || "started", checkedAt: Date.now() });
   } catch {
     writeJson("autostart-status.json", { state: "waiting_desktop", checkedAt: Date.now() });
@@ -23104,7 +23145,7 @@ async function settingsReady(extra) {
   for (let i = 0; i < 100; i++) {
     const saved2 = readJson("dashboard.json", {});
     if (saved2.pid === started.pid && saved2.port) return;
-    await (0, import_promises4.setTimeout)(100);
+    await (0, import_promises5.setTimeout)(100);
   }
   throw new Error("\u914D\u7F6E\u670D\u52A1\u6B63\u5728\u542F\u52A8\uFF0C\u8BF7\u7A0D\u540E\u91CD\u65B0\u6253\u5F00\u9762\u677F");
 }
@@ -23116,7 +23157,7 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   return { contents: [{
     uri: SETTINGS_URI,
     mimeType: "text/html;profile=mcp-app",
-    text: import_node_fs7.default.readFileSync(import_node_path9.default.join(__dirname, "settings-panel.html"), "utf8"),
+    text: import_node_fs7.default.readFileSync(import_node_path10.default.join(__dirname, "settings-panel.html"), "utf8"),
     _meta: { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } }, "openai/ui": { availableDisplayModes: ["inline", "fullscreen"], preferredDisplayMode: "fullscreen" } }
   }] };
 });
@@ -23186,7 +23227,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           bots: feishuBots().map(publicBot),
           responsesCompat: responsesCompatStatus(),
           autostart: { ...autostartStatus(), lastAttempt: readJson("autostart-status.json", {}) },
-          limitations: ["\u65E0\u6CD5\u505C\u6B62\u684C\u9762\u56DE\u590D\u6216\u4EE3\u70B9\u5BA1\u6279", "\u4EC5\u8F6C\u53D1\u6587\u5B57", "\u684C\u9762 App \u9700\u8981\u4FDD\u6301\u8FD0\u884C", "\u672C\u673A\u684C\u9762\u5DE5\u5177\u63A5\u53E3\u53EF\u80FD\u968F\u7248\u672C\u6539\u53D8"]
+          limitations: ["\u65E0\u6CD5\u505C\u6B62\u684C\u9762\u56DE\u590D\u6216\u4EE3\u70B9\u5BA1\u6279", "\u98DE\u4E66\u672C\u673A\u4F1A\u8BDD\u652F\u6301\u6587\u5B57\u548C\u56FE\u7247\uFF1B\u5FAE\u4FE1\u4EC5\u6587\u5B57", "\u684C\u9762 App \u9700\u8981\u4FDD\u6301\u8FD0\u884C", "\u672C\u673A\u684C\u9762\u5DE5\u5177\u63A5\u53E3\u53EF\u80FD\u968F\u7248\u672C\u6539\u53D8"]
         };
         break;
       }
@@ -23204,7 +23245,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       case "create_pairing_code": {
         secureDirectory();
         const settings = config2();
-        settings.pairing = { code: (0, import_node_crypto8.randomBytes)(12).toString("hex"), expiresAt: Date.now() + 10 * 60 * 1e3 };
+        settings.pairing = { code: (0, import_node_crypto9.randomBytes)(12).toString("hex"), expiresAt: Date.now() + 10 * 60 * 1e3 };
         writeJson("config.json", settings);
         result = { pairCommand: `/pair ${settings.pairing.code}`, expiresAt: settings.pairing.expiresAt };
         break;

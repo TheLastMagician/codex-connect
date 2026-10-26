@@ -1,7 +1,7 @@
 import {Router,threadSnapshot,fingerprint} from './router.mjs';
 import {randomUUID} from 'node:crypto';
 import {targetLeases} from './target-leases.mjs';
-import {receiptEvidence} from './receipt-evidence.mjs';
+import {receiptEvidence,receiptCandidates} from './receipt-evidence.mjs';
 
 const terminal=turn=>['completed','failed','interrupted'].includes(turn?.status);
 const statusOf=thread=>typeof thread?.status==='string'?thread.status:thread?.status?.type;
@@ -11,8 +11,8 @@ const inputsOf=turn=>(turn?.items||[]).filter(item=>item.type==='userMessage').m
   Array.isArray(item.content)?item.content.filter(part=>part.type==='text').map(part=>part.text).join('\n'):item.text||'');
 
 export class FixedChatRouter extends Router {
-  constructor({thread,isActive=()=>true,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot,...options}) {
-    super(options);Object.assign(this,{thread:{...thread},isActive,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot});
+  constructor({thread,isActive=()=>true,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot,prepareInput,...options}) {
+    super(options);Object.assign(this,{thread:{...thread},isActive,matchTurn,beforeDispatch,onAccepted,onSendError,deliverReply,readSnapshot,prepareInput});
     this.state.fixedQueue ||= {pending:[],active:null};
     this.state.fixedQueue.review ||= [];
     this.state.fixedQueue.deliveries ||= [];
@@ -156,6 +156,10 @@ export class FixedChatRouter extends Router {
         !(turn.items||[]).some(item=>item.type==='userMessage' && item.id===active.clientUserMessageId))return;
       return turn;
     }
+    if(active.evidence?.images?.length) {
+      const matches=receiptCandidates(turns,{...active,createdAt:active.sentAt});
+      return matches.turns.length===1?matches.turns[0]:undefined;
+    }
     return turns.find(turn=>(active.clientUserMessageId && (turn.items||[]).some(item=>item.type==='userMessage' && item.id===active.clientUserMessageId)) ||
       (turn.id!==active.baselineTurnId && !active.baselineTurnIds?.includes(turn.id) &&
       (inputsOf(turn).includes(active.message.text) || (active.phase==='waiting' && !inputsOf(turn).length))));
@@ -252,30 +256,41 @@ export class FixedChatRouter extends Router {
       baselineAssistantMessageId:threadSnapshot(result).latestAssistantMessage?.id,baselineTurnIds:(result.turns||[]).map(turn=>turn.id)};
     queue.pending.shift();queue.active=active;delete queue.blockedReason;this.saveState();
     try {
-      const receipt=await this.desktop.call('send_message_to_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),prompt:message.text,clientUserMessageId:active.clientUserMessageId,...message.modelArgs},
+      let images;
+      if(message.images?.length) {
+        if(!this.prepareInput)throw Object.assign(new Error('此通道尚未支持图片输入，图片和文字均未发送。'),{notSent:true,code:'IMAGE_INPUT_ERROR'});
+        images=await this.prepareInput(message,this.thread);
+        if(!Array.isArray(images) || images.length!==message.images.length)throw Object.assign(new Error('图片附件尚未准备完整，图片和文字均未发送。'),{notSent:true,code:'IMAGE_INPUT_ERROR'});
+        if(!this.live() || !this.authorized(message.openId))throw Object.assign(new Error('通道授权已撤销'),{notSent:true});
+      }
+      const receipt=await this.desktop.call('send_message_to_thread',{threadId:this.thread.id,...(this.thread.hostId?{hostId:this.thread.hostId}:{}),prompt:message.text,clientUserMessageId:active.clientUserMessageId,...message.modelArgs,...(images?.length?{images}:{})},
         {beforeSend:()=>{if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');},
           beforeActivate:()=>{
             if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');
             if(queue.autoOpenAttempted)return false;
             queue.autoOpenAttempted=true;this.saveState();return true;
           },
-          beforeSubmit:async()=>{
+          beforeSubmit:async({imageEvidence}={})=>{
             const fresh=await this.read();
             if(!this.live() || !this.authorized(message.openId))throw new Error('通道授权已撤销');
             if(!idle(fresh))throw Object.assign(new Error('会话正在执行，消息尚未发送。'),{code:'THREAD_BUSY'});
             active.baselineTurnId=fresh.turns?.[0]?.id;
             active.baselineAssistantMessageId=threadSnapshot(fresh).latestAssistantMessage?.id;
             active.baselineTurnIds=(fresh.turns||[]).map(turn=>turn.id);this.saveState();
-            active.phase='sending';active.submittedAt=this.now();active.evidence=receiptEvidence(message.text,fresh.turns||[]);this.saveState();
+            active.phase='sending';active.submittedAt=this.now();active.evidence=receiptEvidence(message.text,fresh.turns||[],imageEvidence);this.saveState();
           }});
       await this.accepted(active,receipt?.turnId);
     }catch(error) {
       this.onSendError?.(error,message);
       if(error.notSent) {
+        if(error.code==='IMAGE_INPUT_ERROR' && error.retryable===false) {
+          queue.active=null;queue.rejectedInputs=[...(queue.rejectedInputs||[]),{message,at:this.now(),reason:'image'}].slice(-20);
+          delete queue.blockedReason;this.saveState();await this.notify(message,error.message+' 请调整后重新发送。');return;
+        }
         queue.active=null;queue.pending.unshift(message);this.saveState();
-        await this.waitingNotice(message,error.code==='THREAD_BUSY'
+        await this.waitingNotice(message,error.code==='IMAGE_INPUT_ERROR'?error.message:error.code==='THREAD_BUSY'
           ?'已排队，会话正在处理前面的任务；结束后会自动处理你的问题。'
-          :'已排队，暂时无法连接目标会话；连接恢复后会自动处理。',error.code==='THREAD_BUSY'?'busy':'connection');
+          :'已排队，暂时无法连接目标会话；连接恢复后会自动处理。',error.code==='IMAGE_INPUT_ERROR'?'image':error.code==='THREAD_BUSY'?'busy':'connection');
       }else {
         active.phase='uncertain';active.uncertainSince=this.now();this.saveState();
         // The desktop's start-turn ACK can time out while the actual turn is

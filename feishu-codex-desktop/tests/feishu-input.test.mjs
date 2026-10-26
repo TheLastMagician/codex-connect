@@ -48,5 +48,23 @@ test('invalid, oversized and nontext payloads cannot become tasks; media keys ne
   for(const content of [{content:[[{tag:'img',image_key:'private-key'}]]},{content:[[{tag:'unknown',text:'must not run'}]]},{content:[{}]},{content:[[{tag:'text',text:'x'.repeat(12001)}]]}])assert.equal(parseMessage(event(content)),null);
   const raw=event({text:'not a transcription',file_key:'private'});raw.message.message_type='audio';assert.equal(parseMessage(raw),null);
   raw.message.message_type='interactive';assert.equal(parseMessage(raw),null);
-  assert.equal(feishuText({message_type:'post',content:{content:[[{tag:'text',text:'文字'}, {tag:'img',image_key:'secret'}]]}}),'文字[图片附件未传入 Codex]');
+  assert.equal(feishuText({message_type:'post',content:{content:[[{tag:'text',text:'文字'}, {tag:'img',image_key:'secret'}]]}}),undefined);
+});
+
+test('image posts preserve original text and image order without a missing-attachment placeholder',()=>{
+  const raw=event({content:[[{tag:'img',image_key:'img_one'}],[{tag:'text',text:'看看这个订单，为什么为空？'},{tag:'img',image_key:'img_two'}]]});
+  const parsed=parseMessage(raw);assert.equal(parsed.text,'看看这个订单，为什么为空？');
+  assert.deepEqual(parsed.images,[{key:'img_one'},{key:'img_two'}]);assert.ok(!parsed.text.includes('未传入'));
+  raw.message.content_v2=JSON.stringify({content:[[{tag:'img',image_key:'img_modern'},{tag:'text',text:'新版'}]]});
+  assert.deepEqual(parseMessage(raw).images,[{key:'img_modern'}]);
+});
+
+test('private image-only messages work while group image posts still require a genuine bot mention',()=>{
+  const raw=event({image_key:'img_only'});raw.message.message_type='image';
+  assert.equal(parseMessage(raw).text,'[图片]');assert.deepEqual(parseMessage(raw).images,[{key:'img_only'}]);
+  raw.message.chat_type='group';assert.equal(parseMessage(raw,{botOpenId:'ou_bot'}),null);
+  raw.message.message_type='post';raw.message.mentions=[{key:'@_user_1',id:{open_id:'ou_bot'}}];
+  raw.message.content=JSON.stringify({content:[[{tag:'img',image_key:'img_only'},{tag:'at',user_id:'ou_bot'}]]});
+  const parsed=parseMessage(raw,{botOpenId:'ou_bot'});assert.equal(parsed.text,'[图片]');assert.equal(parsed.mentionOnly,undefined);
+  raw.message.mentions=[];assert.equal(parseMessage(raw,{botOpenId:'ou_bot'}),null);
 });

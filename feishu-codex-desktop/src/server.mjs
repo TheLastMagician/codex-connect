@@ -104,7 +104,7 @@ server.setRequestHandler(CallToolRequestSchema,async(request,extra)=>{
           pairingPending:!!(settings.pairing?.expiresAt>Date.now()),cardActionsEnabled:!!settings.cardActionsEnabled,...status,processAlive:!!status.pid && alive(status.pid),
           bots:feishuBots().map(publicBot),
           responsesCompat:responsesCompatStatus(),autostart:{...autostartStatus(),lastAttempt:readJson('autostart-status.json',{})},
-          limitations:['无法停止桌面回复或代点审批','仅转发文字','桌面 App 需要保持运行','本机桌面工具接口可能随版本改变']};break;
+          limitations:['无法停止桌面回复或代点审批','飞书本机会话支持文字和图片；微信仅文字','桌面 App 需要保持运行','本机桌面工具接口可能随版本改变']};break;
       }
       case 'desktop_probe': {
         const desktop=new DesktopClient(context(extra));

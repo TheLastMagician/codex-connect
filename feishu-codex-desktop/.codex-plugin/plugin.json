@@ -5,7 +5,7 @@
   "interface": {
     "displayName": "Codex 连接",
     "shortDescription": "用飞书或微信继续本机 Codex 会话",
-    "longDescription": "通过飞书原生卡片或微信 ClawBot 私聊连接本机 Codex 桌面真实会话，列出项目与会话、继续任务、查看进度并接收回复。微信扫码登录，无需 App ID / Secret；飞书和微信可以同时运行，分别保存发送目标。支持文字对话及飞书图片回复，需要桌面版保持运行；停止任务和执行审批需在桌面处理。",
+    "longDescription": "通过飞书原生卡片或微信 ClawBot 私聊连接本机 Codex 桌面真实会话，列出项目与会话、继续任务、查看进度并接收回复。微信扫码登录，无需 App ID / Secret；飞书和微信可以同时运行，分别保存发送目标。支持飞书文字及图片对话、微信文字对话与飞书图片回复，需要桌面版保持运行；停止任务和执行审批需在桌面处理。",
     "developerName": "Local Workspace",
     "category": "Productivity",
     "capabilities": [
@@ -18,7 +18,7 @@
     "defaultPrompt": "帮我配置并启动飞书 Codex 桌面桥接，先检查真实桌面会话接口"
   },
   "name": "feishu-codex-desktop",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "通过飞书或微信 ClawBot 私聊控制本机 Codex 桌面真实会话，选择项目、继续聊天并接收回复。支持扫码连接微信与飞书同时运行。",
   "author": {
     "name": "Local Workspace"

@@ -5,6 +5,7 @@ import {FixedChatRouter,fixedReply} from '../fixed-router.mjs';
 import {CardActions} from '../card-actions.mjs';
 import {createSender,createCardWriter} from '../outbound.mjs';
 import {createFeishuMedia} from '../feishu-media.mjs';
+import {createInboundImages} from '../feishu-inbound-images.mjs';
 import {fixedReplyCards} from '../fixed-cards.mjs';
 import {readJson,writeJson} from '../storage.mjs';
 import {readLocalThreads} from '../catalog.mjs';
@@ -47,6 +48,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},
   };
   const authorized=openId=>active() && allowsFeishuUser(getSettings(),openId);
   const report=record=>onStatus({lastReplyError:record});
+  const prepareInput=createInboundImages({client,namespace:settings.appId,canRead:authorized,report:record=>onStatus({lastImageInputError:record})});
   const media=createFeishuMedia({client,state,saveState,canSend:authorized,namespace:settings.appId,report});
   const writeCard=createCardWriter({client,state,saveState,canSend:authorized,namespace:settings.appId,report});
   const fullSend=createSender({client,actions,state,saveState,getConfig,canSend:authorized,prepareText:media.prepare,writeCard});
@@ -66,7 +68,7 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},
     }
     media.forget(meta.deliveryId);
   };
-  const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,isAuthorized:authorized,
+  const options={desktop,getLocalThreads:readLocalThreads,getConfig,saveConfig:saveSettings,state,saveState,send,isAuthorized:authorized,prepareInput,
     reportDeliveryFailure:record=>onStatus({lastDeliveryFailure:record})};
   const router=settings.mode==='fixed'?new FixedChatRouter({...options,thread:settings.thread,isActive:active}):new ManagedChatRouter({...options,isActive:active});
   const receive=event=>{

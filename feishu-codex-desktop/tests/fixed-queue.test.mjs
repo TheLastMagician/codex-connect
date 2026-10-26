@@ -84,6 +84,24 @@ test('definitely unsent messages survive connection errors and automatically ret
   delete f.writeError;await f.router.poll();assert.deepEqual(f.writes,['A','A']);await f.complete('a','A');assert.equal(f.answers().length,1);
 });
 
+test('queued image input is prepared only at dispatch and a failed download never submits text alone',async()=>{
+  const f=fixture();let downloads=0;f.router.prepareInput=async(message)=>{downloads++;assert.deepEqual(message.images,[{key:'img_one'}]);throw Object.assign(Error('图片下载失败，已保留'),{code:'IMAGE_INPUT_ERROR',notSent:true});};
+  f.snapshot={thread:{status:{type:'active'}},turns:[turn('busy','local','inProgress')]};
+  await f.accept({...f.message('看图'),images:[{key:'img_one'}]});assert.equal(downloads,0);assert.deepEqual(f.writes,[]);
+  f.snapshot=snapshot(turn('busy','local'));await f.router.poll();assert.equal(downloads,1);assert.deepEqual(f.writes,[]);
+  assert.equal(f.state.fixedQueue.pending[0].images[0].key,'img_one');assert.equal(f.state.fixedQueue.blockedReason,'image');
+  assert.ok(f.sent.some(s=>s.text.includes('图片下载失败')));
+  const calls=[];const original=f.desktop.call;f.desktop.call=async(name,args,options)=>{if(name==='send_message_to_thread')calls.push(args);return original(name,args,options);};
+  f.router.prepareInput=async()=>['prepared-photo.png'];await f.router.poll();assert.deepEqual(calls[0].images,['prepared-photo.png']);assert.deepEqual(f.writes,['看图']);
+});
+
+test('an oversized image is retained as rejected input without blocking later text tasks',async()=>{
+  const f=fixture();f.router.prepareInput=async()=>{throw Object.assign(Error('图片超过大小限制，本条未发送。'),{notSent:true,code:'IMAGE_INPUT_ERROR',retryable:false});};
+  await f.accept({...f.message('看图'),images:[{key:'img_one'}]},f.message('后面的文字'));
+  assert.equal(f.state.fixedQueue.rejectedInputs.length,1);assert.deepEqual(f.writes,[]);
+  await f.router.poll();assert.deepEqual(f.writes,['后面的文字']);
+});
+
 test('an unavailable renderer wakes once per saved batch and submits queued input only after a successful read',async()=>{
   const f=fixture();f.readError=Error('renderer unavailable');let wakes=0;
   f.desktop.recoverForThread=async(thread,options)=>{

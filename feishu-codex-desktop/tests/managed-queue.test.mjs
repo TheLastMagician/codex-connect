@@ -48,6 +48,14 @@ test('management messages wait for actual completion, not an ACK, and return sep
   f.complete();await f.poll();assert.deepEqual(f.answers().map(s=>s.text),['答复 第一条','答复 第二条']);
   assert.ok(!f.sent.some(s=>s.meta.title==='会话加载中'));await f.poll();assert.equal(f.answers().length,2);
 });
+
+test('image posts keep the selected target and cannot execute a management command or drop their attachment',async()=>{
+  const f=fixture();f.select('a');const imageMessage={...f.message('/archive'),images:[{key:'img_one'}]};
+  f.router.prepareInput=async()=>['prepared-photo.png'];
+  assert.equal(f.router.acceptMessage(imageMessage),true);await flush(f);
+  assert.equal(f.writes[0].threadId,'a');assert.equal(f.writes[0].prompt,'/archive');assert.deepEqual(f.writes[0].images,['prepared-photo.png']);
+  assert.equal(Object.values(f.state.taskQueues)[0].fixedQueue.active.message.images[0].key,'img_one');
+});
 test('queued destinations and model overrides survive commands, chat switches and restart',async()=>{
   const f=fixture(),s=f.select('a');s.modelOverrides={'local:a':{model:'model-one',thinking:'high'}};
   await f.deliver('A1');await f.deliver('A2');f.select('b');await f.deliver('B1');

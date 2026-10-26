@@ -72,7 +72,7 @@ var init_desktop_context_store = __esm({
 init_storage();
 
 // src/version.mjs
-var VERSION = "0.9.3";
+var VERSION = "0.9.4";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);
@@ -198,6 +198,9 @@ var import_node_crypto2 = require("node:crypto");
 var import_promises2 = require("node:timers/promises");
 var import_node_url2 = require("node:url");
 init_storage();
+
+// src/image-input.mjs
+var MAX_INPUT_IMAGE_BYTES = 10 * 1024 * 1024;
 
 // src/desktop-input.mjs
 var MAX_FRAME = 8 * 1024 * 1024;

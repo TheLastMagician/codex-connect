@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {receiptEvidence,receiptCandidates,receiptHistoryComplete} from '../src/receipt-evidence.mjs';
 
 const createdAt=1792293269485;
@@ -13,6 +13,18 @@ test('canonical history with a different user item ID is correlated by new turn,
   assert.deepEqual(receiptCandidates([turn],w),{method:'evidence',turns:[turn]});
   assert.doesNotMatch(JSON.stringify(w.evidence),/普通消息|保留符号/);
   assert.notEqual(w.evidence.promptDigest,watch().evidence.promptDigest);
+});
+
+test('image receipts require the matching attachment as well as text and never match a text-only or different image turn',()=>{
+  const bytes=Buffer.from('image bytes'),file='C:/private/photo.png';
+  const w=watch();w.evidence=receiptEvidence('普通消息，保留符号。',[],[{path:file,digest:createHash('sha256').update(bytes).digest('hex')}]);
+  const local=canonical();local.items[0].content.push({type:'localImage',path:file});
+  assert.deepEqual(receiptCandidates([local],w).turns,[local]);
+  const data=canonical();data.items[0].content.push({type:'image',url:'data:image/png;base64,'+bytes.toString('base64')});
+  assert.deepEqual(receiptCandidates([data],w).turns,[data]);
+  assert.equal(receiptCandidates([canonical()],w).turns.length,0);
+  data.items[0].content[1].url='data:image/png;base64,'+Buffer.from('different image').toString('base64');
+  assert.equal(receiptCandidates([data],w).turns.length,0);assert.ok(!JSON.stringify(w.evidence).includes(file));
 });
 test('identical historical input, missing timestamps, future work, provisional turns and partial input are not proof',()=>{
   const old=canonical(),w=watch([old]);

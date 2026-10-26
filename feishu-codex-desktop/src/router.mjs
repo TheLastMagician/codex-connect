@@ -6,7 +6,7 @@ import {CARD_TITLES} from './cards.mjs';
 import {EFFORTS,threadKey,modelSettings,modelSummary,taskModelArgs,loadModels} from './models.mjs';
 import {conversationMessages,renderConversation} from './conversation.mjs';
 import {nativeTurnId,receiptEvidence,receiptCandidates,receiptHistoryComplete} from './receipt-evidence.mjs';
-import {feishuText} from './feishu-input.mjs';
+import {feishuInput} from './feishu-input.mjs';
 
 export const HELP = `Codex 桌面会话
 继续已有会话：
@@ -32,7 +32,7 @@ export const HELP = `Codex 桌面会话
 /effort high — 设置推理强度；/effort default 恢复沿用桌面设置
 
 默认沿用会话的模型、项目和上下文；模型覆盖按通道、账号和会话保存。桌面切换窗口不改变通道发送目标。
-当前只支持文字。停止任务和执行审批需要在桌面处理。`;
+飞书支持图片与图文消息；微信目前仅支持文字。停止任务和执行审批需要在桌面处理。`;
 
 export function parseMessage(event,{botOpenId,appId}={}) {
   const message = event?.message;
@@ -40,8 +40,8 @@ export function parseMessage(event,{botOpenId,appId}={}) {
   if(!openId || event.sender.sender_type !== 'user' || !['p2p','group'].includes(message?.chat_type)) return null;
   if(appId && event.app_id && event.app_id!==appId)return null;
   if(!message.message_id || !message.chat_id || !message.create_time) return null;
-  let text=feishuText(message);
-  if(typeof text!=='string' || !text.trim() || text.length>12000) return null;
+  const input=feishuInput(message);let text=input?.text;
+  if(typeof text!=='string' || (!text.trim() && !input.images.length) || text.length>12000) return null;
   const group=message.chat_type==='group';
   if(group) {
     if(!botOpenId || !Array.isArray(message.mentions))return null;
@@ -53,8 +53,9 @@ export function parseMessage(event,{botOpenId,appId}={}) {
     for(const mention of mentions.filter(m=>m.id?.open_id!==botOpenId && typeof m.name==='string'))
       text=text.replace(new RegExp(mention.key+'(?![A-Za-z0-9_])','g'),()=>'@'+mention.name);
   }
-  return {openId,chatId:message.chat_id,id:message.message_id,text:text.trim(),timestamp:Number(message.create_time),
-    ...(group?{chatType:'group',...(!text.trim()?{mentionOnly:true}:{})}:{})};
+  return {openId,chatId:message.chat_id,id:message.message_id,text:text.trim()||(input.images.length?'[图片]':''),timestamp:Number(message.create_time),
+    ...(input.images.length?{images:input.images}:{}),
+    ...(group?{chatType:'group',...(!text.trim() && !input.images.length?{mentionOnly:true}:{})}:{})};
 }
 export function fingerprint(message) {return createHash('sha256').update(message.id).digest('hex');}
 export function equalSecret(left,right) {
@@ -281,6 +282,11 @@ export class Router {
   async handle(message) {
     const session=this.session(message);
     const authorize=()=>{if(!this.authorized(message.openId))throw new Error('通道授权已撤销，未执行该操作');};
+    if(message.images?.length) {
+      this.selected(session);
+      if(!this.enqueueTask)throw new Error('此通道尚未支持图片输入，图片和文字均未发送。');
+      await this.enqueueTask(message,session,message.text);return;
+    }
     const choice=message.text.match(/^选择\s*(\d+)$/);const page=message.text.match(/^第?\s*(\d+)\s*页$/);
     if(choice)message={...message,text:`/use ${choice[1]}`};
     else if(page)message={...message,text:`/page ${page[1]}`};

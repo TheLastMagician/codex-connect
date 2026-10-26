@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
+import {localImageInputs} from './image-input.mjs';
 
 const MAX_FRAME=8*1024*1024;
 const VERSIONS={initialize:0,'thread-owner-discovery':1,'thread-follower-start-turn':2};
@@ -130,7 +131,7 @@ export class DesktopInput {
     try {return await loading;}
     finally {if(this.loading.get(key)===loading)this.loading.delete(key);}
   }
-  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId},beforeSend,{beforeSubmit,beforeActivate}={}) {
+  async send({threadId,hostId='local',prompt,model,thinking,clientUserMessageId,images},beforeSend,{beforeSubmit,beforeActivate}={}) {
     if(typeof threadId!=='string' || !threadId.trim() || typeof prompt!=='string' || !prompt.trim() || prompt.length>12000)
       throw inputError('会话或消息无效，消息尚未发送。',true);
     if(clientUserMessageId!==undefined && (typeof clientUserMessageId!=='string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(clientUserMessageId)))
@@ -142,12 +143,14 @@ export class DesktopInput {
     // opening the target; navigation alone is not proof that it has loaded.
     authorize();
     if(!owner)owner=await this.loadOwner(threadId,hostId,authorize,beforeActivate);
+    if(images?.length && hostId!=='local')throw Object.assign(inputError('图片目前仅支持本机会话，消息尚未发送。',true),{code:'IMAGE_INPUT_ERROR'});
+    const prepared=await localImageInputs(images);
     // Loading can take seconds. Recheck queue readiness after it completes,
     // before any native write, so a newly started desktop task is not steered.
-    try {await beforeSubmit?.();}
+    try {await beforeSubmit?.({imageEvidence:prepared.evidence});}
     catch(error) {throw Object.assign(inputError(error.message||'发送前检查失败，消息尚未发送。',true),{code:error.code});}
     authorize();
-    const request={threadId,clientUserMessageId:clientUserMessageId||randomUUID(),input:[{type:'text',text:prompt,text_elements:[]}],
+    const request={threadId,clientUserMessageId:clientUserMessageId||randomUUID(),input:[{type:'text',text:prompt,text_elements:[]},...prepared.input],
       ...(model?{model}:{}),...(thinking?{effort:thinking}:{})};
     // Let the desktop choose the input route for its actual host. Forcing
     // user-message admission selects a cloud-only extension on local/SSH hosts.
