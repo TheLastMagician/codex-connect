@@ -20,9 +20,9 @@ description: 打开本机供应商与模型面板，选择已配置的 API 供�
 
 原生目录中第三方模型使用保守的 32768 上下文上限，思考强度选项供用户明确请求，实际支持由供应商决定；未验证工具调用、长上下文或图像能力。不要声称已通过这些验证。
 
-用户明确要求修改已有会话模型时，先确定用户提供或选择的会话，必要时调用 `list_existing_threads` 分页读取列表；不要猜测目标会话。调用 `modify_existing_thread`，threadRef 使用该会话 ID 或 codex://threads/ 链接；默认 providerId=custom、model=qwen3.8-27b、effort=xhigh。插件先核对持久化供应商，再打开原会话并修改、读回设置。供应商不一致时不得强行覆盖；needs_confirmation 不等于成功，可对同一会话重试，不另建会话。也可在原生插件设置填入会话链接，点击“修改已有会话模型”。
+用户明确要求修改已有会话模型时，先确定用户提供或选择的会话，必要时调用 `list_existing_threads` 分页读取列表；不要猜测目标。调用 `modify_existing_thread`，threadRef 使用原会话 ID 或 codex://threads/ 链接；默认目标 providerId=custom、model=qwen3.8-27b、effort=xhigh。同一供应商下默认只修改模型与强度。只有用户明确要求跨供应商切换时才传 switchProvider=true；原生设置和面板的“修改供应商与模型”按钮也会明确请求此能力。
 
-修改已有会话仅设置同一供应商下的模型和强度，保留上下文，不发送消息，不修改定时任务或全局模型目录。不要承诺修复调度器覆盖模型、跨供应商切换或实际推理能力，不修改认证文件，不全局切换默认供应商，不自动重新启动 Codex。
+跨供应商切换返回 provider_change_queued，只证明本机队列已保存，providerSaved=false，不能声称已经生效。后台等待原会话释放写锁后用官方接口保存并在新进程核对，完成后自动打开原会话。若会话已加载，提示用户完全退出 Codex，等待后台保存并打开原会话；不要主动关闭 Codex。调用 list_provider_changes 核对 waiting/applying/saved/failed/cancelled，只有用户要求取消才调用 cancel_provider_change；saved 不证明普通消息请求成功。后台启动失败时先重试启动，不要叫用户退出后空等。不发送探测消息，不创建替代会话，不手改历史、认证、全局供应商或模型目录，不改定时任务。
 
 修改已有会话后检查 `requiresContextReview`、`history` 和 `note`。`verificationScope=settings_only` 始终不证明实际普通消息请求成功。历史模型与目标模型不同时，Codex 可能先用旧模型进行 ModelDownshift 压缩并失败；提示用户在原会话执行 `/compact`，等待当前模型压缩完成，再发送消息。不要自动压缩、删除或篡改历史，也不要擅自发送探测消息。历史记录不可读时必须说明核对范围有限。
 

@@ -6,7 +6,7 @@ import {randomBytes,timingSafeEqual} from 'node:crypto';
 import {Server} from '@modelcontextprotocol/sdk/server/index.js';
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js';
 import {ListToolsRequestSchema,CallToolRequestSchema,ListResourcesRequestSchema,ReadResourceRequestSchema} from '@modelcontextprotocol/sdk/types.js';
-import {LauncherService} from './service.mjs';
+import {LauncherService,existingThreadId} from './service.mjs';
 import {readConfig,home} from './providers.mjs';
 import {prepareCatalog,compatibleWithInstalledCli} from './catalog.mjs';
 import {withAppServer} from './app-server.mjs';
@@ -23,10 +23,12 @@ const icons=[...['light','dark'].map(theme=>({
 const service=new LauncherService();
 const settings=new NativeSettings(service);
 const schedules=new ScheduleStore(),scheduler=new SchedulerRuntime(path.join(directory,'scheduler.cjs'));
-try{if(schedules.jobs().some(j=>j.status==='ACTIVE'))scheduler.ensure().catch(()=>{});}catch{/* Schedule errors must not disable model tools. */}
+try{if(schedules.jobs().some(j=>j.status==='ACTIVE')||service.providerChanges.list().some(j=>['waiting','applying'].includes(j.status)))scheduler.ensure().catch(()=>{});}catch{/* State errors must not disable model tools. */}
 const URI='ui://codex-model-switcher/panel.html';
 const empty={type:'object',properties:{},additionalProperties:false};
 const tools=[
+  {name:'list_provider_changes',description:'读取本机原会话供应商切换的等待、保存和失败状态。saved 证明新进程已核对配置，不证明旧桌面会话已释放或普通消息成功。',inputSchema:empty,annotations:{readOnlyHint:true}},
+  {name:'cancel_provider_change',description:'用户明确要求后取消指定会话尚在等待中的供应商切换。',inputSchema:{type:'object',properties:{threadRef:{type:'string'}},required:['threadRef'],additionalProperties:false},annotations:{readOnlyHint:false}},
   {name:'open_schedule_panel',title:'定时任务管理',description:'打开插件定时任务管理页，为每个任务选择供应商、模型和思考强度。默认填入千问，支持其他已配置供应商。',inputSchema:empty,icons,annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:URI}}},
   {name:'list_model_schedules',description:'读取本机插件定时任务、下次执行时间和最近运行记录。',inputSchema:empty,annotations:{readOnlyHint:true}},
   {name:'save_model_schedule',description:'用户明确要求后，在本机创建或更新独立每天或每周定时任务，向指定已有会话发送任务提示词。默认 custom / qwen3.8-27b / xhigh，按北京时间执行。启用时安装隐藏后台服务和当前用户登录自启动；不修改原生定时任务或模型目录。相同任务编辑和重试必须复用 ID。',inputSchema:{type:'object',properties:{id:{type:'string'},name:{type:'string'},threadRef:{type:'string'},prompt:{type:'string'},time:{type:'string',description:'北京时间 HH:mm'},frequency:{type:'string',enum:['daily','weekly'],description:'新任务默认每天；编辑时省略则保留原频率'},weekdays:{type:'array',items:{type:'integer',minimum:1,maximum:7},minItems:1,maxItems:7,uniqueItems:true,description:'每周执行星期，1=周一，7=周日；每周计划必须选择至少一天'},status:{type:'string',enum:['ACTIVE','PAUSED']},providerId:{type:'string',default:'custom'},model:{type:'string',default:'qwen3.8-27b'},effort:{type:'string',enum:['none','minimal','low','medium','high','xhigh','max','ultra'],default:'xhigh'}},required:['id','name','threadRef','prompt','time','status'],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
@@ -36,9 +38,9 @@ const tools=[
   {name:'read_launcher_settings',description:'读取插件详情页的原生配置控件、当前设置和操作按钮。',inputSchema:empty,outputSchema:SETTINGS_READ_OUTPUT,annotations:{readOnlyHint:true}},
   {name:'update_launcher_settings',description:'保存插件原生配置页中改变的字段；不修改 Codex 默认配置，不创建会话。',inputSchema:SETTINGS_UPDATE_INPUT,outputSchema:{type:'object',properties:{values:{type:'object'}},required:['values']},annotations:{readOnlyHint:false}},
   {name:'launch_from_settings',title:'按以上配置新建会话',description:'用户点击原生设置页的新建按钮或明确要求时，使用已保存的插件设置新建并打开会话；不发送消息。',inputSchema:empty,annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false}},
-  {name:'modify_from_settings',title:'修改已有会话模型',description:'用户点击修改按钮或明确要求时，按插件设置修改指定已有会话的模型和强度。默认 custom / qwen3.8-27b / xhigh；保留上下文，不发送消息、不改供应商或定时任务。',inputSchema:empty,annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
+  {name:'modify_from_settings',title:'修改已有会话模型',description:'用户点击修改按钮或明确要求时，按插件设置修改指定已有会话的供应商、模型和强度。保留原会话 ID 和历史；已加载的桌面会话可能需要用户重新打开 Codex 后生效。',inputSchema:empty,annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
   {name:'list_existing_threads',description:'分页读取指定供应商的本机已有会话，供用户选择。',inputSchema:{type:'object',properties:{providerId:{type:'string',default:'custom'},cursor:{type:'string'}},additionalProperties:false},annotations:{readOnlyHint:true}},
-  {name:'modify_existing_thread',title:'修改已有会话模型',description:'用户明确要求后修改指定会话的模型和强度，默认 custom / qwen3.8-27b / xhigh。先核对持久化供应商，再等待桌面设置读回；不新建会话、不发送消息、不切换供应商、不改定时任务。',inputSchema:{type:'object',properties:{threadRef:{type:'string',description:'用户选择或提供的会话 ID / codex://threads/ 链接'},providerId:{type:'string',default:'custom'},model:{type:'string',default:'qwen3.8-27b'},effort:{type:'string',enum:['none','minimal','low','medium','high','xhigh','max','ultra'],default:'xhigh'}},required:['threadRef'],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
+  {name:'modify_existing_thread',title:'修改已有会话模型',description:'用户明确要求后修改原会话的模型和强度。明确要求跨供应商切换时传 switchProvider=true，后台等待原会话释放写锁后用官方恢复接口保存并自动打开原会话。提示用户完全退出 Codex，插件不会主动关闭应用；区分 provider_change_queued、队列 saved 与 settings_verified。保留 ID、历史及项目，不发送消息或改定时任务。',inputSchema:{type:'object',properties:{threadRef:{type:'string',description:'用户选择或提供的会话 ID / codex://threads/ 链接'},switchProvider:{type:'boolean',default:false,description:'仅用户明确要求切换供应商时设为 true'},providerId:{type:'string',default:'custom'},model:{type:'string',default:'qwen3.8-27b'},effort:{type:'string',enum:['none','minimal','low','medium','high','xhigh','max','ultra'],default:'xhigh'}},required:['threadRef'],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true}},
   {name:'open_model_panel',title:'供应商与模型',description:'打开供应商与模型面板。选择已配置的供应商和模型，新建真实 Codex 桌面会话。',inputSchema:empty,icons,
     annotations:{readOnlyHint:true},_meta:{ui:{resourceUri:URI},'openai/ui':{entrypoints:[{type:'global'}]}}},
   {name:'open_thread_model_panel',title:'供应商与模型',description:'在当前会话旁打开面板，新建会话或修改已有会话模型。',inputSchema:empty,icons,
@@ -64,6 +66,8 @@ async function nativeModels(models) {
 }
 async function action(name,args={},extra={}) {
   switch(name) {
+    case 'list_provider_changes':return {changes:service.providerChanges.list(),service:await scheduler.status()};
+    case 'cancel_provider_change':return {change:service.providerChanges.cancel(existingThreadId(args.threadRef))};
     case 'open_schedule_panel':return {...await service.catalog(extra),initialMode:'schedule'};
     case 'list_model_schedules':return {jobs:schedules.list(),service:await scheduler.status()};
     case 'save_model_schedule':{const job=await schedules.save(args);let runtime;try{runtime=job.status==='ACTIVE'?await scheduler.ensure():await scheduler.status();}catch(error){runtime={running:false,error:error.message};}return {job,service:runtime};}
@@ -73,9 +77,9 @@ async function action(name,args={},extra={}) {
     case 'read_launcher_settings':return settings.get();
     case 'update_launcher_settings':return settings.update(args.set);
     case 'launch_from_settings':return settings.launch();
-    case 'modify_from_settings':return settings.modify();
+    case 'modify_from_settings':return ensureProviderChange(await settings.modify());
     case 'list_existing_threads':return service.existingThreads(args);
-    case 'modify_existing_thread':return service.modifyExisting(args);
+    case 'modify_existing_thread':return ensureProviderChange(await service.modifyExisting(args));
     case 'open_model_panel':case 'open_thread_model_panel':return service.catalog(extra);
     case 'list_provider_models':return service.models(args.providerId);
     case 'create_provider_thread':return service.create(args);
@@ -84,6 +88,11 @@ async function action(name,args={},extra={}) {
     case 'open_launcher_browser':return {url:browserLink};
     default:throw new Error('不支持的操作。');
   }
+}
+async function ensureProviderChange(result){
+  if(result.status!=='provider_change_queued')return result;
+  try{return {...result,service:await scheduler.ensure()};}
+  catch(error){return {...result,service:{running:false,error:error.message},note:result.note+' 后台尚未启动：'+error.message+'。请先重试启动，再退出 Codex。'};}
 }
 let html=fs.readFileSync(path.join(directory,'panel.html'),'utf8');
 const token=randomBytes(32).toString('hex');
@@ -114,7 +123,7 @@ if(process.argv.includes('--serve')) {
   fs.writeFileSync(path.join(folder,'launcher.json'),JSON.stringify({pid:process.pid,url:browserLink}),{mode:0o600});
   console.error('供应商与模型启动器已在本机运行。');
 }else{
-  const server=new Server({name:'codex-model-switcher',version:'0.4.0',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
+  const server=new Server({name:'codex-model-switcher',version:'0.5.0',icons},{capabilities:{tools:{},resources:{},experimental:{'openai/settings':{readTool:'read_launcher_settings',updateTool:'update_launcher_settings'}}}});
   server.setRequestHandler(ListToolsRequestSchema,async()=>({tools}));
   server.setRequestHandler(ListResourcesRequestSchema,async()=>({resources:[{uri:URI,name:'供应商与模型',mimeType:'text/html;profile=mcp-app'}]}));
   server.setRequestHandler(ReadResourceRequestSchema,async request=>{

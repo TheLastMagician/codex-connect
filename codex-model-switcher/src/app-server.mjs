@@ -37,10 +37,10 @@ export class AppServer {
       let message;try{message=JSON.parse(line);}catch{return;}
       const item=this.pending.get(message.id);if(!item)return;
       clearTimeout(item.timer);this.pending.delete(message.id);
-      if(message.error)item.reject(new Error(`Codex 拒绝了 ${item.method} 请求（${message.error.code}）。`));
+      if(message.error){const error=new Error(`Codex 拒绝了 ${item.method} 请求（${message.error.code}）。`);if(/already has an active writer/.test(message.error.message||''))error.code='THREAD_WRITER_ACTIVE';item.reject(error);}
       else item.resolve(message.result);
     });
-    await this.request('initialize',{clientInfo:{name:'codex_model_switcher',title:'供应商与模型',version:'0.4.0'},capabilities:{experimentalApi:true}});
+    await this.request('initialize',{clientInfo:{name:'codex_model_switcher',title:'供应商与模型',version:'0.5.0'},capabilities:{experimentalApi:true}});
     this.child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'initialized'})+'\n');
     return this;
   }

@@ -23,15 +23,15 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // src/scheduler-worker.mjs
 var import_node_net2 = __toESM(require("node:net"), 1);
-var import_node_fs6 = __toESM(require("node:fs"), 1);
-var import_node_path6 = __toESM(require("node:path"), 1);
-var import_node_crypto5 = require("node:crypto");
+var import_node_fs7 = __toESM(require("node:fs"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
+var import_node_crypto6 = require("node:crypto");
 var import_promises3 = require("node:timers/promises");
 
 // src/schedules.mjs
-var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path4 = __toESM(require("node:path"), 1);
-var import_node_crypto2 = require("node:crypto");
+var import_node_fs5 = __toESM(require("node:fs"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_crypto3 = require("node:crypto");
 
 // src/providers.mjs
 var import_node_fs = __toESM(require("node:fs"), 1);
@@ -837,8 +837,8 @@ function requireSelection(config, providerId, model) {
 }
 
 // src/service.mjs
-var import_node_fs3 = __toESM(require("node:fs"), 1);
-var import_node_child_process2 = require("node:child_process");
+var import_node_fs4 = __toESM(require("node:fs"), 1);
+var import_node_child_process3 = require("node:child_process");
 var import_node_readline2 = require("node:readline");
 
 // src/app-server.mjs
@@ -891,10 +891,13 @@ var AppServer = class {
       if (!item) return;
       clearTimeout(item.timer);
       this.pending.delete(message.id);
-      if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
-      else item.resolve(message.result);
+      if (message.error) {
+        const error = new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`);
+        if (/already has an active writer/.test(message.error.message || "")) error.code = "THREAD_WRITER_ACTIVE";
+        item.reject(error);
+      } else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.4.0" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.5.0" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }
@@ -1073,21 +1076,202 @@ var DesktopReader = class {
   }
 };
 
-// src/service.mjs
+// src/provider-changes.mjs
+var import_node_fs3 = __toESM(require("node:fs"), 1);
+var import_node_path4 = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
+
+// src/provider-switch.mjs
+async function persistProviderSwitch(thread, selection, effort, { rpc = withAppServer } = {}) {
+  const expected = { id: thread.id, provider: thread.modelProvider, cwd: thread.cwd, projectId: thread.projectId };
+  const checkIdentity = (current) => {
+    if (current?.id !== expected.id || current.cwd !== expected.cwd || current.projectId !== expected.projectId) throw new Error("\u4F1A\u8BDD\u8EAB\u4EFD\u3001\u9879\u76EE\u6216\u76EE\u5F55\u5DF2\u53D8\u5316\uFF0C\u672A\u7EE7\u7EED\u5207\u6362\u3002");
+  };
+  await rpc(async (c) => {
+    const current = (await c.request("thread/read", { threadId: thread.id, includeTurns: false })).thread;
+    checkIdentity(current);
+    if (current.modelProvider !== expected.provider) throw new Error("\u4F1A\u8BDD\u4F9B\u5E94\u5546\u5DF2\u88AB\u5176\u4ED6\u64CD\u4F5C\u4FEE\u6539\uFF0C\u8BF7\u5237\u65B0\u540E\u91CD\u8BD5\u3002");
+    const turns = await c.request("thread/turns/list", { threadId: thread.id, limit: 1, itemsView: "notLoaded" });
+    if (current.status?.type === "active" || turns.data?.some((t) => t.status === "inProgress")) throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u7B49\u5F85\u5F53\u524D\u56DE\u590D\u5B8C\u6210\u540E\u518D\u5207\u6362\u4F9B\u5E94\u5546\u3002");
+  });
+  await rpc(async (c) => {
+    const result = await c.request("thread/resume", { threadId: thread.id, ...selection, excludeTurns: true, config: { model_reasoning_effort: effort, ...selection.modelProvider !== "openai" ? { web_search: "disabled" } : {} } });
+    checkIdentity(result.thread);
+    if (result.modelProvider !== selection.modelProvider || result.thread.modelProvider !== selection.modelProvider || result.model !== selection.model) throw new Error("\u5E95\u5C42\u672A\u786E\u8BA4\u65B0\u4F9B\u5E94\u5546\uFF0C\u8BF7\u5173\u95ED\u8BE5\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002");
+    await c.request("thread/settings/update", { threadId: thread.id, model: selection.model, effort, serviceTier: null, collaborationMode: { mode: "default", settings: { model: selection.model, reasoning_effort: effort, developer_instructions: null } } });
+  });
+  const saved = await rpc(async (c) => {
+    const result = await c.request("thread/resume", { threadId: thread.id, excludeTurns: true });
+    checkIdentity(result.thread);
+    if (result.modelProvider !== selection.modelProvider || result.thread.modelProvider !== selection.modelProvider || result.model !== selection.model || result.reasoningEffort !== effort) throw new Error("\u91CD\u65B0\u52A0\u8F7D\u540E\u4F9B\u5E94\u5546\u3001\u6A21\u578B\u6216\u5F3A\u5EA6\u672A\u80FD\u6838\u5BF9\uFF0C\u8BF7\u5BF9\u540C\u4E00\u4F1A\u8BDD\u91CD\u8BD5\u3002");
+    return result.thread;
+  });
+  return saved;
+}
+
+// src/provider-changes.mjs
+var import_node_child_process2 = require("node:child_process");
 var UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+var ProviderChangeStore = class {
+  constructor({ directory = import_node_path4.default.join(home(), "model-switcher", "provider-changes") } = {}) {
+    this.directory = directory;
+  }
+  file(id) {
+    if (!UUID.test(id || "")) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
+    return import_node_path4.default.join(this.directory, id + ".json");
+  }
+  get(id) {
+    try {
+      return JSON.parse(import_node_fs3.default.readFileSync(this.file(id), "utf8"));
+    } catch (e) {
+      if (e.code === "ENOENT") return null;
+      throw e;
+    }
+  }
+  list() {
+    if (!import_node_fs3.default.existsSync(this.directory)) return [];
+    return import_node_fs3.default.readdirSync(this.directory).filter((n) => /^[\da-f-]+\.json$/i.test(n)).map((n) => JSON.parse(import_node_fs3.default.readFileSync(import_node_path4.default.join(this.directory, n), "utf8"))).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+  write(job) {
+    import_node_fs3.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
+    const file = this.file(job.threadId), temp = file + "." + (0, import_node_crypto2.randomUUID)() + ".tmp";
+    import_node_fs3.default.writeFileSync(temp, JSON.stringify({ ...job, updatedAt: Date.now() }), { mode: 384 });
+    import_node_fs3.default.renameSync(temp, file);
+    return this.get(job.threadId);
+  }
+  locked(id, action) {
+    import_node_fs3.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
+    const file = this.file(id) + ".lock";
+    let fd;
+    for (let i = 0; i < 2; i++) {
+      try {
+        fd = import_node_fs3.default.openSync(file, "wx", 384);
+        break;
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+        let stale = false;
+        try {
+          const pid = Number(import_node_fs3.default.readFileSync(file, "utf8"));
+          if (pid > 0) {
+            try {
+              process.kill(pid, 0);
+            } catch (e) {
+              stale = e.code === "ESRCH";
+            }
+          } else stale = Date.now() - import_node_fs3.default.statSync(file).mtimeMs > 3e4;
+        } catch {
+        }
+        if (stale) {
+          try {
+            import_node_fs3.default.unlinkSync(file);
+          } catch {
+          }
+          continue;
+        }
+        const busy = new Error("\u4F9B\u5E94\u5546\u5207\u6362\u8BB0\u5F55\u6B63\u5728\u66F4\u65B0\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+        busy.code = "PROVIDER_QUEUE_BUSY";
+        throw busy;
+      }
+    }
+    if (fd === void 0) {
+      const busy = new Error("\u4F9B\u5E94\u5546\u5207\u6362\u8BB0\u5F55\u6B63\u5728\u66F4\u65B0\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+      busy.code = "PROVIDER_QUEUE_BUSY";
+      throw busy;
+    }
+    try {
+      import_node_fs3.default.writeFileSync(fd, String(process.pid));
+      return action();
+    } finally {
+      import_node_fs3.default.closeSync(fd);
+      import_node_fs3.default.unlinkSync(file);
+    }
+  }
+  transition(id, operationId, statuses, patch) {
+    return this.locked(id, () => {
+      const job = this.get(id);
+      return job?.id === operationId && statuses.includes(job.status) ? this.write({ ...job, ...patch }) : null;
+    });
+  }
+  enqueue(thread, selection, effort) {
+    return this.locked(thread.id, () => {
+      const old = this.get(thread.id);
+      if (old?.status === "applying") throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u5207\u6362\u4F9B\u5E94\u5546\uFF0C\u8BF7\u7B49\u5F85\u540E\u53F0\u5B8C\u6210\u540E\u518D\u4FEE\u6539\u3002");
+      if (old?.status === "waiting" && old.providerId === selection.modelProvider && old.model === selection.model && old.effort === effort) return old;
+      return this.write({ id: (0, import_node_crypto2.randomUUID)(), threadId: thread.id, title: thread.name || thread.title || "\u5DF2\u6709\u4F1A\u8BDD", sourceProvider: thread.modelProvider, providerId: selection.modelProvider, model: selection.model, effort, cwd: thread.cwd, projectId: thread.projectId, status: "waiting", attempts: 0, createdAt: Date.now(), note: "\u7B49\u5F85\u539F\u4F1A\u8BDD\u91CA\u653E\u3002\u8BF7\u5B8C\u5168\u9000\u51FA Codex\uFF0C\u540E\u53F0\u4FDD\u5B58\u5B8C\u6210\u540E\u4F1A\u81EA\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\u3002" });
+    });
+  }
+  cancel(id) {
+    return this.locked(id, () => {
+      const job = this.get(id);
+      if (!job || job.status !== "waiting") throw new Error("\u4EC5\u7B49\u5F85\u4E2D\u7684\u5207\u6362\u53EF\u4EE5\u53D6\u6D88\u3002");
+      return this.write({ ...job, status: "cancelled", note: "\u5DF2\u53D6\u6D88\uFF0C\u672A\u7EE7\u7EED\u5207\u6362\u3002" });
+    });
+  }
+};
+async function desktopHasThread(id) {
+  const reader = new DesktopReader({ timeoutMs: 2e3 });
+  try {
+    await reader.connect();
+    return !!await reader.settings(id);
+  } catch {
+    return false;
+  } finally {
+    reader.close();
+  }
+}
+async function reopenThread(id) {
+  if (!UUID.test(id)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
+  const url = `codex://threads/${id}`;
+  const [command, args] = process.platform === "win32" ? ["rundll32.exe", ["url.dll,FileProtocolHandler", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
+  await new Promise((resolve, reject) => {
+    const child = (0, import_node_child_process2.spawn)(command, args, { windowsHide: true, stdio: "ignore" });
+    child.once("error", reject);
+    child.once("exit", (code) => code === 0 ? resolve() : reject(new Error("\u65E0\u6CD5\u81EA\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\u3002")));
+  });
+}
+async function processProviderChanges(store, { rpc = withAppServer, read = readConfig, isLoaded = desktopHasThread, persist = persistProviderSwitch, open = reopenThread } = {}) {
+  for (const job of store.list().filter((j) => ["waiting", "applying"].includes(j.status))) {
+    if (await isLoaded(job.threadId)) continue;
+    let current = store.get(job.threadId);
+    if (current.id !== job.id || !["waiting", "applying"].includes(current.status)) continue;
+    try {
+      const selection = requireSelection(read(), job.providerId, job.model);
+      const thread = await rpc(async (c) => (await c.request("thread/read", { threadId: job.threadId, includeTurns: false })).thread);
+      if (thread.id !== job.threadId || thread.cwd !== job.cwd || thread.projectId !== job.projectId || ![job.sourceProvider, job.providerId].includes(thread.modelProvider)) throw new Error("\u4F1A\u8BDD\u8EAB\u4EFD\u3001\u76EE\u5F55\u3001\u9879\u76EE\u6216\u4F9B\u5E94\u5546\u5DF2\u53D8\u5316\uFF0C\u5207\u6362\u5DF2\u505C\u6B62\uFF0C\u8BF7\u5237\u65B0\u540E\u91CD\u65B0\u8BBE\u7F6E\u3002");
+      current = store.get(job.threadId);
+      if (current.id !== job.id || !["waiting", "applying"].includes(current.status)) continue;
+      if (!store.transition(job.threadId, job.id, ["waiting", "applying"], { status: "applying", note: "\u6B63\u5728\u4FDD\u5B58\u5E76\u7528\u65B0\u8FDB\u7A0B\u6838\u5BF9\u4F9B\u5E94\u5546\u3002" })) continue;
+      await persist(thread, selection, job.effort, { rpc });
+      if (!store.transition(job.threadId, job.id, ["applying"], { status: "saved", note: "\u65B0\u8FDB\u7A0B\u5DF2\u6838\u5BF9\u4F9B\u5E94\u5546\u3001\u6A21\u578B\u4E0E\u5F3A\u5EA6\uFF0C\u6B63\u5728\u6253\u5F00\u539F\u4F1A\u8BDD\u3002\u5386\u53F2\u6A21\u578B\u4E0D\u540C\u65F6\uFF0C\u5148\u6267\u884C /compact \u518D\u53D1\u9001\u3002" })) continue;
+      try {
+        await open(job.threadId);
+        store.transition(job.threadId, job.id, ["saved"], { note: "\u65B0\u4F9B\u5E94\u5546\u3001\u6A21\u578B\u4E0E\u5F3A\u5EA6\u5DF2\u4FDD\u5B58\u5E76\u6838\u5BF9\uFF0C\u5DF2\u8BF7\u6C42\u6253\u5F00\u539F\u4F1A\u8BDD\u3002\u9996\u6B21\u53D1\u9001\u524D\u8BF7\u6838\u5BF9\u8BBE\u7F6E\uFF1B\u5386\u53F2\u6A21\u578B\u4E0D\u540C\u65F6\u5148\u6267\u884C /compact\u3002" });
+      } catch {
+        store.transition(job.threadId, job.id, ["saved"], { note: "\u65B0\u4F9B\u5E94\u5546\u3001\u6A21\u578B\u4E0E\u5F3A\u5EA6\u5DF2\u4FDD\u5B58\u5E76\u6838\u5BF9\u3002\u81EA\u52A8\u6253\u5F00\u5931\u8D25\uFF0C\u8BF7\u624B\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\uFF1B\u5386\u53F2\u6A21\u578B\u4E0D\u540C\u65F6\u5148\u6267\u884C /compact\u3002" });
+      }
+    } catch (error) {
+      if (error.code === "PROVIDER_QUEUE_BUSY") continue;
+      const locked = error.code === "THREAD_WRITER_ACTIVE", attempts = job.attempts + (locked ? 0 : 1);
+      store.transition(job.threadId, job.id, ["waiting", "applying"], { status: locked || attempts < 5 ? "waiting" : "failed", attempts, note: locked ? "\u539F\u4F1A\u8BDD\u5199\u9501\u5C1A\u672A\u91CA\u653E\uFF0C\u8BF7\u5B8C\u5168\u9000\u51FA Codex \u540E\u7B49\u5F85\u540E\u53F0\u5B8C\u6210\u3002" : `\u5207\u6362\u5C1A\u672A\u6838\u5BF9\uFF1A${error.message}\u3002\u82E5\u5DF2\u91CD\u65B0\u6253\u5F00 Codex\uFF0C\u8BF7\u7B49\u5F85\u4E0B\u6B21\u91CA\u653E\u4F1A\u8BDD\u540E\u91CD\u8BD5\u3002` });
+    }
+  }
+}
+
+// src/service.mjs
+var UUID2 = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function existingThreadId(reference) {
   if (typeof reference !== "string") throw new Error("\u8BF7\u9009\u62E9\u5DF2\u6709\u4F1A\u8BDD\uFF0C\u6216\u7C98\u8D34 codex://threads/ \u4F1A\u8BDD\u94FE\u63A5\u3002");
   const id = reference.trim().replace(/^codex:\/\/threads\//i, "");
-  if (!UUID.test(id)) throw new Error("\u4F1A\u8BDD\u94FE\u63A5\u6216 ID \u65E0\u6548\uFF0C\u8BF7\u7C98\u8D34\u5B8C\u6574\u7684 codex://threads/ \u94FE\u63A5\u3002");
+  if (!UUID2.test(id)) throw new Error("\u4F1A\u8BDD\u94FE\u63A5\u6216 ID \u65E0\u6548\uFF0C\u8BF7\u7C98\u8D34\u5B8C\u6574\u7684 codex://threads/ \u94FE\u63A5\u3002");
   return id.toLowerCase();
 }
 async function historyModel(thread) {
   if (typeof thread.path !== "string") return { status: "unavailable" };
   let input, lines;
   try {
-    const size = import_node_fs3.default.statSync(thread.path).size;
+    const size = import_node_fs4.default.statSync(thread.path).size;
     if (size > 128 * 1024 * 1024) return { status: "unavailable" };
-    input = import_node_fs3.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) });
+    input = import_node_fs4.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) });
     lines = (0, import_node_readline2.createInterface)({ input, crlfDelay: Infinity });
     let model = null;
     for await (const line of lines) {
@@ -1109,20 +1293,20 @@ async function historyModel(thread) {
   }
 }
 function openThread(threadId) {
-  if (!UUID.test(threadId)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
+  if (!UUID2.test(threadId)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
   const url = `codex://threads/${threadId}`;
   const [bin, args] = process.platform === "win32" ? ["rundll32.exe", ["url.dll,FileProtocolHandler", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
   return new Promise((resolve, reject) => {
-    const child = (0, import_node_child_process2.spawn)(bin, args, { windowsHide: true, stdio: "ignore" });
+    const child = (0, import_node_child_process3.spawn)(bin, args, { windowsHide: true, stdio: "ignore" });
     child.once("error", () => reject(new Error("\u65E0\u6CD5\u6253\u5F00 Codex\uFF0C\u8BF7\u4F7F\u7528\u8FD4\u56DE\u7684\u4F1A\u8BDD\u94FE\u63A5\u3002")));
     child.once("exit", (code) => code === 0 ? resolve() : reject(new Error("\u684C\u9762\u672A\u786E\u8BA4\u6253\u5F00\u64CD\u4F5C\uFF0C\u8BF7\u4F7F\u7528\u4F1A\u8BDD\u94FE\u63A5\u3002")));
   });
 }
 
 // src/schedules.mjs
-var SCHEDULER_VERSION = "0.4.0";
+var SCHEDULER_VERSION = "0.5.0";
 var GRACE_MS = 15 * 60 * 1e3;
-var scheduleDirectory = () => import_node_path4.default.join(home(), "model-switcher", "scheduler");
+var scheduleDirectory = () => import_node_path5.default.join(home(), "model-switcher", "scheduler");
 function localDay(now) {
   return new Date(now + 8 * 36e5).toISOString().slice(0, 10);
 }
@@ -1153,40 +1337,40 @@ function nextRun(job, now = Date.now()) {
   return null;
 }
 function atomicJson(file, value) {
-  import_node_fs4.default.mkdirSync(import_node_path4.default.dirname(file), { recursive: true, mode: 448 });
-  const tmp = `${file}.${(0, import_node_crypto2.randomUUID)()}.tmp`;
-  import_node_fs4.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
-  import_node_fs4.default.renameSync(tmp, file);
+  import_node_fs5.default.mkdirSync(import_node_path5.default.dirname(file), { recursive: true, mode: 448 });
+  const tmp = `${file}.${(0, import_node_crypto3.randomUUID)()}.tmp`;
+  import_node_fs5.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
+  import_node_fs5.default.renameSync(tmp, file);
 }
 var ScheduleStore = class {
   constructor({ directory = scheduleDirectory(), read = readConfig, rpc = withAppServer, now = Date.now } = {}) {
     Object.assign(this, { directory, read, rpc, now });
   }
   jobFile(id) {
-    if (!UUID.test(id || "")) throw new Error("\u65E0\u6548\u7684\u5B9A\u65F6\u4EFB\u52A1 ID\u3002");
-    return import_node_path4.default.join(this.directory, "jobs", id + ".json");
+    if (!UUID2.test(id || "")) throw new Error("\u65E0\u6548\u7684\u5B9A\u65F6\u4EFB\u52A1 ID\u3002");
+    return import_node_path5.default.join(this.directory, "jobs", id + ".json");
   }
   readJob(id) {
     try {
-      return JSON.parse(import_node_fs4.default.readFileSync(this.jobFile(id), "utf8"));
+      return JSON.parse(import_node_fs5.default.readFileSync(this.jobFile(id), "utf8"));
     } catch (error) {
       if (error.code === "ENOENT") throw new Error("\u5B9A\u65F6\u4EFB\u52A1\u4E0D\u5B58\u5728\uFF0C\u8BF7\u5237\u65B0\u5217\u8868\u3002");
       throw error;
     }
   }
   jobs() {
-    const folder = import_node_path4.default.join(this.directory, "jobs");
-    if (!import_node_fs4.default.existsSync(folder)) return [];
-    return import_node_fs4.default.readdirSync(folder).filter((f) => /^[\da-f-]+\.json$/i.test(f)).map((f) => JSON.parse(import_node_fs4.default.readFileSync(import_node_path4.default.join(folder, f), "utf8")));
+    const folder = import_node_path5.default.join(this.directory, "jobs");
+    if (!import_node_fs5.default.existsSync(folder)) return [];
+    return import_node_fs5.default.readdirSync(folder).filter((f) => /^[\da-f-]+\.json$/i.test(f)).map((f) => JSON.parse(import_node_fs5.default.readFileSync(import_node_path5.default.join(folder, f), "utf8")));
   }
   runFile(id, day) {
     this.jobFile(id);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("\u65E0\u6548\u7684\u8FD0\u884C\u65E5\u671F\u3002");
-    return import_node_path4.default.join(this.directory, "runs", id, day + ".json");
+    return import_node_path5.default.join(this.directory, "runs", id, day + ".json");
   }
   run(id, day) {
     try {
-      return JSON.parse(import_node_fs4.default.readFileSync(this.runFile(id, day), "utf8"));
+      return JSON.parse(import_node_fs5.default.readFileSync(this.runFile(id, day), "utf8"));
     } catch (error) {
       if (error.code === "ENOENT") return null;
       throw error;
@@ -1194,10 +1378,10 @@ var ScheduleStore = class {
   }
   claim(job, day) {
     const file = this.runFile(job.id, day);
-    import_node_fs4.default.mkdirSync(import_node_path4.default.dirname(file), { recursive: true, mode: 448 });
-    const run = { jobId: job.id, day, scheduledFor: scheduledTime(job, day), status: "waiting", clientUserMessageId: (0, import_node_crypto2.randomUUID)(), createdAt: this.now(), updatedAt: this.now() };
+    import_node_fs5.default.mkdirSync(import_node_path5.default.dirname(file), { recursive: true, mode: 448 });
+    const run = { jobId: job.id, day, scheduledFor: scheduledTime(job, day), status: "waiting", clientUserMessageId: (0, import_node_crypto3.randomUUID)(), createdAt: this.now(), updatedAt: this.now() };
     try {
-      import_node_fs4.default.writeFileSync(file, JSON.stringify(run), { flag: "wx", mode: 384 });
+      import_node_fs5.default.writeFileSync(file, JSON.stringify(run), { flag: "wx", mode: 384 });
       return run;
     } catch (e) {
       if (e.code === "EEXIST") return this.run(job.id, day);
@@ -1208,14 +1392,14 @@ var ScheduleStore = class {
     atomicJson(this.runFile(run.jobId, run.day), { ...run, updatedAt: this.now() });
   }
   recent(id) {
-    const folder = import_node_path4.default.join(this.directory, "runs", id);
-    if (!import_node_fs4.default.existsSync(folder)) return [];
-    return import_node_fs4.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(0, 7).map((f) => JSON.parse(import_node_fs4.default.readFileSync(import_node_path4.default.join(folder, f), "utf8")));
+    const folder = import_node_path5.default.join(this.directory, "runs", id);
+    if (!import_node_fs5.default.existsSync(folder)) return [];
+    return import_node_fs5.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(0, 7).map((f) => JSON.parse(import_node_fs5.default.readFileSync(import_node_path5.default.join(folder, f), "utf8")));
   }
   pending(id) {
-    const folder = import_node_path4.default.join(this.directory, "runs", id);
-    if (!import_node_fs4.default.existsSync(folder)) return [];
-    return import_node_fs4.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map((f) => JSON.parse(import_node_fs4.default.readFileSync(import_node_path4.default.join(folder, f), "utf8"))).filter((r) => ["accepted", "submitting", "unknown"].includes(r.status));
+    const folder = import_node_path5.default.join(this.directory, "runs", id);
+    if (!import_node_fs5.default.existsSync(folder)) return [];
+    return import_node_fs5.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map((f) => JSON.parse(import_node_fs5.default.readFileSync(import_node_path5.default.join(folder, f), "utf8"))).filter((r) => ["accepted", "submitting", "unknown"].includes(r.status));
   }
   acknowledge(id, day) {
     const run = this.run(id, day);
@@ -1230,7 +1414,7 @@ var ScheduleStore = class {
     const { id, name, threadRef, prompt, time, status = "ACTIVE", providerId = "custom", model = "qwen3.8-27b", effort = "xhigh" } = input;
     this.jobFile(id);
     const threadId = existingThreadId(threadRef), selection = requireSelection(this.read(), providerId, model);
-    const old = import_node_fs4.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
+    const old = import_node_fs5.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
     const frequency = input.frequency ?? old?.frequency ?? "daily";
     if (!["daily", "weekly"].includes(frequency)) throw new Error("\u6267\u884C\u9891\u7387\u5FC5\u987B\u4E3A\u6BCF\u5929\u6216\u6BCF\u5468\u3002");
     const weekdays = scheduleDays({ frequency, weekdays: input.weekdays ?? (old?.frequency === "weekly" ? old.weekdays : void 0) });
@@ -1241,13 +1425,13 @@ var ScheduleStore = class {
     const thread = await this.rpc(async (c) => (await c.request("thread/read", { threadId, includeTurns: false })).thread);
     if (thread?.id !== threadId || thread.modelProvider !== providerId) throw new Error("\u4EFB\u52A1\u76EE\u6807\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u4E0D\u4E00\u81F4\uFF0C\u672A\u4FDD\u5B58\u3002");
     if (status === "ACTIVE" && this.jobs().some((j) => j.id !== id && j.status === "ACTIVE" && j.threadId === threadId && j.time === time && j.prompt === prompt.trim() && scheduleDays(j).some((d) => weekdays.includes(d)))) throw new Error("\u8FD9\u4E2A\u4F1A\u8BDD\u5DF2\u6709\u76F8\u540C\u65F6\u95F4\u548C\u63D0\u793A\u8BCD\u4E14\u6267\u884C\u65E5\u671F\u91CD\u53E0\u7684\u542F\u7528\u4EFB\u52A1\uFF0C\u8BF7\u7F16\u8F91\u5DF2\u6709\u4EFB\u52A1\u3002");
-    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time, frequency, weekdays, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto2.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
+    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time, frequency, weekdays, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto3.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
     atomicJson(this.jobFile(id), job);
     return { ...job, nextRunAt: nextRun(job, this.now()) };
   }
   setStatus(id, status) {
     if (!["ACTIVE", "PAUSED"].includes(status)) throw new Error("\u65E0\u6548\u7684\u4EFB\u52A1\u72B6\u6001\u3002");
-    const job = { ...this.readJob(id), status, revision: (0, import_node_crypto2.randomUUID)(), updatedAt: this.now() };
+    const job = { ...this.readJob(id), status, revision: (0, import_node_crypto3.randomUUID)(), updatedAt: this.now() };
     atomicJson(this.jobFile(id), job);
     return job;
   }
@@ -1301,19 +1485,19 @@ async function tickSchedules(store, { now = Date.now(), dispatch, observe = asyn
 }
 
 // src/scheduler-runtime.mjs
-var import_node_path5 = __toESM(require("node:path"), 1);
-var import_node_crypto3 = require("node:crypto");
-var schedulerPipe = () => process.platform === "win32" ? "\\\\.\\pipe\\codex-model-switcher-scheduler-" + (0, import_node_crypto3.createHash)("sha256").update(import_node_path5.default.resolve(scheduleDirectory()).toLowerCase()).digest("hex").slice(0, 16) : import_node_path5.default.join(scheduleDirectory(), "worker.sock");
+var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_crypto4 = require("node:crypto");
+var schedulerPipe = () => process.platform === "win32" ? "\\\\.\\pipe\\codex-model-switcher-scheduler-" + (0, import_node_crypto4.createHash)("sha256").update(import_node_path6.default.resolve(scheduleDirectory()).toLowerCase()).digest("hex").slice(0, 16) : import_node_path6.default.join(scheduleDirectory(), "worker.sock");
 
 // src/scheduled-turn.mjs
-var import_node_crypto4 = require("node:crypto");
-var import_node_fs5 = __toESM(require("node:fs"), 1);
+var import_node_crypto5 = require("node:crypto");
+var import_node_fs6 = __toESM(require("node:fs"), 1);
 var import_node_readline3 = require("node:readline");
 var import_promises2 = require("node:timers/promises");
 function scheduledTurnRequest(job, run) {
   return {
     threadId: job.threadId,
-    clientUserMessageId: run.clientUserMessageId || (0, import_node_crypto4.randomUUID)(),
+    clientUserMessageId: run.clientUserMessageId || (0, import_node_crypto5.randomUUID)(),
     input: [{ type: "text", text: `[\u63D2\u4EF6\u5B9A\u65F6\u4EFB\u52A1\uFF1A${job.name} \xB7 ${run.day} ${job.time} \u5317\u4EAC\u65F6\u95F4]
 ${job.prompt}`, text_elements: [] }],
     model: job.model,
@@ -1368,8 +1552,8 @@ async function observeScheduled(job, run, { rpc = withAppServer } = {}) {
     if (turn.status !== "completed") return { status: turn.status, note: "\u5B9A\u65F6\u56DE\u5408\u672A\u6210\u529F\u5B8C\u6210\uFF0C\u8BF7\u6253\u5F00\u539F\u4F1A\u8BDD\u67E5\u770B\u9519\u8BEF\u3002" };
     const { thread } = await c.request("thread/read", { threadId: job.threadId, includeTurns: false });
     let model, effort;
-    if (thread.path && import_node_fs5.default.statSync(thread.path).size <= 128 * 1024 * 1024) {
-      const input = import_node_fs5.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) }), lines = (0, import_node_readline3.createInterface)({ input, crlfDelay: Infinity });
+    if (thread.path && import_node_fs6.default.statSync(thread.path).size <= 128 * 1024 * 1024) {
+      const input = import_node_fs6.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) }), lines = (0, import_node_readline3.createInterface)({ input, crlfDelay: Infinity });
       try {
         for await (const line of lines) {
           if (!line.includes(run.turnId) || !line.includes("turn_context")) continue;
@@ -1398,8 +1582,8 @@ async function observeScheduled(job, run, { rpc = withAppServer } = {}) {
 
 // src/scheduler-worker.mjs
 async function main() {
-  const store = new ScheduleStore(), tokenFile = import_node_path6.default.join(scheduleDirectory(), "control.key");
-  const token = import_node_fs6.default.readFileSync(tokenFile, "utf8");
+  const store = new ScheduleStore(), changes = new ProviderChangeStore(), tokenFile = import_node_path7.default.join(scheduleDirectory(), "control.key");
+  const token = import_node_fs7.default.readFileSync(tokenFile, "utf8");
   let stopping = false, working = false;
   const server = import_node_net2.default.createServer((socket) => {
     socket.setTimeout(2e3, () => socket.destroy());
@@ -1418,7 +1602,7 @@ async function main() {
       }
       if (request.command === "stop") {
         const received = Buffer.from(request.token || ""), expected = Buffer.from(token);
-        if (received.length !== expected.length || !(0, import_node_crypto5.timingSafeEqual)(received, expected)) return socket.destroy();
+        if (received.length !== expected.length || !(0, import_node_crypto6.timingSafeEqual)(received, expected)) return socket.destroy();
         stopping = true;
       }
       socket.end(JSON.stringify({ running: true, version: SCHEDULER_VERSION, pid: process.pid, working, stopping }) + "\n");
@@ -1446,12 +1630,14 @@ async function main() {
     working = true;
     try {
       await tickSchedules(store, { dispatch: dispatchScheduled, observe: observeScheduled });
-      atomicJson(import_node_path6.default.join(scheduleDirectory(), "health.json"), { pid: process.pid, version: SCHEDULER_VERSION, heartbeatAt: Date.now() });
+      await processProviderChanges(changes);
+      atomicJson(import_node_path7.default.join(scheduleDirectory(), "health.json"), { pid: process.pid, version: SCHEDULER_VERSION, heartbeatAt: Date.now() });
     } catch {
-      atomicJson(import_node_path6.default.join(scheduleDirectory(), "health.json"), { pid: process.pid, version: SCHEDULER_VERSION, heartbeatAt: Date.now(), error: "\u5B9A\u65F6\u670D\u52A1\u68C0\u67E5\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u63D2\u4EF6\u8FD0\u884C\u8BB0\u5F55\u3002" });
+      atomicJson(import_node_path7.default.join(scheduleDirectory(), "health.json"), { pid: process.pid, version: SCHEDULER_VERSION, heartbeatAt: Date.now(), error: "\u5B9A\u65F6\u670D\u52A1\u68C0\u67E5\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u63D2\u4EF6\u8FD0\u884C\u8BB0\u5F55\u3002" });
     }
     working = false;
-    for (let i = 0; i < 15 && !stopping; i++) await (0, import_promises3.setTimeout)(1e3);
+    const steps = changes.list().some((j) => ["waiting", "applying"].includes(j.status)) ? 2 : 15;
+    for (let i = 0; i < steps && !stopping; i++) await (0, import_promises3.setTimeout)(1e3);
   }
   await new Promise((resolve) => server.close(resolve));
 }

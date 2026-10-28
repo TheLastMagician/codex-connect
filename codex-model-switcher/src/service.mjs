@@ -7,6 +7,7 @@ import {readConfig,providerList,requireSelection,discoverModels,home,launcherDef
 import {withAppServer} from './app-server.mjs';
 import {DesktopReader} from './desktop-ipc.mjs';
 import {listProjects,projectDirectory} from './projects.mjs';
+import {ProviderChangeStore} from './provider-changes.mjs';
 
 export const UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 export function existingThreadId(reference) {
@@ -77,7 +78,7 @@ export async function confirmDesktop(thread,{open=openThread,Reader=DesktopReade
 
 export class LauncherService {
   constructor({read=readConfig,rpc=withAppServer,confirm=confirmDesktop,stateDir=path.join(home(),'model-switcher')}={}) {
-    Object.assign(this,{read,rpc,confirm,stateDir});this.inFlight=new Map();
+    Object.assign(this,{read,rpc,confirm,stateDir});this.inFlight=new Map();this.providerChanges=new ProviderChangeStore({directory:path.join(stateDir,'provider-changes')});
   }
   stateFile(id){if(!UUID.test(id))throw new Error('无效的操作 ID。');return path.join(this.stateDir,'operations',id+'.json');}
   receipt(id){try{return JSON.parse(fs.readFileSync(this.stateFile(id),'utf8'));}catch(error){if(error.code==='ENOENT')return null;throw new Error('新建记录无法读取，请检查本机状态文件。');}}
@@ -108,15 +109,22 @@ export class LauncherService {
       })),nextCursor:page.nextCursor||null,providerId};
     });
   }
-  async modifyExisting({threadRef,providerId='custom',model='qwen3.8-27b',effort='xhigh'}) {
+  async modifyExisting({threadRef,providerId='custom',model='qwen3.8-27b',effort='xhigh',switchProvider=false}) {
     const threadId=existingThreadId(threadRef),selection=requireSelection(this.read(),providerId,model);
     if(!['none','minimal','low','medium','high','xhigh','max','ultra'].includes(effort))throw new Error('无效的思考强度。');
     const readThread=id=>this.rpc(async c=>(await c.request('thread/read',{threadId:id,includeTurns:false})).thread);
     const thread=await readThread(threadId);
     if(thread?.id!==threadId)throw new Error('没有找到所选会话。');
-    if(thread.modelProvider!==providerId)throw new Error(`该会话的供应商是 ${thread.modelProvider||'未知'}，与 ${providerId} 不一致。请选择原供应商的会话；此操作不切换供应商。`);
+    if(typeof switchProvider!=='boolean')throw new Error('无效的供应商切换选项。');
+    if(thread.modelProvider!==providerId&&!switchProvider)throw new Error(`该会话的供应商是 ${thread.modelProvider||'未知'}，与 ${providerId} 不一致。请明确选择同时切换供应商。`);
     if(thread.status?.type==='active')throw new Error('该会话正在运行，请等待当前回复完成后再修改。');
     const record={threadId,providerId,model:selection.model,effort,title:thread.name||thread.title||'已有会话',cwd:thread.cwd,url:`codex://threads/${threadId}`};
+    if(thread.modelProvider!==providerId&&switchProvider){
+      const turns=await this.rpc(c=>c.request('thread/turns/list',{threadId,limit:1,itemsView:'notLoaded'}));
+      if(turns.data?.some(t=>t.status==='inProgress'))throw new Error('该会话正在运行，请等待当前回复结束后再切换供应商。');
+      const change=this.providerChanges.enqueue(thread,selection,effort);
+      return {...record,action:'provider_change_queued',status:'provider_change_queued',previousProvider:thread.modelProvider,providerSaved:false,requiresDesktopReload:true,change,note:'供应商切换已排队，当前尚未修改。请完全退出 Codex；后台会在原会话释放写锁后保存配置并自动打开原会话。重新打开后在面板检查切换状态，再继续发送。原会话 ID、历史与项目保留；定时任务配置仍需单独核对。'};
+    }
     try{
       const confirmed=await this.confirm(record,{readThread});
       const history=await historyModel(thread);

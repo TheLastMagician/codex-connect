@@ -3261,8 +3261,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path11) {
-      let input = path11;
+    function removeDotSegments(path12) {
+      let input = path12;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3671,8 +3671,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path11 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path11 && path11 !== "/" ? path11 : void 0;
+        const path12 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path12 && path12 !== "/" ? path12 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -7185,12 +7185,12 @@ var require_dist = __commonJS({
         throw new Error(`Unknown format "${name}"`);
       return f;
     };
-    function addFormats(ajv, list, fs10, exportName) {
+    function addFormats(ajv, list, fs11, exportName) {
       var _a3;
       var _b;
       (_a3 = (_b = ajv.opts.code).formats) !== null && _a3 !== void 0 ? _a3 : _b.formats = (0, codegen_1._)`require("ajv-formats/dist/formats").${exportName}`;
       for (const f of list)
-        ajv.addFormat(f, fs10[f]);
+        ajv.addFormat(f, fs11[f]);
     }
     module2.exports = exports2 = formatsPlugin;
     Object.defineProperty(exports2, "__esModule", { value: true });
@@ -7199,11 +7199,11 @@ var require_dist = __commonJS({
 });
 
 // src/server.mjs
-var import_node_fs9 = __toESM(require("node:fs"), 1);
-var import_node_path10 = __toESM(require("node:path"), 1);
+var import_node_fs10 = __toESM(require("node:fs"), 1);
+var import_node_path11 = __toESM(require("node:path"), 1);
 var import_node_url = require("node:url");
 var import_node_http = __toESM(require("node:http"), 1);
-var import_node_crypto5 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 
 // node_modules/zod/v4/core/util.js
 var util_exports = {};
@@ -7442,10 +7442,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path11) {
-  if (!path11)
+function getElementAtPath(obj, path12) {
+  if (!path12)
     return obj;
-  return path11.reduce((acc, key) => acc?.[key], obj);
+  return path12.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -7785,11 +7785,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path11, issues) {
+function prefixIssues(path12, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path11);
+    iss.path.unshift(path12);
     return iss;
   });
 }
@@ -8247,16 +8247,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path11 = []) => {
+  const processError = (error3, path12 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path11, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path12, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path12, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path11, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path12, ...issue2.path]);
       } else {
-        const fullpath = [...path11, ...issue2.path];
+        const fullpath = [...path12, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -16990,8 +16990,8 @@ var StdioServerTransport = class {
 };
 
 // src/service.mjs
-var import_node_fs4 = __toESM(require("node:fs"), 1);
-var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_fs5 = __toESM(require("node:fs"), 1);
+var import_node_path6 = __toESM(require("node:path"), 1);
 var import_node_child_process2 = require("node:child_process");
 var import_promises2 = require("node:timers/promises");
 var import_node_readline2 = require("node:readline");
@@ -17892,10 +17892,13 @@ var AppServer = class {
       if (!item) return;
       clearTimeout(item.timer);
       this.pending.delete(message.id);
-      if (message.error) item.reject(new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`));
-      else item.resolve(message.result);
+      if (message.error) {
+        const error2 = new Error(`Codex \u62D2\u7EDD\u4E86 ${item.method} \u8BF7\u6C42\uFF08${message.error.code}\uFF09\u3002`);
+        if (/already has an active writer/.test(message.error.message || "")) error2.code = "THREAD_WRITER_ACTIVE";
+        item.reject(error2);
+      } else item.resolve(message.result);
     });
-    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.4.0" }, capabilities: { experimentalApi: true } });
+    await this.request("initialize", { clientInfo: { name: "codex_model_switcher", title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", version: "0.5.0" }, capabilities: { experimentalApi: true } });
     this.child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "initialized" }) + "\n");
     return this;
   }
@@ -18106,21 +18109,123 @@ function projectDirectory(project, cwd) {
   return import_node_path4.default.resolve(selected);
 }
 
-// src/service.mjs
+// src/provider-changes.mjs
+var import_node_fs4 = __toESM(require("node:fs"), 1);
+var import_node_path5 = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
 var UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+var ProviderChangeStore = class {
+  constructor({ directory = import_node_path5.default.join(home(), "model-switcher", "provider-changes") } = {}) {
+    this.directory = directory;
+  }
+  file(id) {
+    if (!UUID.test(id || "")) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
+    return import_node_path5.default.join(this.directory, id + ".json");
+  }
+  get(id) {
+    try {
+      return JSON.parse(import_node_fs4.default.readFileSync(this.file(id), "utf8"));
+    } catch (e) {
+      if (e.code === "ENOENT") return null;
+      throw e;
+    }
+  }
+  list() {
+    if (!import_node_fs4.default.existsSync(this.directory)) return [];
+    return import_node_fs4.default.readdirSync(this.directory).filter((n) => /^[\da-f-]+\.json$/i.test(n)).map((n) => JSON.parse(import_node_fs4.default.readFileSync(import_node_path5.default.join(this.directory, n), "utf8"))).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+  write(job) {
+    import_node_fs4.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
+    const file = this.file(job.threadId), temp = file + "." + (0, import_node_crypto2.randomUUID)() + ".tmp";
+    import_node_fs4.default.writeFileSync(temp, JSON.stringify({ ...job, updatedAt: Date.now() }), { mode: 384 });
+    import_node_fs4.default.renameSync(temp, file);
+    return this.get(job.threadId);
+  }
+  locked(id, action) {
+    import_node_fs4.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
+    const file = this.file(id) + ".lock";
+    let fd;
+    for (let i = 0; i < 2; i++) {
+      try {
+        fd = import_node_fs4.default.openSync(file, "wx", 384);
+        break;
+      } catch (error2) {
+        if (error2.code !== "EEXIST") throw error2;
+        let stale = false;
+        try {
+          const pid = Number(import_node_fs4.default.readFileSync(file, "utf8"));
+          if (pid > 0) {
+            try {
+              process.kill(pid, 0);
+            } catch (e) {
+              stale = e.code === "ESRCH";
+            }
+          } else stale = Date.now() - import_node_fs4.default.statSync(file).mtimeMs > 3e4;
+        } catch {
+        }
+        if (stale) {
+          try {
+            import_node_fs4.default.unlinkSync(file);
+          } catch {
+          }
+          continue;
+        }
+        const busy = new Error("\u4F9B\u5E94\u5546\u5207\u6362\u8BB0\u5F55\u6B63\u5728\u66F4\u65B0\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+        busy.code = "PROVIDER_QUEUE_BUSY";
+        throw busy;
+      }
+    }
+    if (fd === void 0) {
+      const busy = new Error("\u4F9B\u5E94\u5546\u5207\u6362\u8BB0\u5F55\u6B63\u5728\u66F4\u65B0\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
+      busy.code = "PROVIDER_QUEUE_BUSY";
+      throw busy;
+    }
+    try {
+      import_node_fs4.default.writeFileSync(fd, String(process.pid));
+      return action();
+    } finally {
+      import_node_fs4.default.closeSync(fd);
+      import_node_fs4.default.unlinkSync(file);
+    }
+  }
+  transition(id, operationId, statuses, patch) {
+    return this.locked(id, () => {
+      const job = this.get(id);
+      return job?.id === operationId && statuses.includes(job.status) ? this.write({ ...job, ...patch }) : null;
+    });
+  }
+  enqueue(thread, selection, effort) {
+    return this.locked(thread.id, () => {
+      const old = this.get(thread.id);
+      if (old?.status === "applying") throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u5207\u6362\u4F9B\u5E94\u5546\uFF0C\u8BF7\u7B49\u5F85\u540E\u53F0\u5B8C\u6210\u540E\u518D\u4FEE\u6539\u3002");
+      if (old?.status === "waiting" && old.providerId === selection.modelProvider && old.model === selection.model && old.effort === effort) return old;
+      return this.write({ id: (0, import_node_crypto2.randomUUID)(), threadId: thread.id, title: thread.name || thread.title || "\u5DF2\u6709\u4F1A\u8BDD", sourceProvider: thread.modelProvider, providerId: selection.modelProvider, model: selection.model, effort, cwd: thread.cwd, projectId: thread.projectId, status: "waiting", attempts: 0, createdAt: Date.now(), note: "\u7B49\u5F85\u539F\u4F1A\u8BDD\u91CA\u653E\u3002\u8BF7\u5B8C\u5168\u9000\u51FA Codex\uFF0C\u540E\u53F0\u4FDD\u5B58\u5B8C\u6210\u540E\u4F1A\u81EA\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\u3002" });
+    });
+  }
+  cancel(id) {
+    return this.locked(id, () => {
+      const job = this.get(id);
+      if (!job || job.status !== "waiting") throw new Error("\u4EC5\u7B49\u5F85\u4E2D\u7684\u5207\u6362\u53EF\u4EE5\u53D6\u6D88\u3002");
+      return this.write({ ...job, status: "cancelled", note: "\u5DF2\u53D6\u6D88\uFF0C\u672A\u7EE7\u7EED\u5207\u6362\u3002" });
+    });
+  }
+};
+
+// src/service.mjs
+var UUID2 = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function existingThreadId(reference) {
   if (typeof reference !== "string") throw new Error("\u8BF7\u9009\u62E9\u5DF2\u6709\u4F1A\u8BDD\uFF0C\u6216\u7C98\u8D34 codex://threads/ \u4F1A\u8BDD\u94FE\u63A5\u3002");
   const id = reference.trim().replace(/^codex:\/\/threads\//i, "");
-  if (!UUID.test(id)) throw new Error("\u4F1A\u8BDD\u94FE\u63A5\u6216 ID \u65E0\u6548\uFF0C\u8BF7\u7C98\u8D34\u5B8C\u6574\u7684 codex://threads/ \u94FE\u63A5\u3002");
+  if (!UUID2.test(id)) throw new Error("\u4F1A\u8BDD\u94FE\u63A5\u6216 ID \u65E0\u6548\uFF0C\u8BF7\u7C98\u8D34\u5B8C\u6574\u7684 codex://threads/ \u94FE\u63A5\u3002");
   return id.toLowerCase();
 }
 async function historyModel(thread) {
   if (typeof thread.path !== "string") return { status: "unavailable" };
   let input, lines;
   try {
-    const size = import_node_fs4.default.statSync(thread.path).size;
+    const size = import_node_fs5.default.statSync(thread.path).size;
     if (size > 128 * 1024 * 1024) return { status: "unavailable" };
-    input = import_node_fs4.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) });
+    input = import_node_fs5.default.createReadStream(thread.path, { encoding: "utf8", signal: AbortSignal.timeout(5e3) });
     lines = (0, import_node_readline2.createInterface)({ input, crlfDelay: Infinity });
     let model = null;
     for await (const line of lines) {
@@ -18147,7 +18252,7 @@ function continuationCheck(history, model) {
   return { history, requiresContextReview, verificationScope: "settings_only", note };
 }
 function openThread(threadId) {
-  if (!UUID.test(threadId)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
+  if (!UUID2.test(threadId)) throw new Error("\u65E0\u6548\u7684\u4F1A\u8BDD ID\u3002");
   const url = `codex://threads/${threadId}`;
   const [bin, args] = process.platform === "win32" ? ["rundll32.exe", ["url.dll,FileProtocolHandler", url]] : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
   return new Promise((resolve, reject) => {
@@ -18185,26 +18290,27 @@ async function confirmDesktop(thread, { open: open2 = openThread, Reader = Deskt
   }
 }
 var LauncherService = class {
-  constructor({ read = readConfig, rpc = withAppServer, confirm = confirmDesktop, stateDir = import_node_path5.default.join(home(), "model-switcher") } = {}) {
+  constructor({ read = readConfig, rpc = withAppServer, confirm = confirmDesktop, stateDir = import_node_path6.default.join(home(), "model-switcher") } = {}) {
     Object.assign(this, { read, rpc, confirm, stateDir });
     this.inFlight = /* @__PURE__ */ new Map();
+    this.providerChanges = new ProviderChangeStore({ directory: import_node_path6.default.join(stateDir, "provider-changes") });
   }
   stateFile(id) {
-    if (!UUID.test(id)) throw new Error("\u65E0\u6548\u7684\u64CD\u4F5C ID\u3002");
-    return import_node_path5.default.join(this.stateDir, "operations", id + ".json");
+    if (!UUID2.test(id)) throw new Error("\u65E0\u6548\u7684\u64CD\u4F5C ID\u3002");
+    return import_node_path6.default.join(this.stateDir, "operations", id + ".json");
   }
   receipt(id) {
     try {
-      return JSON.parse(import_node_fs4.default.readFileSync(this.stateFile(id), "utf8"));
+      return JSON.parse(import_node_fs5.default.readFileSync(this.stateFile(id), "utf8"));
     } catch (error2) {
       if (error2.code === "ENOENT") return null;
       throw new Error("\u65B0\u5EFA\u8BB0\u5F55\u65E0\u6CD5\u8BFB\u53D6\uFF0C\u8BF7\u68C0\u67E5\u672C\u673A\u72B6\u6001\u6587\u4EF6\u3002");
     }
   }
   claim(id, value) {
-    import_node_fs4.default.mkdirSync(import_node_path5.default.dirname(this.stateFile(id)), { recursive: true, mode: 448 });
+    import_node_fs5.default.mkdirSync(import_node_path6.default.dirname(this.stateFile(id)), { recursive: true, mode: 448 });
     try {
-      import_node_fs4.default.writeFileSync(this.stateFile(id), JSON.stringify(value), { flag: "wx", mode: 384 });
+      import_node_fs5.default.writeFileSync(this.stateFile(id), JSON.stringify(value), { flag: "wx", mode: 384 });
       return null;
     } catch (error2) {
       if (error2.code === "EEXIST") return this.receipt(id);
@@ -18213,8 +18319,8 @@ var LauncherService = class {
   }
   save(id, value) {
     const file = this.stateFile(id), tmp = file + "." + process.pid + ".tmp";
-    import_node_fs4.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
-    import_node_fs4.default.renameSync(tmp, file);
+    import_node_fs5.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
+    import_node_fs5.default.renameSync(tmp, file);
   }
   async catalog(extra = {}) {
     const config2 = this.read();
@@ -18230,7 +18336,7 @@ var LauncherService = class {
     const { projects, thread } = await this.rpc(async (c) => {
       const projects2 = await listProjects(c);
       let thread2;
-      if (threadId && UUID.test(threadId)) try {
+      if (threadId && UUID2.test(threadId)) try {
         thread2 = (await c.request("thread/read", { threadId, includeTurns: false })).thread;
       } catch {
       }
@@ -18252,7 +18358,7 @@ var LauncherService = class {
     if (cursor != null && (typeof cursor !== "string" || cursor.length > 4096)) throw new Error("\u65E0\u6548\u7684\u5206\u9875\u4F4D\u7F6E\uFF0C\u8BF7\u5237\u65B0\u4F1A\u8BDD\u5217\u8868\u3002");
     return this.rpc(async (c) => {
       const page = await c.request("thread/list", { limit: 100, archived: false, sortKey: "updated_at", modelProviders: [providerId], ...cursor ? { cursor } : {} });
-      return { threads: (page.data || []).filter((t) => UUID.test(t.id) && t.modelProvider === providerId).map((t) => ({
+      return { threads: (page.data || []).filter((t) => UUID2.test(t.id) && t.modelProvider === providerId).map((t) => ({
         id: t.id,
         title: t.name || t.title || t.preview?.slice(0, 80) || "\u672A\u547D\u540D\u4F1A\u8BDD",
         providerId: t.modelProvider,
@@ -18261,15 +18367,22 @@ var LauncherService = class {
       })), nextCursor: page.nextCursor || null, providerId };
     });
   }
-  async modifyExisting({ threadRef, providerId = "custom", model = "qwen3.8-27b", effort = "xhigh" }) {
+  async modifyExisting({ threadRef, providerId = "custom", model = "qwen3.8-27b", effort = "xhigh", switchProvider = false }) {
     const threadId = existingThreadId(threadRef), selection = requireSelection(this.read(), providerId, model);
     if (!["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("\u65E0\u6548\u7684\u601D\u8003\u5F3A\u5EA6\u3002");
     const readThread = (id) => this.rpc(async (c) => (await c.request("thread/read", { threadId: id, includeTurns: false })).thread);
     const thread = await readThread(threadId);
     if (thread?.id !== threadId) throw new Error("\u6CA1\u6709\u627E\u5230\u6240\u9009\u4F1A\u8BDD\u3002");
-    if (thread.modelProvider !== providerId) throw new Error(`\u8BE5\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u662F ${thread.modelProvider || "\u672A\u77E5"}\uFF0C\u4E0E ${providerId} \u4E0D\u4E00\u81F4\u3002\u8BF7\u9009\u62E9\u539F\u4F9B\u5E94\u5546\u7684\u4F1A\u8BDD\uFF1B\u6B64\u64CD\u4F5C\u4E0D\u5207\u6362\u4F9B\u5E94\u5546\u3002`);
+    if (typeof switchProvider !== "boolean") throw new Error("\u65E0\u6548\u7684\u4F9B\u5E94\u5546\u5207\u6362\u9009\u9879\u3002");
+    if (thread.modelProvider !== providerId && !switchProvider) throw new Error(`\u8BE5\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u662F ${thread.modelProvider || "\u672A\u77E5"}\uFF0C\u4E0E ${providerId} \u4E0D\u4E00\u81F4\u3002\u8BF7\u660E\u786E\u9009\u62E9\u540C\u65F6\u5207\u6362\u4F9B\u5E94\u5546\u3002`);
     if (thread.status?.type === "active") throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u7B49\u5F85\u5F53\u524D\u56DE\u590D\u5B8C\u6210\u540E\u518D\u4FEE\u6539\u3002");
     const record2 = { threadId, providerId, model: selection.model, effort, title: thread.name || thread.title || "\u5DF2\u6709\u4F1A\u8BDD", cwd: thread.cwd, url: `codex://threads/${threadId}` };
+    if (thread.modelProvider !== providerId && switchProvider) {
+      const turns = await this.rpc((c) => c.request("thread/turns/list", { threadId, limit: 1, itemsView: "notLoaded" }));
+      if (turns.data?.some((t) => t.status === "inProgress")) throw new Error("\u8BE5\u4F1A\u8BDD\u6B63\u5728\u8FD0\u884C\uFF0C\u8BF7\u7B49\u5F85\u5F53\u524D\u56DE\u590D\u7ED3\u675F\u540E\u518D\u5207\u6362\u4F9B\u5E94\u5546\u3002");
+      const change = this.providerChanges.enqueue(thread, selection, effort);
+      return { ...record2, action: "provider_change_queued", status: "provider_change_queued", previousProvider: thread.modelProvider, providerSaved: false, requiresDesktopReload: true, change, note: "\u4F9B\u5E94\u5546\u5207\u6362\u5DF2\u6392\u961F\uFF0C\u5F53\u524D\u5C1A\u672A\u4FEE\u6539\u3002\u8BF7\u5B8C\u5168\u9000\u51FA Codex\uFF1B\u540E\u53F0\u4F1A\u5728\u539F\u4F1A\u8BDD\u91CA\u653E\u5199\u9501\u540E\u4FDD\u5B58\u914D\u7F6E\u5E76\u81EA\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\u3002\u91CD\u65B0\u6253\u5F00\u540E\u5728\u9762\u677F\u68C0\u67E5\u5207\u6362\u72B6\u6001\uFF0C\u518D\u7EE7\u7EED\u53D1\u9001\u3002\u539F\u4F1A\u8BDD ID\u3001\u5386\u53F2\u4E0E\u9879\u76EE\u4FDD\u7559\uFF1B\u5B9A\u65F6\u4EFB\u52A1\u914D\u7F6E\u4ECD\u9700\u5355\u72EC\u6838\u5BF9\u3002" };
+    }
     try {
       const confirmed = await this.confirm(record2, { readThread });
       const history = await historyModel(thread);
@@ -18287,7 +18400,7 @@ var LauncherService = class {
   }
   create(args) {
     const { operationId } = args;
-    if (!UUID.test(operationId || "")) throw new Error("\u7F3A\u5C11\u6709\u6548\u7684\u65B0\u5EFA\u64CD\u4F5C ID\u3002");
+    if (!UUID2.test(operationId || "")) throw new Error("\u7F3A\u5C11\u6709\u6548\u7684\u65B0\u5EFA\u64CD\u4F5C ID\u3002");
     const signature = JSON.stringify([args.providerId, args.model, args.projectId, args.cwd, args.title, args.effort || "none"]);
     const running = this.inFlight.get(operationId);
     if (running) {
@@ -18300,11 +18413,11 @@ var LauncherService = class {
   }
   async createOnce({ operationId, providerId, model, projectId, cwd, title, effort = "none" }) {
     const selection = requireSelection(this.read(), providerId, model);
-    if (!UUID.test(projectId || "")) throw new Error("\u8BF7\u9009\u62E9 Codex \u5DF2\u6709\u9879\u76EE\u3002");
-    if (typeof cwd !== "string" || !import_node_path5.default.isAbsolute(cwd)) throw new Error("\u8BF7\u9009\u62E9\u9879\u76EE\u4E2D\u7684\u5DE5\u4F5C\u76EE\u5F55\u3002");
+    if (!UUID2.test(projectId || "")) throw new Error("\u8BF7\u9009\u62E9 Codex \u5DF2\u6709\u9879\u76EE\u3002");
+    if (typeof cwd !== "string" || !import_node_path6.default.isAbsolute(cwd)) throw new Error("\u8BF7\u9009\u62E9\u9879\u76EE\u4E2D\u7684\u5DE5\u4F5C\u76EE\u5F55\u3002");
     if (typeof title !== "string" || !title.trim() || title.length > 100) throw new Error("\u4F1A\u8BDD\u6807\u9898\u9700\u8981 1\u2013100 \u4E2A\u5B57\u7B26\u3002");
     if (!["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(effort)) throw new Error("\u65E0\u6548\u7684\u601D\u8003\u5F3A\u5EA6\u3002");
-    const fingerprint = JSON.stringify([providerId, selection.model, projectId, import_node_path5.default.resolve(cwd), title.trim(), effort]);
+    const fingerprint = JSON.stringify([providerId, selection.model, projectId, import_node_path6.default.resolve(cwd), title.trim(), effort]);
     const previous = this.receipt(operationId);
     if (previous) {
       if (previous.fingerprint !== fingerprint) throw new Error("\u540C\u4E00\u4E2A\u64CD\u4F5C ID \u4E0D\u80FD\u5BF9\u5E94\u4E0D\u540C\u7684\u4F9B\u5E94\u5546\u6216\u6A21\u578B\u3002");
@@ -18330,7 +18443,7 @@ var LauncherService = class {
           config: { model_reasoning_effort: effort, ...providerId !== "openai" ? { web_search: "disabled" } : {} }
         });
         const threadId = result.thread.id;
-        if (!UUID.test(threadId)) throw new Error("Codex \u8FD4\u56DE\u4E86\u65E0\u6CD5\u8BC6\u522B\u7684\u4F1A\u8BDD ID\u3002");
+        if (!UUID2.test(threadId)) throw new Error("Codex \u8FD4\u56DE\u4E86\u65E0\u6CD5\u8BC6\u522B\u7684\u4F1A\u8BDD ID\u3002");
         const record2 = {
           operationId,
           threadId,
@@ -18349,7 +18462,7 @@ var LauncherService = class {
         this.save(operationId, record2);
         await client.request("thread/name/set", { threadId, name: title.trim() });
         const readback = (await client.request("thread/read", { threadId, includeTurns: false })).thread;
-        if (readback.projectId !== projectId || import_node_path5.default.resolve(readback.cwd) !== cwd) throw new Error("\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u4F46\u9879\u76EE\u5F52\u5C5E\u8BFB\u56DE\u4E0D\u4E00\u81F4\u3002");
+        if (readback.projectId !== projectId || import_node_path6.default.resolve(readback.cwd) !== cwd) throw new Error("\u4F1A\u8BDD\u5DF2\u521B\u5EFA\uFF0C\u4F46\u9879\u76EE\u5F52\u5C5E\u8BFB\u56DE\u4E0D\u4E00\u81F4\u3002");
         record2.projectVerified = true;
         this.save(operationId, record2);
         return record2;
@@ -18362,7 +18475,7 @@ var LauncherService = class {
     return this.finish(created);
   }
   async complete(operationId) {
-    if (!UUID.test(operationId || "")) throw new Error("\u65E0\u6548\u7684\u64CD\u4F5C ID\u3002");
+    if (!UUID2.test(operationId || "")) throw new Error("\u65E0\u6548\u7684\u64CD\u4F5C ID\u3002");
     const saved = this.receipt(operationId);
     if (!saved?.threadId) throw new Error("\u6CA1\u6709\u627E\u5230\u5DF2\u521B\u5EFA\u7684\u4F1A\u8BDD\uFF0C\u8BF7\u5237\u65B0\u3002");
     return this.finish(saved);
@@ -18372,7 +18485,7 @@ var LauncherService = class {
     try {
       if (saved.projectId && !saved.projectVerified) {
         const thread = await this.rpc(async (c) => (await c.request("thread/read", { threadId: saved.threadId, includeTurns: false })).thread);
-        if (thread.projectId !== saved.projectId || import_node_path5.default.resolve(thread.cwd) !== import_node_path5.default.resolve(saved.cwd)) throw new Error("\u9879\u76EE\u5F52\u5C5E\u8BFB\u56DE\u4E0D\u4E00\u81F4\uFF0C\u8BF7\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u3002");
+        if (thread.projectId !== saved.projectId || import_node_path6.default.resolve(thread.cwd) !== import_node_path6.default.resolve(saved.cwd)) throw new Error("\u9879\u76EE\u5F52\u5C5E\u8BFB\u56DE\u4E0D\u4E00\u81F4\uFF0C\u8BF7\u68C0\u67E5\u8BE5\u4F1A\u8BDD\u3002");
         saved = { ...saved, projectVerified: true };
       }
       result = await this.confirm(saved, { readThread: (id) => this.rpc(async (c) => (await c.request("thread/read", { threadId: id, includeTurns: false })).thread) });
@@ -18385,13 +18498,13 @@ var LauncherService = class {
 };
 
 // src/catalog.mjs
-var import_node_fs5 = __toESM(require("node:fs"), 1);
-var import_node_path6 = __toESM(require("node:path"), 1);
+var import_node_fs6 = __toESM(require("node:fs"), 1);
+var import_node_path7 = __toESM(require("node:path"), 1);
 var import_node_child_process3 = require("node:child_process");
 async function compatibleWithInstalledCli(file, { env = process.env, run } = {}) {
   if (process.platform !== "win32") return true;
-  const shim = import_node_path6.default.join(env.APPDATA || import_node_path6.default.join(env.USERPROFILE || "", "AppData", "Roaming"), "npm", "node_modules", "@openai", "codex", "bin", "codex.js");
-  if (!import_node_fs5.default.existsSync(shim)) return true;
+  const shim = import_node_path7.default.join(env.APPDATA || import_node_path7.default.join(env.USERPROFILE || "", "AppData", "Roaming"), "npm", "node_modules", "@openai", "codex", "bin", "codex.js");
+  if (!import_node_fs6.default.existsSync(shim)) return true;
   if (run) return run(shim, file);
   return new Promise((resolve) => {
     const child = (0, import_node_child_process3.spawn)(process.execPath, [shim, "app-server", "-c", "model_catalog_json=" + JSON.stringify(file)], { env, windowsHide: true, stdio: ["pipe", "ignore", "ignore"] });
@@ -18458,38 +18571,38 @@ function buildCatalog({ source, models }) {
   return { models: [...all.values()] };
 }
 function prepareCatalog(config2, models, directory = home()) {
-  const sourcePath = config2.model_catalog_json || import_node_path6.default.join(directory, "models_cache.json");
+  const sourcePath = config2.model_catalog_json || import_node_path7.default.join(directory, "models_cache.json");
   let source;
   try {
-    source = JSON.parse(import_node_fs5.default.readFileSync(sourcePath, "utf8"));
+    source = JSON.parse(import_node_fs6.default.readFileSync(sourcePath, "utf8"));
   } catch {
     throw new Error("\u5F53\u524D\u7248\u672C\u7684\u6A21\u578B\u76EE\u5F55\u4E0D\u53EF\u7528\uFF0C\u65E0\u6CD5\u51C6\u5907\u539F\u751F\u83DC\u5355\u3002");
   }
   const catalog = buildCatalog({ source, models });
-  const folder = import_node_path6.default.join(directory, "model-switcher");
-  import_node_fs5.default.mkdirSync(folder, { recursive: true, mode: 448 });
-  const file = import_node_path6.default.join(folder, "models.json");
-  import_node_fs5.default.writeFileSync(file, JSON.stringify(catalog), { mode: 384 });
+  const folder = import_node_path7.default.join(directory, "model-switcher");
+  import_node_fs6.default.mkdirSync(folder, { recursive: true, mode: 448 });
+  const file = import_node_path7.default.join(folder, "models.json");
+  import_node_fs6.default.writeFileSync(file, JSON.stringify(catalog), { mode: 384 });
   return file;
 }
 
 // src/settings.mjs
-var import_node_fs6 = __toESM(require("node:fs"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
-var import_node_crypto2 = require("node:crypto");
+var import_node_fs7 = __toESM(require("node:fs"), 1);
+var import_node_path8 = __toESM(require("node:path"), 1);
+var import_node_crypto3 = require("node:crypto");
 var SETTINGS_READ_OUTPUT = { type: "object", properties: { schema: { type: "object" }, values: { type: "object" }, layout: { type: "array", items: { type: "object" } } }, required: ["schema", "values"] };
 var SETTINGS_UPDATE_INPUT = { type: "object", properties: { set: { type: "object", properties: { providerId: { type: "string" }, model: { type: "string" }, effort: { type: "string" }, project: { type: "string" }, title: { type: "string" }, editThread: { type: "string" }, editProvider: { type: "string" }, editModel: { type: "string" }, editEffort: { type: "string" } }, minProperties: 1, additionalProperties: false } }, required: ["set"], additionalProperties: false };
 var EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 var NativeSettings = class {
-  constructor(service, { directory = import_node_path7.default.join(home(), "model-switcher"), read = readConfig } = {}) {
+  constructor(service, { directory = import_node_path8.default.join(home(), "model-switcher"), read = readConfig } = {}) {
     Object.assign(this, { service, directory, read });
   }
   file() {
-    return import_node_path7.default.join(this.directory, "settings.json");
+    return import_node_path8.default.join(this.directory, "settings.json");
   }
   stored() {
     try {
-      return JSON.parse(import_node_fs6.default.readFileSync(this.file(), "utf8"));
+      return JSON.parse(import_node_fs7.default.readFileSync(this.file(), "utf8"));
     } catch (error2) {
       if (error2.code === "ENOENT") return {};
       throw new Error("\u672C\u673A\u63D2\u4EF6\u8BBE\u7F6E\u65E0\u6CD5\u8BFB\u53D6\u3002");
@@ -18523,7 +18636,7 @@ var NativeSettings = class {
       project: { type: "string", title: "\u6240\u5C5E\u9879\u76EE", description: "\u5B9E\u65F6\u8BFB\u53D6 Codex \u672C\u673A\u5DF2\u6709\u9879\u76EE\u3002\u65B0\u4F1A\u8BDD\u4FDD\u5B58\u9879\u76EE\u5F52\u5C5E\uFF0C\u5DE5\u4F5C\u76EE\u5F55\u4F7F\u7528\u8BE5\u9879\u76EE\u8DEF\u5F84\u3002", enum: [...!choice ? ["\u8BF7\u9009\u62E9\u9879\u76EE"] : [], ...choices.map((p) => p.label)] },
       title: { type: "string", title: "\u65B0\u4F1A\u8BDD\u6807\u9898", minLength: 1, maxLength: 100 },
       editThread: { type: "string", title: "\u5DF2\u6709\u4F1A\u8BDD\u94FE\u63A5\u6216 ID", description: "\u7C98\u8D34 codex://threads/ \u94FE\u63A5\uFF1B\u4E5F\u53EF\u6253\u5F00\u6A21\u578B\u9762\u677F\uFF0C\u4ECE\u5DF2\u6709\u4F1A\u8BDD\u5217\u8868\u9009\u62E9\u3002" },
-      editProvider: { type: "string", title: "\u4F1A\u8BDD\u539F\u4F9B\u5E94\u5546", description: "\u5FC5\u987B\u4E0E\u8BE5\u4F1A\u8BDD\u4FDD\u5B58\u7684\u4F9B\u5E94\u5546\u4E00\u81F4\u3002", enum: providerList(config2).providers.map((p) => p.id) },
+      editProvider: { type: "string", title: "\u76EE\u6807\u4F9B\u5E94\u5546", description: "\u4FDD\u5B58\u5230\u539F\u4F1A\u8BDD\uFF0C\u4FDD\u7559\u5386\u53F2\u4E0E\u9879\u76EE\u3002\u8DE8\u4F9B\u5E94\u5546\u4F1A\u6392\u961F\uFF1B\u5B8C\u5168\u9000\u51FA Codex \u540E\u540E\u53F0\u4FDD\u5B58\u5B8C\u6210\u4F1A\u81EA\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\u3002", enum: providerList(config2).providers.map((p) => p.id) },
       editModel: { type: "string", title: "\u4FEE\u6539\u4E3A\u6A21\u578B", minLength: 1, maxLength: 160 },
       editEffort: { type: "string", title: "\u4FEE\u6539\u4E3A\u601D\u8003\u5F3A\u5EA6", enum: EFFORTS }
     }, required: ["providerId", "model", "effort", "project", "title"] }, values: { ...this.values(), project: choice?.label || "\u8BF7\u9009\u62E9\u9879\u76EE" }, layout: [
@@ -18569,29 +18682,29 @@ var NativeSettings = class {
     return { values };
   }
   write(data) {
-    import_node_fs6.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
-    const tmp = this.file() + "." + (0, import_node_crypto2.randomUUID)() + ".tmp";
-    import_node_fs6.default.writeFileSync(tmp, JSON.stringify(data), { mode: 384 });
-    import_node_fs6.default.renameSync(tmp, this.file());
+    import_node_fs7.default.mkdirSync(this.directory, { recursive: true, mode: 448 });
+    const tmp = this.file() + "." + (0, import_node_crypto3.randomUUID)() + ".tmp";
+    import_node_fs7.default.writeFileSync(tmp, JSON.stringify(data), { mode: 384 });
+    import_node_fs7.default.renameSync(tmp, this.file());
   }
   modify() {
     const values = this.values();
-    return this.service.modifyExisting({ threadRef: values.editThread, providerId: values.editProvider, model: values.editModel, effort: values.editEffort });
+    return this.service.modifyExisting({ threadRef: values.editThread, providerId: values.editProvider, model: values.editModel, effort: values.editEffort, switchProvider: true });
   }
   async launch() {
     const { choice } = await this.selection();
     if (!choice) throw new Error("\u6240\u9009\u9879\u76EE\u5DF2\u4E0D\u5B58\u5728\uFF0C\u8BF7\u5237\u65B0\u540E\u91CD\u65B0\u9009\u62E9\u3002");
-    return this.service.create({ operationId: (0, import_node_crypto2.randomUUID)(), ...this.values(), projectId: choice.projectId, cwd: choice.cwd });
+    return this.service.create({ operationId: (0, import_node_crypto3.randomUUID)(), ...this.values(), projectId: choice.projectId, cwd: choice.cwd });
   }
 };
 
 // src/schedules.mjs
-var import_node_fs7 = __toESM(require("node:fs"), 1);
-var import_node_path8 = __toESM(require("node:path"), 1);
-var import_node_crypto3 = require("node:crypto");
-var SCHEDULER_VERSION = "0.4.0";
+var import_node_fs8 = __toESM(require("node:fs"), 1);
+var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_crypto4 = require("node:crypto");
+var SCHEDULER_VERSION = "0.5.0";
 var GRACE_MS = 15 * 60 * 1e3;
-var scheduleDirectory = () => import_node_path8.default.join(home(), "model-switcher", "scheduler");
+var scheduleDirectory = () => import_node_path9.default.join(home(), "model-switcher", "scheduler");
 function localDay(now) {
   return new Date(now + 8 * 36e5).toISOString().slice(0, 10);
 }
@@ -18616,40 +18729,40 @@ function nextRun(job, now = Date.now()) {
   return null;
 }
 function atomicJson(file, value) {
-  import_node_fs7.default.mkdirSync(import_node_path8.default.dirname(file), { recursive: true, mode: 448 });
-  const tmp = `${file}.${(0, import_node_crypto3.randomUUID)()}.tmp`;
-  import_node_fs7.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
-  import_node_fs7.default.renameSync(tmp, file);
+  import_node_fs8.default.mkdirSync(import_node_path9.default.dirname(file), { recursive: true, mode: 448 });
+  const tmp = `${file}.${(0, import_node_crypto4.randomUUID)()}.tmp`;
+  import_node_fs8.default.writeFileSync(tmp, JSON.stringify(value), { mode: 384 });
+  import_node_fs8.default.renameSync(tmp, file);
 }
 var ScheduleStore = class {
   constructor({ directory = scheduleDirectory(), read = readConfig, rpc = withAppServer, now = Date.now } = {}) {
     Object.assign(this, { directory, read, rpc, now });
   }
   jobFile(id) {
-    if (!UUID.test(id || "")) throw new Error("\u65E0\u6548\u7684\u5B9A\u65F6\u4EFB\u52A1 ID\u3002");
-    return import_node_path8.default.join(this.directory, "jobs", id + ".json");
+    if (!UUID2.test(id || "")) throw new Error("\u65E0\u6548\u7684\u5B9A\u65F6\u4EFB\u52A1 ID\u3002");
+    return import_node_path9.default.join(this.directory, "jobs", id + ".json");
   }
   readJob(id) {
     try {
-      return JSON.parse(import_node_fs7.default.readFileSync(this.jobFile(id), "utf8"));
+      return JSON.parse(import_node_fs8.default.readFileSync(this.jobFile(id), "utf8"));
     } catch (error2) {
       if (error2.code === "ENOENT") throw new Error("\u5B9A\u65F6\u4EFB\u52A1\u4E0D\u5B58\u5728\uFF0C\u8BF7\u5237\u65B0\u5217\u8868\u3002");
       throw error2;
     }
   }
   jobs() {
-    const folder = import_node_path8.default.join(this.directory, "jobs");
-    if (!import_node_fs7.default.existsSync(folder)) return [];
-    return import_node_fs7.default.readdirSync(folder).filter((f) => /^[\da-f-]+\.json$/i.test(f)).map((f) => JSON.parse(import_node_fs7.default.readFileSync(import_node_path8.default.join(folder, f), "utf8")));
+    const folder = import_node_path9.default.join(this.directory, "jobs");
+    if (!import_node_fs8.default.existsSync(folder)) return [];
+    return import_node_fs8.default.readdirSync(folder).filter((f) => /^[\da-f-]+\.json$/i.test(f)).map((f) => JSON.parse(import_node_fs8.default.readFileSync(import_node_path9.default.join(folder, f), "utf8")));
   }
   runFile(id, day) {
     this.jobFile(id);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error("\u65E0\u6548\u7684\u8FD0\u884C\u65E5\u671F\u3002");
-    return import_node_path8.default.join(this.directory, "runs", id, day + ".json");
+    return import_node_path9.default.join(this.directory, "runs", id, day + ".json");
   }
   run(id, day) {
     try {
-      return JSON.parse(import_node_fs7.default.readFileSync(this.runFile(id, day), "utf8"));
+      return JSON.parse(import_node_fs8.default.readFileSync(this.runFile(id, day), "utf8"));
     } catch (error2) {
       if (error2.code === "ENOENT") return null;
       throw error2;
@@ -18657,10 +18770,10 @@ var ScheduleStore = class {
   }
   claim(job, day) {
     const file = this.runFile(job.id, day);
-    import_node_fs7.default.mkdirSync(import_node_path8.default.dirname(file), { recursive: true, mode: 448 });
-    const run = { jobId: job.id, day, scheduledFor: scheduledTime(job, day), status: "waiting", clientUserMessageId: (0, import_node_crypto3.randomUUID)(), createdAt: this.now(), updatedAt: this.now() };
+    import_node_fs8.default.mkdirSync(import_node_path9.default.dirname(file), { recursive: true, mode: 448 });
+    const run = { jobId: job.id, day, scheduledFor: scheduledTime(job, day), status: "waiting", clientUserMessageId: (0, import_node_crypto4.randomUUID)(), createdAt: this.now(), updatedAt: this.now() };
     try {
-      import_node_fs7.default.writeFileSync(file, JSON.stringify(run), { flag: "wx", mode: 384 });
+      import_node_fs8.default.writeFileSync(file, JSON.stringify(run), { flag: "wx", mode: 384 });
       return run;
     } catch (e) {
       if (e.code === "EEXIST") return this.run(job.id, day);
@@ -18671,14 +18784,14 @@ var ScheduleStore = class {
     atomicJson(this.runFile(run.jobId, run.day), { ...run, updatedAt: this.now() });
   }
   recent(id) {
-    const folder = import_node_path8.default.join(this.directory, "runs", id);
-    if (!import_node_fs7.default.existsSync(folder)) return [];
-    return import_node_fs7.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(0, 7).map((f) => JSON.parse(import_node_fs7.default.readFileSync(import_node_path8.default.join(folder, f), "utf8")));
+    const folder = import_node_path9.default.join(this.directory, "runs", id);
+    if (!import_node_fs8.default.existsSync(folder)) return [];
+    return import_node_fs8.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().slice(0, 7).map((f) => JSON.parse(import_node_fs8.default.readFileSync(import_node_path9.default.join(folder, f), "utf8")));
   }
   pending(id) {
-    const folder = import_node_path8.default.join(this.directory, "runs", id);
-    if (!import_node_fs7.default.existsSync(folder)) return [];
-    return import_node_fs7.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map((f) => JSON.parse(import_node_fs7.default.readFileSync(import_node_path8.default.join(folder, f), "utf8"))).filter((r) => ["accepted", "submitting", "unknown"].includes(r.status));
+    const folder = import_node_path9.default.join(this.directory, "runs", id);
+    if (!import_node_fs8.default.existsSync(folder)) return [];
+    return import_node_fs8.default.readdirSync(folder).filter((f) => /^\d{4}-\d{2}-\d{2}\.json$/.test(f)).map((f) => JSON.parse(import_node_fs8.default.readFileSync(import_node_path9.default.join(folder, f), "utf8"))).filter((r) => ["accepted", "submitting", "unknown"].includes(r.status));
   }
   acknowledge(id, day) {
     const run = this.run(id, day);
@@ -18693,7 +18806,7 @@ var ScheduleStore = class {
     const { id, name, threadRef, prompt, time: time3, status = "ACTIVE", providerId = "custom", model = "qwen3.8-27b", effort = "xhigh" } = input;
     this.jobFile(id);
     const threadId = existingThreadId(threadRef), selection = requireSelection(this.read(), providerId, model);
-    const old = import_node_fs7.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
+    const old = import_node_fs8.default.existsSync(this.jobFile(id)) ? this.readJob(id) : null;
     const frequency = input.frequency ?? old?.frequency ?? "daily";
     if (!["daily", "weekly"].includes(frequency)) throw new Error("\u6267\u884C\u9891\u7387\u5FC5\u987B\u4E3A\u6BCF\u5929\u6216\u6BCF\u5468\u3002");
     const weekdays = scheduleDays({ frequency, weekdays: input.weekdays ?? (old?.frequency === "weekly" ? old.weekdays : void 0) });
@@ -18704,27 +18817,27 @@ var ScheduleStore = class {
     const thread = await this.rpc(async (c) => (await c.request("thread/read", { threadId, includeTurns: false })).thread);
     if (thread?.id !== threadId || thread.modelProvider !== providerId) throw new Error("\u4EFB\u52A1\u76EE\u6807\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u4E0D\u4E00\u81F4\uFF0C\u672A\u4FDD\u5B58\u3002");
     if (status === "ACTIVE" && this.jobs().some((j) => j.id !== id && j.status === "ACTIVE" && j.threadId === threadId && j.time === time3 && j.prompt === prompt.trim() && scheduleDays(j).some((d) => weekdays.includes(d)))) throw new Error("\u8FD9\u4E2A\u4F1A\u8BDD\u5DF2\u6709\u76F8\u540C\u65F6\u95F4\u548C\u63D0\u793A\u8BCD\u4E14\u6267\u884C\u65E5\u671F\u91CD\u53E0\u7684\u542F\u7528\u4EFB\u52A1\uFF0C\u8BF7\u7F16\u8F91\u5DF2\u6709\u4EFB\u52A1\u3002");
-    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time: time3, frequency, weekdays, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto3.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
+    const job = { id, name: name.trim(), threadId, title: thread.name || thread.title || name.trim(), prompt: prompt.trim(), time: time3, frequency, weekdays, timeZone: "Asia/Shanghai", status, providerId, model: selection.model, effort, revision: (0, import_node_crypto4.randomUUID)(), activeSince: this.now(), createdAt: old?.createdAt || this.now(), updatedAt: this.now() };
     atomicJson(this.jobFile(id), job);
     return { ...job, nextRunAt: nextRun(job, this.now()) };
   }
   setStatus(id, status) {
     if (!["ACTIVE", "PAUSED"].includes(status)) throw new Error("\u65E0\u6548\u7684\u4EFB\u52A1\u72B6\u6001\u3002");
-    const job = { ...this.readJob(id), status, revision: (0, import_node_crypto3.randomUUID)(), updatedAt: this.now() };
+    const job = { ...this.readJob(id), status, revision: (0, import_node_crypto4.randomUUID)(), updatedAt: this.now() };
     atomicJson(this.jobFile(id), job);
     return job;
   }
 };
 
 // src/scheduler-runtime.mjs
-var import_node_fs8 = __toESM(require("node:fs"), 1);
-var import_node_path9 = __toESM(require("node:path"), 1);
+var import_node_fs9 = __toESM(require("node:fs"), 1);
+var import_node_path10 = __toESM(require("node:path"), 1);
 var import_node_net2 = __toESM(require("node:net"), 1);
-var import_node_crypto4 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 var import_node_child_process4 = require("node:child_process");
 var import_node_util = require("node:util");
 var import_promises3 = require("node:timers/promises");
-var schedulerPipe = () => process.platform === "win32" ? "\\\\.\\pipe\\codex-model-switcher-scheduler-" + (0, import_node_crypto4.createHash)("sha256").update(import_node_path9.default.resolve(scheduleDirectory()).toLowerCase()).digest("hex").slice(0, 16) : import_node_path9.default.join(scheduleDirectory(), "worker.sock");
+var schedulerPipe = () => process.platform === "win32" ? "\\\\.\\pipe\\codex-model-switcher-scheduler-" + (0, import_node_crypto5.createHash)("sha256").update(import_node_path10.default.resolve(scheduleDirectory()).toLowerCase()).digest("hex").slice(0, 16) : import_node_path10.default.join(scheduleDirectory(), "worker.sock");
 function schedulerControl(command = "health", token) {
   return new Promise((resolve) => {
     const socket = import_node_net2.default.createConnection(schedulerPipe());
@@ -18766,43 +18879,43 @@ var SchedulerRuntime = class {
   }
   async stop() {
     if (process.platform === "win32") await (0, import_node_util.promisify)(import_node_child_process4.execFile)("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "$taskRunKey='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'; if(Test-Path $taskRunKey){$taskRunValues=Get-ItemProperty -Path $taskRunKey -ErrorAction Stop; if($null -ne $taskRunValues.PSObject.Properties['CodexModelScheduler']){Remove-ItemProperty -Path $taskRunKey -Name 'CodexModelScheduler' -ErrorAction Stop}}"], { windowsHide: true });
-    const tokenFile = import_node_path9.default.join(scheduleDirectory(), "control.key");
-    if (import_node_fs8.default.existsSync(tokenFile)) await schedulerControl("stop", import_node_fs8.default.readFileSync(tokenFile, "utf8"));
+    const tokenFile = import_node_path10.default.join(scheduleDirectory(), "control.key");
+    if (import_node_fs9.default.existsSync(tokenFile)) await schedulerControl("stop", import_node_fs9.default.readFileSync(tokenFile, "utf8"));
     for (let i = 0; i < 20 && await schedulerControl(); i++) await (0, import_promises3.setTimeout)(250);
     return await this.status();
   }
   async start() {
     if (process.platform !== "win32") throw new Error("\u72EC\u7ACB\u5B9A\u65F6\u670D\u52A1\u76EE\u524D\u53EA\u9A8C\u8BC1\u5E76\u652F\u6301 Windows\u3002");
-    const folder = import_node_path9.default.join(scheduleDirectory(), "runtime");
-    import_node_fs8.default.mkdirSync(folder, { recursive: true, mode: 448 });
-    const tokenFile = import_node_path9.default.join(scheduleDirectory(), "control.key");
-    if (!import_node_fs8.default.existsSync(tokenFile)) try {
-      import_node_fs8.default.writeFileSync(tokenFile, (0, import_node_crypto4.randomBytes)(32).toString("hex"), { flag: "wx", mode: 384 });
+    const folder = import_node_path10.default.join(scheduleDirectory(), "runtime");
+    import_node_fs9.default.mkdirSync(folder, { recursive: true, mode: 448 });
+    const tokenFile = import_node_path10.default.join(scheduleDirectory(), "control.key");
+    if (!import_node_fs9.default.existsSync(tokenFile)) try {
+      import_node_fs9.default.writeFileSync(tokenFile, (0, import_node_crypto5.randomBytes)(32).toString("hex"), { flag: "wx", mode: 384 });
     } catch (error2) {
       if (error2.code !== "EEXIST") throw error2;
     }
     const health = await schedulerControl();
     if (health?.version && health.version !== SCHEDULER_VERSION) {
-      await schedulerControl("stop", import_node_fs8.default.readFileSync(tokenFile, "utf8"));
+      await schedulerControl("stop", import_node_fs9.default.readFileSync(tokenFile, "utf8"));
       for (let i = 0; i < 20 && await schedulerControl(); i++) await (0, import_promises3.setTimeout)(250);
       if (await schedulerControl()) throw new Error("\u65E7\u7248\u5B9A\u65F6\u670D\u52A1\u4ECD\u5728\u9000\u51FA\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002");
     }
-    const target = import_node_path9.default.join(folder, "scheduler.cjs");
-    if (!this.bundle || !import_node_fs8.default.existsSync(this.bundle)) throw new Error("\u5B9A\u65F6\u670D\u52A1\u6784\u5EFA\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
-    const data = import_node_fs8.default.readFileSync(this.bundle), tmp = target + "." + (0, import_node_crypto4.randomUUID)() + ".tmp";
-    import_node_fs8.default.writeFileSync(tmp, data, { mode: 384 });
-    import_node_fs8.default.renameSync(tmp, target);
+    const target = import_node_path10.default.join(folder, "scheduler.cjs");
+    if (!this.bundle || !import_node_fs9.default.existsSync(this.bundle)) throw new Error("\u5B9A\u65F6\u670D\u52A1\u6784\u5EFA\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u8BF7\u66F4\u65B0\u63D2\u4EF6\u3002");
+    const data = import_node_fs9.default.readFileSync(this.bundle), tmp = target + "." + (0, import_node_crypto5.randomUUID)() + ".tmp";
+    import_node_fs9.default.writeFileSync(tmp, data, { mode: 384 });
+    import_node_fs9.default.renameSync(tmp, target);
     const quoted = (value) => '"' + value.replaceAll('"', '""') + '"';
     const command = `"${process.execPath}" "${target}"`;
-    const vbs = import_node_path9.default.join(folder, "start.vbs");
-    const codexHome = import_node_path9.default.dirname(import_node_path9.default.dirname(scheduleDirectory()));
-    import_node_fs8.default.writeFileSync(vbs, Buffer.from(`\uFEFFSet taskShell = CreateObject("WScript.Shell")\r
+    const vbs = import_node_path10.default.join(folder, "start.vbs");
+    const codexHome = import_node_path10.default.dirname(import_node_path10.default.dirname(scheduleDirectory()));
+    import_node_fs9.default.writeFileSync(vbs, Buffer.from(`\uFEFFSet taskShell = CreateObject("WScript.Shell")\r
 Set taskEnv = taskShell.Environment("PROCESS")\r
 taskEnv("CODEX_HOME") = ${quoted(codexHome)}\r
 taskShell.Run ${quoted(command)}, 0, False\r
 `, "utf16le"), { mode: 384 });
-    const wscript = import_node_path9.default.join(process.env.WINDIR || "C:\\Windows", "System32", "wscript.exe");
-    if (!import_node_fs8.default.existsSync(wscript)) throw new Error("\u7CFB\u7EDF\u7F3A\u5C11 Windows Script Host\uFF0C\u65E0\u6CD5\u914D\u7F6E\u9690\u85CF\u542F\u52A8\u3002");
+    const wscript = import_node_path10.default.join(process.env.WINDIR || "C:\\Windows", "System32", "wscript.exe");
+    if (!import_node_fs9.default.existsSync(wscript)) throw new Error("\u7CFB\u7EDF\u7F3A\u5C11 Windows Script Host\uFF0C\u65E0\u6CD5\u914D\u7F6E\u9690\u85CF\u542F\u52A8\u3002");
     await (0, import_node_util.promisify)(import_node_child_process4.execFile)("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", "New-Item -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Force | Out-Null; New-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'CodexModelScheduler' -PropertyType String -Value $env:CODEX_SCHEDULER_STARTUP_COMMAND -Force | Out-Null"], { windowsHide: true, env: { ...process.env, CODEX_SCHEDULER_STARTUP_COMMAND: `"${wscript}" "${vbs}"` } });
     if (!await schedulerControl()) {
       const child = (0, import_node_child_process4.spawn)(process.execPath, [target], { detached: true, windowsHide: true, stdio: "ignore", env: process.env });
@@ -18823,24 +18936,26 @@ taskShell.Run ${quoted(command)}, 0, False\r
 
 // src/server.mjs
 async function main() {
-  const directory = typeof __dirname === "string" ? __dirname : import_node_path10.default.dirname((0, import_node_url.fileURLToPath)("file:///codex-model-switcher/src/server.mjs"));
+  const directory = typeof __dirname === "string" ? __dirname : import_node_path11.default.dirname((0, import_node_url.fileURLToPath)("file:///codex-model-switcher/src/server.mjs"));
   const icons = [...["light", "dark"].map((theme) => ({
-    src: "data:image/svg+xml;base64," + import_node_fs9.default.readFileSync(import_node_path10.default.join(directory, "..", "assets", `navigation-${theme}.svg`)).toString("base64"),
+    src: "data:image/svg+xml;base64," + import_node_fs10.default.readFileSync(import_node_path11.default.join(directory, "..", "assets", `navigation-${theme}.svg`)).toString("base64"),
     mimeType: "image/svg+xml",
     sizes: ["any"],
     theme
-  })), { src: "data:image/svg+xml;base64," + import_node_fs9.default.readFileSync(import_node_path10.default.join(directory, "..", "assets", "icon.svg")).toString("base64"), mimeType: "image/svg+xml", sizes: ["any"] }];
+  })), { src: "data:image/svg+xml;base64," + import_node_fs10.default.readFileSync(import_node_path11.default.join(directory, "..", "assets", "icon.svg")).toString("base64"), mimeType: "image/svg+xml", sizes: ["any"] }];
   const service = new LauncherService();
   const settings = new NativeSettings(service);
-  const schedules = new ScheduleStore(), scheduler = new SchedulerRuntime(import_node_path10.default.join(directory, "scheduler.cjs"));
+  const schedules = new ScheduleStore(), scheduler = new SchedulerRuntime(import_node_path11.default.join(directory, "scheduler.cjs"));
   try {
-    if (schedules.jobs().some((j) => j.status === "ACTIVE")) scheduler.ensure().catch(() => {
+    if (schedules.jobs().some((j) => j.status === "ACTIVE") || service.providerChanges.list().some((j) => ["waiting", "applying"].includes(j.status))) scheduler.ensure().catch(() => {
     });
   } catch {
   }
   const URI = "ui://codex-model-switcher/panel.html";
   const empty = { type: "object", properties: {}, additionalProperties: false };
   const tools = [
+    { name: "list_provider_changes", description: "\u8BFB\u53D6\u672C\u673A\u539F\u4F1A\u8BDD\u4F9B\u5E94\u5546\u5207\u6362\u7684\u7B49\u5F85\u3001\u4FDD\u5B58\u548C\u5931\u8D25\u72B6\u6001\u3002saved \u8BC1\u660E\u65B0\u8FDB\u7A0B\u5DF2\u6838\u5BF9\u914D\u7F6E\uFF0C\u4E0D\u8BC1\u660E\u65E7\u684C\u9762\u4F1A\u8BDD\u5DF2\u91CA\u653E\u6216\u666E\u901A\u6D88\u606F\u6210\u529F\u3002", inputSchema: empty, annotations: { readOnlyHint: true } },
+    { name: "cancel_provider_change", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\u53D6\u6D88\u6307\u5B9A\u4F1A\u8BDD\u5C1A\u5728\u7B49\u5F85\u4E2D\u7684\u4F9B\u5E94\u5546\u5207\u6362\u3002", inputSchema: { type: "object", properties: { threadRef: { type: "string" } }, required: ["threadRef"], additionalProperties: false }, annotations: { readOnlyHint: false } },
     { name: "open_schedule_panel", title: "\u5B9A\u65F6\u4EFB\u52A1\u7BA1\u7406", description: "\u6253\u5F00\u63D2\u4EF6\u5B9A\u65F6\u4EFB\u52A1\u7BA1\u7406\u9875\uFF0C\u4E3A\u6BCF\u4E2A\u4EFB\u52A1\u9009\u62E9\u4F9B\u5E94\u5546\u3001\u6A21\u578B\u548C\u601D\u8003\u5F3A\u5EA6\u3002\u9ED8\u8BA4\u586B\u5165\u5343\u95EE\uFF0C\u652F\u6301\u5176\u4ED6\u5DF2\u914D\u7F6E\u4F9B\u5E94\u5546\u3002", inputSchema: empty, icons, annotations: { readOnlyHint: true }, _meta: { ui: { resourceUri: URI } } },
     { name: "list_model_schedules", description: "\u8BFB\u53D6\u672C\u673A\u63D2\u4EF6\u5B9A\u65F6\u4EFB\u52A1\u3001\u4E0B\u6B21\u6267\u884C\u65F6\u95F4\u548C\u6700\u8FD1\u8FD0\u884C\u8BB0\u5F55\u3002", inputSchema: empty, annotations: { readOnlyHint: true } },
     { name: "save_model_schedule", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\uFF0C\u5728\u672C\u673A\u521B\u5EFA\u6216\u66F4\u65B0\u72EC\u7ACB\u6BCF\u5929\u6216\u6BCF\u5468\u5B9A\u65F6\u4EFB\u52A1\uFF0C\u5411\u6307\u5B9A\u5DF2\u6709\u4F1A\u8BDD\u53D1\u9001\u4EFB\u52A1\u63D0\u793A\u8BCD\u3002\u9ED8\u8BA4 custom / qwen3.8-27b / xhigh\uFF0C\u6309\u5317\u4EAC\u65F6\u95F4\u6267\u884C\u3002\u542F\u7528\u65F6\u5B89\u88C5\u9690\u85CF\u540E\u53F0\u670D\u52A1\u548C\u5F53\u524D\u7528\u6237\u767B\u5F55\u81EA\u542F\u52A8\uFF1B\u4E0D\u4FEE\u6539\u539F\u751F\u5B9A\u65F6\u4EFB\u52A1\u6216\u6A21\u578B\u76EE\u5F55\u3002\u76F8\u540C\u4EFB\u52A1\u7F16\u8F91\u548C\u91CD\u8BD5\u5FC5\u987B\u590D\u7528 ID\u3002", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, threadRef: { type: "string" }, prompt: { type: "string" }, time: { type: "string", description: "\u5317\u4EAC\u65F6\u95F4 HH:mm" }, frequency: { type: "string", enum: ["daily", "weekly"], description: "\u65B0\u4EFB\u52A1\u9ED8\u8BA4\u6BCF\u5929\uFF1B\u7F16\u8F91\u65F6\u7701\u7565\u5219\u4FDD\u7559\u539F\u9891\u7387" }, weekdays: { type: "array", items: { type: "integer", minimum: 1, maximum: 7 }, minItems: 1, maxItems: 7, uniqueItems: true, description: "\u6BCF\u5468\u6267\u884C\u661F\u671F\uFF0C1=\u5468\u4E00\uFF0C7=\u5468\u65E5\uFF1B\u6BCF\u5468\u8BA1\u5212\u5FC5\u987B\u9009\u62E9\u81F3\u5C11\u4E00\u5929" }, status: { type: "string", enum: ["ACTIVE", "PAUSED"] }, providerId: { type: "string", default: "custom" }, model: { type: "string", default: "qwen3.8-27b" }, effort: { type: "string", enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"], default: "xhigh" } }, required: ["id", "name", "threadRef", "prompt", "time", "status"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
@@ -18850,9 +18965,9 @@ async function main() {
     { name: "read_launcher_settings", description: "\u8BFB\u53D6\u63D2\u4EF6\u8BE6\u60C5\u9875\u7684\u539F\u751F\u914D\u7F6E\u63A7\u4EF6\u3001\u5F53\u524D\u8BBE\u7F6E\u548C\u64CD\u4F5C\u6309\u94AE\u3002", inputSchema: empty, outputSchema: SETTINGS_READ_OUTPUT, annotations: { readOnlyHint: true } },
     { name: "update_launcher_settings", description: "\u4FDD\u5B58\u63D2\u4EF6\u539F\u751F\u914D\u7F6E\u9875\u4E2D\u6539\u53D8\u7684\u5B57\u6BB5\uFF1B\u4E0D\u4FEE\u6539 Codex \u9ED8\u8BA4\u914D\u7F6E\uFF0C\u4E0D\u521B\u5EFA\u4F1A\u8BDD\u3002", inputSchema: SETTINGS_UPDATE_INPUT, outputSchema: { type: "object", properties: { values: { type: "object" } }, required: ["values"] }, annotations: { readOnlyHint: false } },
     { name: "launch_from_settings", title: "\u6309\u4EE5\u4E0A\u914D\u7F6E\u65B0\u5EFA\u4F1A\u8BDD", description: "\u7528\u6237\u70B9\u51FB\u539F\u751F\u8BBE\u7F6E\u9875\u7684\u65B0\u5EFA\u6309\u94AE\u6216\u660E\u786E\u8981\u6C42\u65F6\uFF0C\u4F7F\u7528\u5DF2\u4FDD\u5B58\u7684\u63D2\u4EF6\u8BBE\u7F6E\u65B0\u5EFA\u5E76\u6253\u5F00\u4F1A\u8BDD\uFF1B\u4E0D\u53D1\u9001\u6D88\u606F\u3002", inputSchema: empty, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false } },
-    { name: "modify_from_settings", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", description: "\u7528\u6237\u70B9\u51FB\u4FEE\u6539\u6309\u94AE\u6216\u660E\u786E\u8981\u6C42\u65F6\uFF0C\u6309\u63D2\u4EF6\u8BBE\u7F6E\u4FEE\u6539\u6307\u5B9A\u5DF2\u6709\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\u3002\u9ED8\u8BA4 custom / qwen3.8-27b / xhigh\uFF1B\u4FDD\u7559\u4E0A\u4E0B\u6587\uFF0C\u4E0D\u53D1\u9001\u6D88\u606F\u3001\u4E0D\u6539\u4F9B\u5E94\u5546\u6216\u5B9A\u65F6\u4EFB\u52A1\u3002", inputSchema: empty, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
+    { name: "modify_from_settings", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", description: "\u7528\u6237\u70B9\u51FB\u4FEE\u6539\u6309\u94AE\u6216\u660E\u786E\u8981\u6C42\u65F6\uFF0C\u6309\u63D2\u4EF6\u8BBE\u7F6E\u4FEE\u6539\u6307\u5B9A\u5DF2\u6709\u4F1A\u8BDD\u7684\u4F9B\u5E94\u5546\u3001\u6A21\u578B\u548C\u5F3A\u5EA6\u3002\u4FDD\u7559\u539F\u4F1A\u8BDD ID \u548C\u5386\u53F2\uFF1B\u5DF2\u52A0\u8F7D\u7684\u684C\u9762\u4F1A\u8BDD\u53EF\u80FD\u9700\u8981\u7528\u6237\u91CD\u65B0\u6253\u5F00 Codex \u540E\u751F\u6548\u3002", inputSchema: empty, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
     { name: "list_existing_threads", description: "\u5206\u9875\u8BFB\u53D6\u6307\u5B9A\u4F9B\u5E94\u5546\u7684\u672C\u673A\u5DF2\u6709\u4F1A\u8BDD\uFF0C\u4F9B\u7528\u6237\u9009\u62E9\u3002", inputSchema: { type: "object", properties: { providerId: { type: "string", default: "custom" }, cursor: { type: "string" } }, additionalProperties: false }, annotations: { readOnlyHint: true } },
-    { name: "modify_existing_thread", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\u4FEE\u6539\u6307\u5B9A\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\uFF0C\u9ED8\u8BA4 custom / qwen3.8-27b / xhigh\u3002\u5148\u6838\u5BF9\u6301\u4E45\u5316\u4F9B\u5E94\u5546\uFF0C\u518D\u7B49\u5F85\u684C\u9762\u8BBE\u7F6E\u8BFB\u56DE\uFF1B\u4E0D\u65B0\u5EFA\u4F1A\u8BDD\u3001\u4E0D\u53D1\u9001\u6D88\u606F\u3001\u4E0D\u5207\u6362\u4F9B\u5E94\u5546\u3001\u4E0D\u6539\u5B9A\u65F6\u4EFB\u52A1\u3002", inputSchema: { type: "object", properties: { threadRef: { type: "string", description: "\u7528\u6237\u9009\u62E9\u6216\u63D0\u4F9B\u7684\u4F1A\u8BDD ID / codex://threads/ \u94FE\u63A5" }, providerId: { type: "string", default: "custom" }, model: { type: "string", default: "qwen3.8-27b" }, effort: { type: "string", enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"], default: "xhigh" } }, required: ["threadRef"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
+    { name: "modify_existing_thread", title: "\u4FEE\u6539\u5DF2\u6709\u4F1A\u8BDD\u6A21\u578B", description: "\u7528\u6237\u660E\u786E\u8981\u6C42\u540E\u4FEE\u6539\u539F\u4F1A\u8BDD\u7684\u6A21\u578B\u548C\u5F3A\u5EA6\u3002\u660E\u786E\u8981\u6C42\u8DE8\u4F9B\u5E94\u5546\u5207\u6362\u65F6\u4F20 switchProvider=true\uFF0C\u540E\u53F0\u7B49\u5F85\u539F\u4F1A\u8BDD\u91CA\u653E\u5199\u9501\u540E\u7528\u5B98\u65B9\u6062\u590D\u63A5\u53E3\u4FDD\u5B58\u5E76\u81EA\u52A8\u6253\u5F00\u539F\u4F1A\u8BDD\u3002\u63D0\u793A\u7528\u6237\u5B8C\u5168\u9000\u51FA Codex\uFF0C\u63D2\u4EF6\u4E0D\u4F1A\u4E3B\u52A8\u5173\u95ED\u5E94\u7528\uFF1B\u533A\u5206 provider_change_queued\u3001\u961F\u5217 saved \u4E0E settings_verified\u3002\u4FDD\u7559 ID\u3001\u5386\u53F2\u53CA\u9879\u76EE\uFF0C\u4E0D\u53D1\u9001\u6D88\u606F\u6216\u6539\u5B9A\u65F6\u4EFB\u52A1\u3002", inputSchema: { type: "object", properties: { threadRef: { type: "string", description: "\u7528\u6237\u9009\u62E9\u6216\u63D0\u4F9B\u7684\u4F1A\u8BDD ID / codex://threads/ \u94FE\u63A5" }, switchProvider: { type: "boolean", default: false, description: "\u4EC5\u7528\u6237\u660E\u786E\u8981\u6C42\u5207\u6362\u4F9B\u5E94\u5546\u65F6\u8BBE\u4E3A true" }, providerId: { type: "string", default: "custom" }, model: { type: "string", default: "qwen3.8-27b" }, effort: { type: "string", enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"], default: "xhigh" } }, required: ["threadRef"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } },
     {
       name: "open_model_panel",
       title: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B",
@@ -18894,13 +19009,17 @@ async function main() {
     const config2 = readConfig();
     const catalog = prepareCatalog(config2, models);
     if (!await compatibleWithInstalledCli(catalog)) return { applied: false, catalog, note: "\u5F53\u524D\u547D\u4EE4\u884C Codex \u4E0D\u80FD\u8BFB\u53D6\u684C\u9762\u7248\u672C\u7684\u6A21\u578B\u76EE\u5F55\u3002\u5DF2\u751F\u6210\u76EE\u5F55\uFF0C\u4F46\u6CA1\u6709\u4FEE\u6539\u5171\u4EAB\u914D\u7F6E\uFF1B\u539F\u751F\u6A21\u578B\u83DC\u5355\u63A5\u5165\u9700\u8981\u5148\u7EDF\u4E00\u7248\u672C\u3002" };
-    const backup = import_node_path10.default.join(home(), "model-switcher", `config-before-catalog-${Date.now()}.toml`);
-    import_node_fs9.default.copyFileSync(import_node_path10.default.join(home(), "config.toml"), backup, import_node_fs9.default.constants.COPYFILE_EXCL);
+    const backup = import_node_path11.default.join(home(), "model-switcher", `config-before-catalog-${Date.now()}.toml`);
+    import_node_fs10.default.copyFileSync(import_node_path11.default.join(home(), "config.toml"), backup, import_node_fs10.default.constants.COPYFILE_EXCL);
     await withAppServer((c) => c.request("config/batchWrite", { edits: [{ keyPath: "model_catalog_json", value: catalog, mergeStrategy: "upsert" }], reloadUserConfig: true }));
     return { applied: true, catalog, backup, note: "\u5DF2\u4FDD\u7559\u539F\u6709\u6A21\u578B\u5E76\u63A5\u5165\u65B0\u6A21\u578B\u76EE\u5F55\u3002\u539F\u751F\u83DC\u5355\u53EF\u80FD\u9700\u8981\u91CD\u65B0\u542F\u52A8\u684C\u9762\u4E00\u6B21\uFF1B\u65E5\u540E\u65B0\u5EFA\u8FD9\u4E9B\u6A21\u578B\u7684\u4F1A\u8BDD\u4E0D\u9700\u8981\u518D\u6539\u914D\u7F6E\u3002" };
   }
   async function action(name, args = {}, extra = {}) {
     switch (name) {
+      case "list_provider_changes":
+        return { changes: service.providerChanges.list(), service: await scheduler.status() };
+      case "cancel_provider_change":
+        return { change: service.providerChanges.cancel(existingThreadId(args.threadRef)) };
       case "open_schedule_panel":
         return { ...await service.catalog(extra), initialMode: "schedule" };
       case "list_model_schedules":
@@ -18939,11 +19058,11 @@ async function main() {
       case "launch_from_settings":
         return settings.launch();
       case "modify_from_settings":
-        return settings.modify();
+        return ensureProviderChange(await settings.modify());
       case "list_existing_threads":
         return service.existingThreads(args);
       case "modify_existing_thread":
-        return service.modifyExisting(args);
+        return ensureProviderChange(await service.modifyExisting(args));
       case "open_model_panel":
       case "open_thread_model_panel":
         return service.catalog(extra);
@@ -18961,13 +19080,21 @@ async function main() {
         throw new Error("\u4E0D\u652F\u6301\u7684\u64CD\u4F5C\u3002");
     }
   }
-  let html = import_node_fs9.default.readFileSync(import_node_path10.default.join(directory, "panel.html"), "utf8");
-  const token = (0, import_node_crypto5.randomBytes)(32).toString("hex");
+  async function ensureProviderChange(result) {
+    if (result.status !== "provider_change_queued") return result;
+    try {
+      return { ...result, service: await scheduler.ensure() };
+    } catch (error2) {
+      return { ...result, service: { running: false, error: error2.message }, note: result.note + " \u540E\u53F0\u5C1A\u672A\u542F\u52A8\uFF1A" + error2.message + "\u3002\u8BF7\u5148\u91CD\u8BD5\u542F\u52A8\uFF0C\u518D\u9000\u51FA Codex\u3002" };
+    }
+  }
+  let html = import_node_fs10.default.readFileSync(import_node_path11.default.join(directory, "panel.html"), "utf8");
+  const token = (0, import_node_crypto6.randomBytes)(32).toString("hex");
   let origin, browserLink;
   function authorized(request) {
     const header = request.headers.authorization || "";
     const expected = Buffer.from(`Bearer ${token}`), provided = Buffer.from(header);
-    return provided.length === expected.length && (0, import_node_crypto5.timingSafeEqual)(provided, expected) && (!request.headers.origin || request.headers.origin === origin);
+    return provided.length === expected.length && (0, import_node_crypto6.timingSafeEqual)(provided, expected) && (!request.headers.origin || request.headers.origin === origin);
   }
   const web = import_node_http.default.createServer(async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -19008,12 +19135,12 @@ async function main() {
   origin = `http://127.0.0.1:${web.address().port}`;
   browserLink = origin + "/#token=" + token;
   if (process.argv.includes("--serve")) {
-    const folder = import_node_path10.default.join(home(), "model-switcher");
-    import_node_fs9.default.mkdirSync(folder, { recursive: true, mode: 448 });
-    import_node_fs9.default.writeFileSync(import_node_path10.default.join(folder, "launcher.json"), JSON.stringify({ pid: process.pid, url: browserLink }), { mode: 384 });
+    const folder = import_node_path11.default.join(home(), "model-switcher");
+    import_node_fs10.default.mkdirSync(folder, { recursive: true, mode: 448 });
+    import_node_fs10.default.writeFileSync(import_node_path11.default.join(folder, "launcher.json"), JSON.stringify({ pid: process.pid, url: browserLink }), { mode: 384 });
     console.error("\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B\u542F\u52A8\u5668\u5DF2\u5728\u672C\u673A\u8FD0\u884C\u3002");
   } else {
-    const server = new Server({ name: "codex-model-switcher", version: "0.4.0", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
+    const server = new Server({ name: "codex-model-switcher", version: "0.5.0", icons }, { capabilities: { tools: {}, resources: {}, experimental: { "openai/settings": { readTool: "read_launcher_settings", updateTool: "update_launcher_settings" } } } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
     server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [{ uri: URI, name: "\u4F9B\u5E94\u5546\u4E0E\u6A21\u578B", mimeType: "text/html;profile=mcp-app" }] }));
     server.setRequestHandler(ReadResourceRequestSchema, async (request) => {

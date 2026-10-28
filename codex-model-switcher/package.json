@@ -1,6 +1,6 @@
 {
   "name": "codex-model-switcher",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/launcher.test.mjs tests/scheduler.test.mjs",
+    "test": "node --test tests/launcher.test.mjs tests/scheduler.test.mjs tests/provider-switch.test.mjs",
     "start": "node dist/server.cjs"
   },
   "dependencies": {

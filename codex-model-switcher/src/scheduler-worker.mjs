@@ -6,9 +6,10 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {ScheduleStore,tickSchedules,scheduleDirectory,SCHEDULER_VERSION,atomicJson} from './schedules.mjs';
 import {schedulerPipe} from './scheduler-runtime.mjs';
 import {dispatchScheduled,observeScheduled} from './scheduled-turn.mjs';
+import {ProviderChangeStore,processProviderChanges} from './provider-changes.mjs';
 
 async function main(){
-  const store=new ScheduleStore(),tokenFile=path.join(scheduleDirectory(),'control.key');
+  const store=new ScheduleStore(),changes=new ProviderChangeStore(),tokenFile=path.join(scheduleDirectory(),'control.key');
   const token=fs.readFileSync(tokenFile,'utf8');let stopping=false,working=false;
   const server=net.createServer(socket=>{
     socket.setTimeout(2000,()=>socket.destroy());let data='';
@@ -31,10 +32,12 @@ async function main(){
     working=true;
     try{
       await tickSchedules(store,{dispatch:dispatchScheduled,observe:observeScheduled});
+      await processProviderChanges(changes);
       atomicJson(path.join(scheduleDirectory(),'health.json'),{pid:process.pid,version:SCHEDULER_VERSION,heartbeatAt:Date.now()});
     }catch{atomicJson(path.join(scheduleDirectory(),'health.json'),{pid:process.pid,version:SCHEDULER_VERSION,heartbeatAt:Date.now(),error:'定时服务检查失败，请检查插件运行记录。'});}
     working=false;
-    for(let i=0;i<15&&!stopping;i++)await delay(1000);
+    const steps=changes.list().some(j=>['waiting','applying'].includes(j.status))?2:15;
+    for(let i=0;i<steps&&!stopping;i++)await delay(1000);
   }
   await new Promise(resolve=>server.close(resolve));
 }

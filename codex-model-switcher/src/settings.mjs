@@ -29,7 +29,7 @@ export class NativeSettings {
     project:{type:'string',title:'所属项目',description:'实时读取 Codex 本机已有项目。新会话保存项目归属，工作目录使用该项目路径。',enum:[...(!choice?['请选择项目']:[]),...choices.map(p=>p.label)]},
     title:{type:'string',title:'新会话标题',minLength:1,maxLength:100},
     editThread:{type:'string',title:'已有会话链接或 ID',description:'粘贴 codex://threads/ 链接；也可打开模型面板，从已有会话列表选择。'},
-    editProvider:{type:'string',title:'会话原供应商',description:'必须与该会话保存的供应商一致。',enum:providerList(config).providers.map(p=>p.id)},
+    editProvider:{type:'string',title:'目标供应商',description:'保存到原会话，保留历史与项目。跨供应商会排队；完全退出 Codex 后后台保存完成会自动打开原会话。',enum:providerList(config).providers.map(p=>p.id)},
     editModel:{type:'string',title:'修改为模型',minLength:1,maxLength:160},
     editEffort:{type:'string',title:'修改为思考强度',enum:EFFORTS}
   },required:['providerId','model','effort','project','title']},values:{...this.values(),project:choice?.label||'请选择项目'},layout:[
@@ -72,7 +72,7 @@ export class NativeSettings {
     this.write(data);return {values};
   }
   write(data){fs.mkdirSync(this.directory,{recursive:true,mode:0o700});const tmp=this.file()+'.'+randomUUID()+'.tmp';fs.writeFileSync(tmp,JSON.stringify(data),{mode:0o600});fs.renameSync(tmp,this.file());}
-  modify(){const values=this.values();return this.service.modifyExisting({threadRef:values.editThread,providerId:values.editProvider,model:values.editModel,effort:values.editEffort});}
+  modify(){const values=this.values();return this.service.modifyExisting({threadRef:values.editThread,providerId:values.editProvider,model:values.editModel,effort:values.editEffort,switchProvider:true});}
   async launch(){
     const {choice}=await this.selection();
     if(!choice)throw new Error('所选项目已不存在，请刷新后重新选择。');

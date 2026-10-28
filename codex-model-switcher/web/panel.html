@@ -54,15 +54,17 @@
   <section id="edit-section" aria-labelledby="edit-heading" hidden>
     <div class="section-heading"><h2 id="edit-heading">修改已有会话模型</h2></div>
     <form id="edit-form">
-      <div class="field-row"><label for="edit-provider">会话原供应商</label><div class="field-control"><select id="edit-provider" disabled></select><p class="hint">选择该会话原来的供应商。</p></div></div>
+      <div class="field-row"><label for="edit-source-provider">会话原供应商</label><div class="field-control"><select id="edit-source-provider" disabled></select><p class="hint">按原供应商筛选要修改的会话。</p></div></div>
       <div class="field-row"><label for="edit-thread">已有会话</label><div class="field-control"><select id="edit-thread" disabled><option value="">请选择会话</option></select><div class="inline-controls"><button id="reload-threads" class="text" type="button">刷新列表</button><button id="more-threads" class="text" type="button" hidden>加载更多</button></div><p id="thread-source" class="hint"></p></div></div>
       <div class="field-row"><label for="edit-ref">会话链接或 ID</label><div class="field-control"><input id="edit-ref" required placeholder="codex://threads/…" maxlength="200" autocomplete="off"><p class="hint">选择会话后自动填入，也可以直接粘贴其他会话的链接。</p></div></div>
+      <div class="field-row"><label for="edit-provider">目标供应商</label><div class="field-control"><select id="edit-provider" disabled></select><p class="hint">可从 OpenAI 切到 custom，保留原会话 ID、历史和项目。跨供应商切换会排队；完全退出 Codex 后，后台保存完成会自动打开原会话。</p></div></div>
       <div class="field-row"><label for="edit-model">修改为模型</label><div class="field-control"><input id="edit-model" required value="qwen3.8-27b" maxlength="160" spellcheck="false"></div></div>
       <div class="field-row"><label for="edit-effort">思考强度</label><div class="field-control"><select id="edit-effort"><option value="xhigh">xhigh</option></select></div></div>
-      <div class="actions"><div class="selection">保留原会话的上下文和项目。</div><button id="edit-submit" class="primary" type="submit" disabled>修改并确认模型</button></div>
+      <div class="actions"><div class="selection">保留原会话的上下文和项目。</div><button id="edit-submit" class="primary" type="submit" disabled>修改供应商与模型</button></div>
       <p class="hint footnote">会打开所选会话并核对设置及历史模型记录。模型切换可能触发旧模型压缩；本操作不会发送验证消息或自动压缩上下文。</p>
     </form>
     <div id="edit-result" class="result" hidden aria-live="polite"><h2>修改结果</h2><p id="edit-result-text" class="hint"></p><a id="edit-result-link">打开该会话</a></div>
+    <div class="actions"><h2>供应商切换状态</h2><button id="edit-check-changes" class="text" type="button">检查切换状态</button></div><div id="edit-changes" aria-live="polite"></div>
   </section>
   <section class="result" id="result" hidden aria-live="polite"><p class="section-caption">最近创建</p><h2 id="result-title"></h2><dl id="result-data"></dl><p id="result-note" class="hint"></p><button id="complete" type="button">打开并确认模型</button></section>
   <details id="advanced" class="advanced"><summary>模型来源与高级设置</summary><div class="advanced-content">

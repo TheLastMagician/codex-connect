@@ -5,7 +5,7 @@ import {home,readConfig,requireSelection} from './providers.mjs';
 import {existingThreadId,UUID} from './service.mjs';
 import {withAppServer} from './app-server.mjs';
 
-export const SCHEDULER_VERSION='0.4.0';
+export const SCHEDULER_VERSION='0.5.0';
 export const GRACE_MS=15*60*1000;
 export const scheduleDirectory=()=>path.join(home(),'model-switcher','scheduler');
 export function localDay(now){return new Date(now+8*3600000).toISOString().slice(0,10);}

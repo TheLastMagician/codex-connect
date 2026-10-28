@@ -32,7 +32,7 @@ function update(){
   $('refresh').disabled=loading;
 }
 async function loadExisting(reset=true){
-  const providerId=$('edit-provider').value;if(!providerId)return;
+  const providerId=$('edit-source-provider').value;if(!providerId)return;
   const generation=++threadGeneration;if(reset){existing=[];threadCursor=null;}
   $('edit-thread').disabled=true;$('more-threads').disabled=true;$('thread-source').textContent='正在读取已有会话…';
   try{
@@ -51,7 +51,20 @@ function switchMode(value){
   editing=value===true;scheduling=value==='schedule';$('create-section').hidden=editing||scheduling;$('edit-section').hidden=!editing;$('schedule-section').hidden=!scheduling;$('advanced').hidden=editing||scheduling;
   $('result').hidden=editing||scheduling||!currentResult;
   $('mode-create').setAttribute('aria-pressed',String(!editing&&!scheduling));$('mode-edit').setAttribute('aria-pressed',String(editing));$('mode-schedule').setAttribute('aria-pressed',String(scheduling));
-  status('');if(editing)loadExisting();if(scheduling)loadSchedules();
+  status('');if(editing){loadExisting();loadProviderChanges();}if(scheduling)loadSchedules();
+}
+async function loadProviderChanges(){
+  try{
+    const result=await call('list_provider_changes',{}),labels={waiting:'等待原会话释放',applying:'正在保存并核对',saved:'已保存，新进程已核对',failed:'切换失败，需重新设置',cancelled:'已取消'};
+    $('edit-changes').replaceChildren();
+    for(const change of result.changes){
+      const card=document.createElement('article');card.className='result';const title=document.createElement('h2');title.textContent=change.title;
+      const info=document.createElement('p');info.className='hint';info.textContent=`${labels[change.status]||change.status} · ${change.sourceProvider} → ${change.providerId} / ${change.model} / ${change.effort}\n${change.note}`;card.append(title,info);
+      if(change.status==='waiting'){const cancel=document.createElement('button');cancel.type='button';cancel.textContent='取消切换';cancel.onclick=()=>busy(async()=>{await call('cancel_provider_change',{threadRef:change.threadId});await loadProviderChanges();status('已取消等待中的供应商切换。');});card.append(cancel);}
+      $('edit-changes').append(card);
+    }
+    if(!result.changes.length)$('edit-changes').textContent='没有供应商切换记录。';
+  }catch(error){$('edit-changes').textContent=error.message;}
 }
 const dateLabel=value=>value?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'short',timeStyle:'short'}).format(value):'已暂停';
 async function scheduleForm(job){
@@ -165,7 +178,10 @@ async function refresh(){
     const priorProvider=$('edit-provider').value;
     $('edit-provider').replaceChildren(...catalog.providers.map(p=>option(p.id,`${p.name} · ${p.id}`)));$('edit-provider').disabled=false;
     $('edit-provider').value=catalog.providers.some(p=>p.id===(priorProvider||'custom'))?(priorProvider||'custom'):catalog.launcherDefaults.providerId;
-    if(!$('edit-ref').value&&catalog.currentThread?.providerId===$('edit-provider').value)$('edit-ref').value=`codex://threads/${catalog.currentThread.id}`;
+    const source=$('edit-source-provider').value||catalog.currentThread?.providerId||'openai';
+    $('edit-source-provider').replaceChildren(...catalog.providers.map(p=>option(p.id,`${p.name} · ${p.id}`)));$('edit-source-provider').disabled=false;
+    $('edit-source-provider').value=catalog.providers.some(p=>p.id===source)?source:catalog.providers[0]?.id||'';
+    if(!$('edit-ref').value&&catalog.currentThread?.providerId===$('edit-source-provider').value)$('edit-ref').value=`codex://threads/${catalog.currentThread.id}`;
     $('provider').replaceChildren(...catalog.providers.map(p=>option(p.id,`${p.name} · ${p.id}`)));$('provider').disabled=false;
     const preferred=catalog.launcherDefaults?.providerId||catalog.defaultProvider;
     $('provider').value=catalog.providers.some(p=>p.id===preferred)?preferred:catalog.providers[0]?.id||'';
@@ -204,17 +220,20 @@ $('schedule-form').onsubmit=event=>{event.preventDefault();busy(async()=>{
   const result=await call('save_model_schedule',{id:scheduleId,name:$('schedule-name').value.trim(),threadRef:$('schedule-ref').value.trim(),prompt:$('schedule-prompt').value.trim(),time:$('schedule-time').value,frequency:$('schedule-frequency').value,weekdays:$('schedule-frequency').value==='weekly'?selectedWeekdays():[1,2,3,4,5,6,7],status:$('schedule-status').value,providerId:$('schedule-provider').value,model:scheduleModelId(),effort:$('schedule-effort').value});
   await loadSchedules();status(result.service.error||`任务已保存，下次执行：${dateLabel(result.job.nextRunAt)}。`,!!result.service.error);
 });};
-$('edit-provider').onchange=()=>{$('edit-ref').value='';$('edit-result').hidden=true;loadExisting();update();};
+$('edit-source-provider').onchange=()=>{$('edit-ref').value='';$('edit-result').hidden=true;loadExisting();update();};
+$('edit-provider').onchange=()=>{$('edit-result').hidden=true;update();};
 $('edit-thread').onchange=()=>{$('edit-ref').value=$('edit-thread').value?`codex://threads/${$('edit-thread').value}`:'';$('edit-result').hidden=true;update();};
 for(const id of ['edit-ref','edit-model','edit-effort'])$(id).addEventListener('input',()=>{$('edit-result').hidden=true;update();});
 $('reload-threads').onclick=()=>loadExisting();$('more-threads').onclick=()=>loadExisting(false);
+$('edit-check-changes').onclick=()=>busy(async()=>{await loadProviderChanges();$('edit-result').hidden=true;status('切换状态已刷新，请核对下方记录。');});
 $('edit-form').onsubmit=event=>{event.preventDefault();busy(async()=>{
-  $('edit-result').hidden=true;status('正在打开所选会话、修改模型并等待设置读回…');
-  const result=await call('modify_existing_thread',{threadRef:$('edit-ref').value.trim(),providerId:$('edit-provider').value,model:$('edit-model').value.trim(),effort:$('edit-effort').value});
+  $('edit-result').hidden=true;status('正在核对原会话并提交供应商与模型设置…');
+  const result=await call('modify_existing_thread',{threadRef:$('edit-ref').value.trim(),providerId:$('edit-provider').value,model:$('edit-model').value.trim(),effort:$('edit-effort').value,switchProvider:true});
   const verified=result.status==='settings_verified';
   $('edit-result').hidden=false;$('edit-result-text').textContent=`${result.title} · ${result.providerId} / ${result.model} / ${result.effort}。${result.note||'仅完成设置核对，尚未验证实际消息请求。'}`;
   $('edit-result-link').href=result.url;
-  status(verified?(result.requiresContextReview?'模型设置已修改；历史上下文仍属于旧模型，请先处理压缩。':'模型设置已读回确认；实际消息请求尚未验证。'):result.note,!verified||result.requiresContextReview);
+  await loadProviderChanges();
+  status(result.requiresDesktopReload?result.note:verified?(result.requiresContextReview?'模型设置已修改；历史上下文仍属于旧模型，请先处理压缩。':'模型设置已读回确认；实际消息请求尚未验证。'):result.note,!verified||result.requiresContextReview);
 });};
 $('provider').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:provider',$('provider').value);$('manual').checked=false;$('manual-model').hidden=true;loadModels();};
 $('model').onchange=()=>{currentOperation=null;localStorage.setItem('model-switcher:model:'+$('provider').value,modelId());updateEffort();update();};
@@ -237,7 +256,7 @@ if(window.parent===window){
   call=async(name,args)=>{const response=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({name,arguments:args})});return unpack(await response.json());};
   refresh();
 }else{
-  const app=new App({name:'供应商与模型',version:'0.4.0'});
+  const app=new App({name:'供应商与模型',version:'0.5.0'});
   function apply(ctx){if(ctx.theme)applyDocumentTheme(ctx.theme);if(ctx.styles?.variables)applyHostStyleVariables(ctx.styles.variables);if(ctx.safeAreaInsets){const s=ctx.safeAreaInsets;document.body.style.padding=`${s.top}px ${s.right}px ${s.bottom}px ${s.left}px`;}}
   app.onhostcontextchanged=apply;app.ontoolresult=result=>{if(result.structuredContent?.initialMode==='schedule')switchMode('schedule');};app.onerror=()=>status('面板与 Codex 的连接暂不可用，请重新打开。',true);
   call=async(name,args)=>unpack(await app.callServerTool({name,arguments:args}));
