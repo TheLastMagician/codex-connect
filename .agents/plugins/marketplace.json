@@ -8,7 +8,7 @@
       "name": "feishu-codex-desktop",
       "source": {
         "source": "local",
-        "path": "./feishu-codex-desktop"
+        "path": "./codex-connect"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -31,7 +31,8 @@ if config_path.is_file():
 files = [root / name for name in ('plugin.json', 'mcp.json', '.mcp.json', 'README.md', 'LICENSE', 'package.json', 'package-lock.json')]
 for directory in ('.codex-plugin', 'assets', 'skills', 'src', 'scripts', 'dist', 'tests', 'web'):
     files.extend(file for file in (root / directory).rglob('*') if file.is_file())
-archive = root.parent / f"{root.name}-{manifest['version']}.zip"
+archive = root / 'releases' / f"{root.name}-{manifest['version']}.zip"
+archive.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zipped:
     for file in sorted(files):
         assert not file.is_symlink()

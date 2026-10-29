@@ -1,120 +1,54 @@
-# Codex 连接
+# Codex 插件工作区
 
-<img src="feishu-codex-desktop/assets/icon.png" width="112" height="112" alt="Codex 连接图标">
+每个插件放在独立目录中，源码、界面、构建产物、测试、文档和打包工具都跟随各自项目。
 
-用飞书或微信 ClawBot 继续本机 Codex 桌面的真实会话：查看项目、选择会话、发送任务，并在手机接收回复。飞书使用原生卡片和按钮，微信使用带编号、分页和操作提示的文字回复。两种通道可以同时运行，各自保存选中的会话。
+| 插件 | 项目目录 | 用途 |
+| --- | --- | --- |
+| [Codex 连接](codex-connect/README.md) | `codex-connect/` | 通过飞书、微信连接本机 Codex 会话 |
+| [供应商与模型](codex-model-switcher/README.md) | `codex-model-switcher/` | 管理供应商、模型和定时任务 |
 
-0.6.0 已移除操作助手及其独立模型配置和入口，升级会清理旧配置与管理历史。通过列表、编号或按钮选择会话后直接聊天；模型管理、飞书卡片、微信和固定机器人继续保留。
+```text
+plugin/
+  codex-connect/                  Codex 连接项目
+    src/ web/ assets/ skills/     源码、界面、资源和技能
+    dist/ tests/ scripts/         构建产物、测试和构建脚本
+    tools/package-plugin.py      校验和打包
+    docs/ CHANGELOG.md           安装说明和历史记录
+    releases/                   本机安装包，不提交到 Git
+  codex-model-switcher/          供应商与模型项目
+    releases/                   本机安装包，不提交到 Git
+  .agents/plugins/marketplace.json  共用的仓库插件目录
+  .github/workflows/             共用的 CI 配置
+```
 
-已有会话保留原来的模型、项目、上下文和执行环境。插件不另起一个 Codex CLI 聊天来代替桌面会话。
+## 开发与打包
 
-**0.5.2 美化专属机器人的回复。** 使用无按钮的飞书原生卡片，渲染加粗、列表与代码；群聊回复 @ 实际提问者，多人连续提问合并通知时一并提醒，私聊不额外 @。
+以下命令从工作区根目录执行：
 
-**0.5.1 支持飞书群内 @ 机器人。** 飞书后台开通接收群内 @ 消息的权限并发布应用后，即可在群里 `@机器人 问题`，回复回到原群；固定会话模式仍只聊天。固定机器人可选择跟随飞书可用范围，无需逐个批准；完整管理型保留本机授权，普通群消息不触发。[群聊配置说明](feishu-codex-desktop/README.md#飞书群聊)
+```powershell
+npm --prefix codex-connect test
+npm --prefix codex-connect run build
+python codex-connect/tools/package-plugin.py
 
-**0.5.0 支持本机配置页面和多个飞书机器人。** 在 Codex 中说“打开 Codex 连接配置页面”，即可配置飞书、微信扫码和会话绑定。页面服务随插件加载启动，保存后自动应用；原有凭据和配对保留。每个新增飞书机器人可选完整管理，或固定一个会话、只收发聊天。首次给新机器人发消息后，在页面允许使用，再发任务即可。[页面使用说明](feishu-codex-desktop/README.md#本机管理页面推荐)
+npm --prefix codex-model-switcher test
+npm --prefix codex-model-switcher run build
+python codex-model-switcher/scripts/package.py
+```
 
-0.4.4 修复桌面重启后仍连接旧管道的 ENOENT：连接失败时先验证最新保存的绑定；Windows 上还会从系统已发布的管道中核对服务端进程是否属于已注册的 Codex 桌面，再验证 Codex 会话工具目录和只读查询。保留宿主提供的真实调用会话，不猜测管道名、不创建替代 agent。桌面断开期间通道保持运行，后台继续等待恢复；已提交但结果未知的操作不自动重发。
+两个插件的安装包分别输出到各自的 `releases/`，凭据和运行状态继续保存在用户本机的私有配置目录。
 
-0.4.3 简化聊天流程：选择会话后直接发消息，无需额外进入直聊。飞书按钮、编号和 `/use` 行为一致；已有选中会话直接接收普通消息。
+## 从 GitHub 安装
 
-0.4.2 取消新建时自动配置全局 Responses 转发，保留供应商原有直连；全局兼容仅保留旧版地址恢复入口。第三方新建首条的 `call_id` 问题尚未实现仅针对新会话的修复；遇到时可先在桌面新建，再由通道继续。详情见[直连与恢复说明](feishu-codex-desktop/README.md#供应商直连与旧版兼容恢复)。
-
-继续已有会话使用桌面的普通用户消息入口，继承该会话的供应商与权限，避免把远程提问当作缺少 `call_id` 的工具结果。0.3.8 支持发送到尚未加载的会话：插件自动在桌面打开目标，等待其连接就绪后再发送，无需手动点击。**这会切换当前桌面页面；已加载的会话继续在后台接收消息。** 打开失败或等待加载超时时明确提示消息未发送；发送结果未知时不会自动重发。第三方供应商收发需在自己的桌面环境验证。
-
-继续保留 0.3.7 对本机/SSH 会话发送时 `User-message admission requires a cloud app-server host` 错误的修复：不再强制使用云端消息入口，由桌面根据目标主机选择普通消息的处理方式。
-
-## 在另一台机器安装
-
-需要正在运行并已登录的 **Codex 桌面版**、**Node.js 20+**。建议安装 **Python 3**，用于完整列出本机历史会话。当前只在 Windows 实机验证过；macOS、Linux 尚未验证。仓库包含构建后的 `dist` 和完整源代码，使用插件无需 `npm install`。
-
-在目标机器的终端执行：
+仓库地址和插件标识保持不变：
 
 ```powershell
 codex plugin marketplace add TheLastMagician/codex-connect --ref main
 codex plugin add feishu-codex-desktop@codex-connect
+codex plugin add codex-model-switcher@codex-connect
 ```
 
-第一条添加仓库插件源，第二条安装 **Codex 连接**。之后重启 Codex 桌面版，在新聊天中启用插件。也可以添加仓库后，在插件目录选择「Codex 连接」来源并安装。上述命令需要支持 `codex plugin` 的 Codex CLI；若命令不存在，先更新 CLI。
+Codex 连接的完整安装与自动启动说明见 [安装指南](codex-connect/docs/installation.md)。
 
-该仓库包含 `.agents/plugins/marketplace.json`，安装方式参照 [OpenAI 官方插件打包文档](https://developers.openai.com/plugins/build/plugins)。
-
-### 连接微信
-
-在 Codex 桌面聊天中说：**「用 Codex 连接插件连接微信」**。用手机微信扫描插件显示的二维码并确认。微信 ClawBot 使用扫码授权，无需飞书 App ID / Secret，也不需要安装 OpenClaw。
-
-连接后，发送 `/projects` 或 `/chats`，再回复项目和会话编号。选中后直接发消息，就是与该 Codex 会话聊天。`下一页`、`上一页` 和 `/page 2` 用于翻页，`/help` 查看所有操作。
-
-### 连接飞书
-
-先创建飞书自建应用机器人，开启单聊接收、发送权限及长连接事件订阅，并发布应用。在 Codex 桌面聊天中说：**「用 Codex 连接插件配置并启动飞书」**。在本机配置程序填写 App ID / Secret，然后把 `/pair 配对码` 发给飞书机器人。
-
-要使用卡片按钮，还需开启长连接回调 `card.action.trigger` 并发布生效。[完整配置和命令说明](feishu-codex-desktop/README.md)。
-
-**每台机器都需要单独连接和配置。** 微信扫码授权、飞书凭据、配对账号及选中会话保存在当前用户本机的 `.codex-feishu-desktop` 目录，不随仓库或插件分发。跨机器使用同一机器人时，请先停止旧机器的桥接，避免多个实例争抢同一通道。
-
-## 更新
-
-```powershell
-codex plugin marketplace upgrade codex-connect
-codex plugin add feishu-codex-desktop@codex-connect
-```
-
-更新后重启桌面版；在新聊天中重新启动桥接。微信、飞书的本机配置独立于插件文件，仍然保留。
-
-### 随 Codex 自动连接（0.4.0）
-
-在 Codex 中说“开启 Codex 连接自动启动”，调用 `configure_autostart(enabled=true)`。也可在插件目录执行 `node dist/setup.cjs autostart on`。首次在 Codex 设置的 **Hooks／钩子** 页审阅并信任“连接 Codex 桌面聊天通道”；CLI 可用 `/hooks`。这是 [Codex 官方钩子信任要求](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)，插件不会替用户修改信任记录。
-
-以后启动 Codex 并恢复或打开会话时，自动连接已配置的飞书和微信，无需再发送“启动桥接”，也不会重复配对。已有桥接会更新桌面连接，不会因多个会话同时恢复而重复启动。自动启动本身不调用模型或发送任务。仅停留在尚未加载会话的空白首页时，不保证已触发会话启动钩子。
-
-`stop_bridge` 会暂停本次桌面运行期间的自动拉起；重启 Codex或手动 `start_bridge` 后恢复。用 `configure_autostart(enabled=false)` 或 `node dist/setup.cjs autostart off` 永久关闭自动启动；它不会停止正在运行的桥接。状态见 `bridge_status.autostart`。此设置只保存在当前机器，不随仓库或插件包分发。
-
-## 当前范围
-
-支持列出项目和会话、搜索标题、继续聊天、读取回复和状态、新建、重命名、置顶、归档/恢复、复制和打开会话。桥接运行期间自动回传所关注任务的回复。
-
-飞书点击「查看对话」或发送 `/read`，按从旧到新的顺序查看最近三轮对话，包含自己的提问、Codex 进度和最终回复。每条消息有角色标识、编号和分隔线；长回复分段时保留角色和代码块。自动通知仍回传任务的最终回复。
-
-### 模型管理
-
-0.3.0 支持 `/models` 查看桌面模型，`/model 模型ID`、`/effort high` 设置该会话的手机侧覆盖，`/model default` 恢复沿用桌面设置。飞书可直接点击模型卡片选择。覆盖按通道、账号、主机和会话保存，作为后续任务参数；不保证永久改变桌面中的模型选择。
-
-未选择会话时，普通文字只提示先选择目标。选择、新建或复制后，普通消息直接发给对应的 Codex 会话，沿用模型和上下文。命令、按钮、查询和模型设置由程序执行，不调用额外模型接口。[完整说明](feishu-codex-desktop/README.md#模型管理)。
-
-需要电脑和 Codex 桌面版持续运行。当前仅支持文字；执行审批、停止正在运行的任务仍需在桌面处理。企业微信和 QQ 尚未实现。桌面会话接口属于实验性适配，桌面更新后可能需要调整；实机验证版本为 Windows Codex 桌面 `26.1007.2314.0`。
-
-## 开发
-
-```powershell
-cd feishu-codex-desktop
-npm ci
-npm test
-npm run build
-```
-
-从仓库根目录打包：
-
-```powershell
-python -m pip install jsonschema
-python tools/package-plugin.py
-```
-
-打包脚本验证插件清单并使用文件白名单，排除本机配置和运行凭据。自动化测试覆盖命令路由、分页、卡片、桌面请求、完整会话目录和微信登录/消息处理；实机收发仍需在已登录的桌面环境中验证。
-
-项目结构：
-
-```text
-.agents/plugins/marketplace.json  仓库插件目录
-feishu-codex-desktop/             插件包
-  plugin.json / .codex-plugin/    可移植清单和 Codex 兼容清单
-  .mcp.json / mcp.json            本机 MCP 服务配置
-  skills/                        飞书和微信连接技能
-  src/                           桌面接口、通道、路由和本机存储
-  dist/                          可直接运行的构建产物
-  tests/                         自动化测试
-  assets/                        图标及生成提示词
-tools/package-plugin.py          校验和打包
-```
+后续新增插件时，在顶层新建同级项目目录，再将其加入 `.agents/plugins/marketplace.json`，按需添加 CI 任务。共用 Git 历史保留在工作区根目录。
 
 使用 [MIT License](LICENSE)。
