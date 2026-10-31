@@ -133410,6 +133410,36 @@ var import_node_url2 = require("node:url");
 var import_node_crypto11 = require("node:crypto");
 var MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 var imageKey = (value) => /^img_[A-Za-z0-9_-]{1,250}$/.test(value);
+var imageReasons = {
+  remote: "\u8FDC\u7A0B\u4F1A\u8BDD\u56FE\u7247\u6682\u4E0D\u652F\u6301\u56DE\u4F20",
+  network_path: "\u4E0D\u652F\u6301\u7F51\u7EDC\u5171\u4EAB\u56FE\u7247",
+  external_url: "\u6682\u4E0D\u652F\u6301\u5916\u90E8\u56FE\u7247\u94FE\u63A5",
+  missing_project: "\u65E0\u6CD5\u8BFB\u53D6\u56FE\u7247\u6240\u5C5E\u4F1A\u8BDD\u7684\u9879\u76EE\u76EE\u5F55",
+  outside_root: "\u56FE\u7247\u4E0D\u5728\u4F1A\u8BDD\u9879\u76EE\u6216\u4E34\u65F6\u3001\u751F\u6210\u76EE\u5F55\u4E2D",
+  unsupported_format: "\u4EC5\u652F\u6301 PNG\u3001JPEG\u3001GIF\u3001WEBP \u56FE\u7247",
+  missing_file: "\u56FE\u7247\u6587\u4EF6\u5DF2\u4E0D\u5B58\u5728",
+  read_denied: "\u6CA1\u6709\u6743\u9650\u8BFB\u53D6\u56FE\u7247\u6587\u4EF6",
+  invalid_file: "\u56FE\u7247\u4E0D\u662F\u666E\u901A\u6587\u4EF6\u6216\u5185\u5BB9\u4E3A\u7A7A",
+  too_large: "\u56FE\u7247\u8D85\u8FC7 10 MB",
+  changing_file: "\u56FE\u7247\u6587\u4EF6\u6B63\u5728\u53D8\u5316\uFF0C\u8BF7\u7A0D\u540E\u67E5\u770B",
+  too_many: "\u5355\u6761\u56DE\u590D\u6700\u591A\u663E\u793A 8 \u5F20\u56FE\u7247",
+  authorization: "\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500",
+  upload_failed: "\u98DE\u4E66\u56FE\u7247\u4E0A\u4F20\u5931\u8D25"
+};
+var imageError = (reason) => Object.assign(new Error(imageReasons[reason]), { mediaReason: reason });
+function imageFailure(error) {
+  const reason = error?.mediaReason && Object.hasOwn(imageReasons, error.mediaReason) ? error.mediaReason : error?.code === "ENOENT" ? "missing_file" : ["EACCES", "EPERM"].includes(error?.code) ? "read_denied" : error?.code === "EISDIR" ? "invalid_file" : "upload_failed";
+  const failure = { ...feishuFailure(error, "image"), reason };
+  return { failure, text: imageReasons[reason] + (reason === "upload_failed" && failure.code ? `\uFF08\u9519\u8BEF\u7801 ${failure.code}\uFF09` : "") };
+}
+function defaultFeishuImageRoots({ platform = process.platform, home = import_node_os3.default.homedir(), temporary = import_node_os3.default.tmpdir() } = {}) {
+  const roots = [temporary, ...["artifacts", "visualizations", "generated-images"].map((name) => import_node_path8.default.join(home, ".codex", name))];
+  if (platform === "win32") for (const directory5 of [home, temporary]) {
+    const drive = import_node_path8.default.win32.parse(directory5).root;
+    if (/^[a-z]:\\$/i.test(drive)) roots.push(import_node_path8.default.win32.join(drive, "temp"), import_node_path8.default.win32.join(drive, "tmp"));
+  }
+  return [...new Set(roots)];
+}
 function feishuFailure(error, operation = "message") {
   const data = error?.response?.data || error?.data || error || {};
   const code = Number(data.code), status = Number(error?.response?.status);
@@ -133494,15 +133524,16 @@ function createFeishuMedia({
   report = () => {
   },
   now = Date.now,
-  roots = [import_node_os3.default.tmpdir(), ...["artifacts", "visualizations", "generated-images"].map((name) => import_node_path8.default.join(import_node_os3.default.homedir(), ".codex", name))]
+  roots = defaultFeishuImageRoots(),
+  resolveThread = async (thread) => thread
 }) {
   const inFlight = /* @__PURE__ */ new Map();
   async function upload(destination, thread, openId) {
-    if (thread?.hostId && thread.hostId !== "local") throw Error("\u8FDC\u7A0B\u4F1A\u8BDD\u56FE\u7247\u9700\u5728\u684C\u9762\u67E5\u770B");
+    if (thread?.hostId && thread.hostId !== "local") throw imageError("remote");
     let file = destination;
     if (/^file:/i.test(file)) {
       const url = new URL(file);
-      if (url.hostname && url.hostname !== "localhost") throw Error("\u4E0D\u652F\u6301\u7F51\u7EDC\u5171\u4EAB\u56FE\u7247");
+      if (url.hostname && url.hostname !== "localhost") throw imageError("network_path");
       file = (0, import_node_url2.fileURLToPath)(url);
     } else {
       try {
@@ -133510,21 +133541,22 @@ function createFeishuMedia({
       } catch {
       }
     }
-    if (/^[a-z][a-z\d+.-]*:/i.test(file) && !/^[a-z]:[\\/]/i.test(file)) throw Error("\u5916\u90E8\u56FE\u7247\u94FE\u63A5\u6682\u4E0D\u652F\u6301");
-    if (/^[\\/]{2}|^\\\\[?.]/.test(file)) throw Error("\u4E0D\u652F\u6301\u7F51\u7EDC\u5171\u4EAB\u56FE\u7247");
+    if (/^[a-z][a-z\d+.-]*:/i.test(file) && !/^[a-z]:[\\/]/i.test(file)) throw imageError("external_url");
+    if (/^[\\/]{2}|^\\\\[?.]/.test(file)) throw imageError("network_path");
     if (!import_node_path8.default.isAbsolute(file)) {
-      if (!thread?.cwd) throw Error("\u7F3A\u5C11\u56FE\u7247\u6240\u5C5E\u9879\u76EE");
+      if (!thread?.cwd) throw imageError("missing_project");
       file = import_node_path8.default.resolve(thread.cwd, file);
     }
     const real = await import_promises4.default.realpath(file);
-    if (!/\.(png|jpe?g|gif|webp)$/i.test(real)) throw Error("\u56FE\u7247\u683C\u5F0F\u6682\u4E0D\u652F\u6301");
+    if (!/\.(png|jpe?g|gif|webp)$/i.test(real)) throw imageError("unsupported_format");
     const allowed = await Promise.all([...roots, ...thread?.cwd ? [thread.cwd] : []].map((root) => import_promises4.default.realpath(root).catch(() => null)));
-    if (!allowed.some((root) => root && inside(root, real))) throw Error("\u56FE\u7247\u4E0D\u5728\u4F1A\u8BDD\u9879\u76EE\u6216\u751F\u6210\u76EE\u5F55\u4E2D");
+    if (!allowed.some((root) => root && inside(root, real))) throw imageError("outside_root");
     const handle = await import_promises4.default.open(real, "r");
     let buffer;
     try {
       const stat = await handle.stat();
-      if (!stat.isFile() || stat.size === 0 || stat.size > MAX_IMAGE_BYTES) throw Error("\u56FE\u7247\u4E3A\u7A7A\u6216\u8D85\u8FC7 10 MB");
+      if (!stat.isFile() || stat.size === 0) throw imageError("invalid_file");
+      if (stat.size > MAX_IMAGE_BYTES) throw imageError("too_large");
       buffer = Buffer.alloc(stat.size + 1);
       let offset = 0;
       while (offset < buffer.length) {
@@ -133532,22 +133564,22 @@ function createFeishuMedia({
         if (!read.bytesRead) break;
         offset += read.bytesRead;
       }
-      if (offset !== stat.size || (await handle.stat()).size !== stat.size) throw Error("\u56FE\u7247\u6587\u4EF6\u6B63\u5728\u53D8\u5316\uFF0C\u8BF7\u7A0D\u540E\u67E5\u770B");
+      if (offset !== stat.size || (await handle.stat()).size !== stat.size) throw imageError("changing_file");
       buffer = buffer.subarray(0, offset);
     } finally {
       await handle.close();
     }
-    if (buffer.length > MAX_IMAGE_BYTES || !raster(buffer)) throw Error("\u56FE\u7247\u683C\u5F0F\u6682\u4E0D\u652F\u6301");
+    if (buffer.length > MAX_IMAGE_BYTES || !raster(buffer)) throw imageError("unsupported_format");
     const digest2 = (0, import_node_crypto11.createHash)("sha256").update(namespace).update(buffer).digest("hex");
     const cached = state.feishuImageUploads?.[digest2];
     if (cached && imageKey(cached.key)) return cached.key;
     if (inFlight.has(digest2)) return inFlight.get(digest2);
     const work = (async () => {
-      if (!canSend(openId)) throw Error("\u901A\u9053\u6388\u6743\u5DF2\u64A4\u9500");
+      if (!canSend(openId)) throw imageError("authorization");
       const result = await client.im.v1.image.create({ data: { image_type: "message", image: buffer } }, { timeout: 2e4 });
       if (result?.code !== void 0) feishuResult(result);
       const key = result?.image_key || result?.data?.image_key;
-      if (!imageKey(key)) throw Error("\u98DE\u4E66\u672A\u8FD4\u56DE\u56FE\u7247\u6807\u8BC6");
+      if (!imageKey(key)) throw imageError("upload_failed");
       state.feishuImageUploads = { ...state.feishuImageUploads, [digest2]: { key, at: now() } };
       state.feishuImageUploads = Object.fromEntries(Object.entries(state.feishuImageUploads).slice(-200));
       saveState();
@@ -133571,6 +133603,14 @@ function createFeishuMedia({
       text = String(text);
       const refs = imageReferences(text);
       let output = "", previous = 0, count = 0;
+      if (thread?.id && !thread.cwd && (!thread.hostId || thread.hostId === "local") && refs.some((ref) => !imageKey(ref.destination))) {
+        try {
+          const resolved = await resolveThread(thread);
+          if (resolved?.id === thread.id && (resolved.hostId || "local") === (thread.hostId || "local") && typeof resolved.cwd === "string" && import_node_path8.default.isAbsolute(resolved.cwd) && !/^[\\/]{2}/.test(resolved.cwd))
+            thread = { ...thread, cwd: resolved.cwd };
+        } catch {
+        }
+      }
       for (const ref of refs) {
         output += text.slice(previous, ref.start);
         previous = ref.end;
@@ -133579,12 +133619,13 @@ function createFeishuMedia({
           continue;
         }
         try {
-          if (++count > 8) throw Error("\u5355\u6761\u56DE\u590D\u6700\u591A\u663E\u793A 8 \u5F20\u56FE\u7247");
+          if (++count > 8) throw imageError("too_many");
           const key2 = await upload(ref.destination, thread, openId);
           output += `![${ref.alt.replace(/[\[\]<>]/g, "").slice(0, 120) || "\u56FE\u7247"}](${key2})`;
         } catch (error) {
-          report({ ...feishuFailure(error, "image"), at: now() });
-          output += "\uFF08\u56FE\u7247\u6682\u672A\u53D1\u9001\uFF0C\u8BF7\u5728 Codex \u684C\u9762\u67E5\u770B\uFF1B\u6587\u5B57\u56DE\u590D\u7EE7\u7EED\u663E\u793A\uFF09";
+          const { failure, text: text2 } = imageFailure(error);
+          report({ ...failure, at: now() });
+          output += `\uFF08\u56FE\u7247\u6682\u672A\u53D1\u9001\uFF1A${text2}\uFF1B\u6587\u5B57\u56DE\u590D\u7EE7\u7EED\u663E\u793A\uFF09`;
         }
       }
       output += text.slice(previous);
@@ -133966,7 +134007,18 @@ function createFeishuChannel({
   const authorized = (openId) => active() && allowsFeishuUser(getSettings(), openId);
   const report = (record) => onStatus({ lastReplyError: record });
   const prepareInput = createInboundImages({ client, namespace: settings.appId, canRead: authorized, report: (record) => onStatus({ lastImageInputError: record }) });
-  const media = createFeishuMedia({ client, state, saveState, canSend: authorized, namespace: settings.appId, report });
+  const media = createFeishuMedia({
+    client,
+    state,
+    saveState,
+    canSend: authorized,
+    namespace: settings.appId,
+    report,
+    resolveThread: async (thread) => {
+      const result = await desktop.call("read_thread", { threadId: thread.id, ...thread.hostId ? { hostId: thread.hostId } : {}, turnLimit: 1, maxOutputCharsPerItem: 1 });
+      return result.thread;
+    }
+  });
   const writeCard = createCardWriter({ client, state, saveState, canSend: authorized, namespace: settings.appId, report });
   const fullSend = createSender({ client, actions, state, saveState, getConfig, canSend: authorized, prepareText: media.prepare, writeCard });
   const send = async (chatId, text, meta = {}) => {
@@ -134107,7 +134159,7 @@ var import_promises6 = require("node:timers/promises");
 var import_node_crypto14 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.4";
+var VERSION = "0.9.6";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

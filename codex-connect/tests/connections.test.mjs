@@ -40,15 +40,28 @@ test('local approval can only approve a real application and never stores or rep
   assert.deepEqual(authorizeFeishuUser(bot.id,'owner',false).allowedOpenIds,[]);
 });
 function channelFixture(thread=binding,{identity=async()=>({code:0,bot:{open_id:'ou_robot'}}),accessMode='approved',mode='fixed',state={}}={}) {
-  const settings={...botInput,thread,id:'default',enabled:true,allowedOpenIds:['owner'],accessMode,mode};const calls=[],sent=[],requests=[],statuses=[];let events;
-  const sdk={Client:class {constructor(){this.im={v1:{message:{create:async args=>{sent.push(args);return {code:0};}}}};}request(){return identity();}},
+  const settings={...botInput,thread,id:'default',enabled:true,allowedOpenIds:['owner'],accessMode,mode};const calls=[],sent=[],requests=[],statuses=[],uploads=[];let events;
+  const sdk={Client:class {constructor(){this.im={v1:{message:{create:async args=>{sent.push(args);return {code:0};}},image:{create:async args=>{uploads.push(args);return {image_key:'img_project_fixture'};}}}};}request(){return identity();}},
     WSClient:class {async start({eventDispatcher}){events=eventDispatcher;}close(){}},EventDispatcher:class {register(value){return value;}}};
   let snapshot={thread:{status:{type:'idle'}},turns:[{id:'old-turn',status:'completed',items:[{type:'agentMessage',id:'old',text:'旧回复'}]}]};
   const desktop={call:async(name,args,options)=>{calls.push({name,args});options?.beforeSend?.();if(name==='read_thread')return snapshot;return {};}};
   const channel=createFeishuChannel({desktop,settings:structuredClone(settings),getSettings:()=>settings,sdk,loadState:()=>state,save:()=>{},rememberRequest:m=>requests.push(m),onStatus:update=>statuses.push(update)});
   const event=(text,owner='owner',id=Math.random().toString())=>({sender:{sender_type:'user',sender_id:{open_id:owner}},message:{message_id:id,chat_id:'private-chat',chat_type:'p2p',message_type:'text',create_time:String(Date.now()),content:JSON.stringify({text})}});
-  return {channel,calls,sent,settings,requests,statuses,desktop,event,events:()=>events,setSnapshot:value=>snapshot=value};
+  return {channel,calls,sent,uploads,settings,requests,statuses,desktop,event,events:()=>events,setSnapshot:value=>snapshot=value};
 }
+
+test('a dedicated bot recovers its actual project for relative reply images without sending a model task',async()=>{
+  const f=channelFixture();await f.channel.start();
+  const project=fs.mkdtempSync(path.join(folder,'project-'));
+  const image=path.join(project,'chart.png');fs.writeFileSync(image,Buffer.from('89504e470d0a1a0a','hex'));
+  f.setSnapshot({thread:{...binding,cwd:project},turns:[]});
+  try {
+    await f.channel.router.reply({id:'original-message',openId:'owner',chatId:'private-chat'},'图表\n![统计图](chart.png)','original-answer');
+    assert.deepEqual(f.calls.map(c=>c.name),['read_thread']);assert.equal(f.calls[0].args.threadId,binding.id);
+    assert.equal(f.uploads.length,1);assert.ok(JSON.stringify(f.sent).includes('img_project_fixture'));
+    assert.ok(!JSON.stringify(f.sent).includes('图片暂未发送'));
+  }finally{f.channel.stop();fs.unlinkSync(image);fs.rmdirSync(project);}
+});
 test('a full bot retains its selected target through a transient read and exposes only redacted failure metadata',async()=>{
   const state={sessions:{'owner:private-chat':{openId:'owner',chatId:'private-chat',selected:binding,mode:'chat',routingVersion:3}}};
   const f=channelFixture(binding,{mode:'full',state});await f.channel.start();const original=f.desktop.call;let reads=0;

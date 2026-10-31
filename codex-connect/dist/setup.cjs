@@ -4681,7 +4681,7 @@ init_storage();
 var import_node_crypto2 = require("node:crypto");
 
 // src/version.mjs
-var VERSION = "0.9.4";
+var VERSION = "0.9.6";
 
 // src/wechat-api.mjs
 var WECHAT_BASE_URL = "https://ilinkai.weixin.qq.com";

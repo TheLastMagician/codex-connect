@@ -72,7 +72,7 @@ var init_desktop_context_store = __esm({
 init_storage();
 
 // src/version.mjs
-var VERSION = "0.9.4";
+var VERSION = "0.9.6";
 
 // src/responses-compat.mjs
 var import_node_http = __toESM(require("node:http"), 1);

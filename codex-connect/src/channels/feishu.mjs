@@ -49,7 +49,11 @@ export function createFeishuChannel({desktop,settings,onStatus=()=>{},
   const authorized=openId=>active() && allowsFeishuUser(getSettings(),openId);
   const report=record=>onStatus({lastReplyError:record});
   const prepareInput=createInboundImages({client,namespace:settings.appId,canRead:authorized,report:record=>onStatus({lastImageInputError:record})});
-  const media=createFeishuMedia({client,state,saveState,canSend:authorized,namespace:settings.appId,report});
+  const media=createFeishuMedia({client,state,saveState,canSend:authorized,namespace:settings.appId,report,
+    resolveThread:async thread=>{
+      const result=await desktop.call('read_thread',{threadId:thread.id,...(thread.hostId?{hostId:thread.hostId}:{}),turnLimit:1,maxOutputCharsPerItem:1});
+      return result.thread;
+    }});
   const writeCard=createCardWriter({client,state,saveState,canSend:authorized,namespace:settings.appId,report});
   const fullSend=createSender({client,actions,state,saveState,getConfig,canSend:authorized,prepareText:media.prepare,writeCard});
   const send=async(chatId,text,meta={})=>{
